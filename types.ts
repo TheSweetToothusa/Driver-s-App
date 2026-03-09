@@ -1,6 +1,7 @@
 
+export type AppRole = 'SUPER_ADMIN' | 'MANAGER' | 'DRIVER';
+
 export type Priority = 'Standard' | 'Urgent' | 'Sympathy';
-export type AppRole = 'ADMIN' | 'DRIVER';
 
 export enum DeliveryStatus {
   PENDING = 'PENDING',
@@ -12,24 +13,29 @@ export enum DeliveryStatus {
   CLOSED = 'CLOSED'
 }
 
-export type FailureReason = 
-  | 'NOT_HOME' 
-  | 'BAD_ADDRESS' 
-  | 'UNSAFE' 
-  | 'REFUSED' 
-  | 'CONCIERGE_REJECTED' 
+export type FailureReason =
+  | 'NOT_HOME'
+  | 'BAD_ADDRESS'
+  | 'UNSAFE'
+  | 'REFUSED'
+  | 'CONCIERGE_REJECTED'
   | 'GATE_CODE_MISSING'
   | 'RECIPIENT_UNAVAILABLE'
   | 'LEFT_WITH_NEIGHBOR'
   | 'OTHER';
 
-export interface ChatMessage {
+export interface UserAccount {
   id: string;
-  senderId: string;
-  senderName: string;
-  text: string;
-  timestamp: string;
-  isRead: boolean;
+  name: string;
+  pin: string;
+  role: AppRole;
+  phone?: string;
+  email?: string;
+  vehicle?: string;
+  isActive: boolean;
+  lockedUntil?: string;
+  failedAttempts?: number;
+  createdAt: string;
 }
 
 export interface Attempt {
@@ -77,22 +83,23 @@ export interface Delivery {
   deliveryFee: number;
   driverId: string;
   driverName?: string;
-  
+
   isConfirmed?: boolean;
   driverNotes?: string;
+  adminNotes?: string;
   isPodMandatory?: boolean;
-  
+
   confirmationPhoto?: string;
   confirmationSignature?: string;
   completedAt?: string;
-  
-  // New Enhanced Fields
+  submittedAt?: string;
+
   safeDropAllowed?: boolean;
   returnToStoreRequired?: boolean;
   neighborName?: string;
   mileageEstimate?: number;
   timeSpentMinutes?: number;
-  
+
   attempts: Attempt[];
   internalNotes: string[];
   giftMessage?: string;
@@ -101,17 +108,16 @@ export interface Delivery {
   giftSenderEmail?: string;
   giftReceiverName?: string;
   giftReceiverPhone?: string;
+
+  successNotificationSent?: boolean;
+  failureNotificationSent?: boolean;
 }
 
-export interface ManualStop {
-  id: string;
-  type: 'GAS' | 'FOOD' | 'CHARGING' | 'BREAK';
-  name: string;
-  address?: string;
-  timestamp: string;
+export interface MessageTemplate {
+  id: 'SUCCESS' | 'FAILURE';
+  label: string;
+  body: string;
 }
-
-export type RouteStop = (Delivery & { stopType: 'DELIVERY' }) | (ManualStop & { stopType: 'MANUAL' });
 
 export interface Driver {
   id: string;
@@ -125,3 +131,15 @@ export interface Driver {
   totalCompleted?: number;
   successRate?: number;
 }
+
+export interface ManualStop {
+  id: string;
+  type: 'GAS' | 'FOOD' | 'CHARGING' | 'BREAK';
+  name: string;
+  address?: string;
+  timestamp: string;
+}
+
+export type RouteStop = (Delivery & { stopType: 'DELIVERY' }) | (ManualStop & { stopType: 'MANUAL' });
+
+export type ViewMode = 'DAY' | 'WEEK' | 'MONTH' | 'CUSTOM';

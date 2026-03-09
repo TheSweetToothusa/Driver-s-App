@@ -1,67 +1,62 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { HashRouter, Routes, Route, useNavigate } from 'react-router-dom';
-import { 
-  Package, Truck, ChevronRight, X, Check, RefreshCw, 
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import {
+  Package, Truck, ChevronRight, X, Check, RefreshCw,
   LogOut, Calendar, MapPin, Phone, MessageSquare,
-  Navigation, CheckCircle2, Send, ShieldCheck, 
-  MessageCircle, AlertTriangle, Eye, Camera, PenTool, Share2, Mail, Home, MapPinned, Trash2, Wifi, Copy, Smartphone, Info, Settings, HelpCircle, ExternalLink, Lock, Key, Globe, Download, Zap, EyeOff, AlertCircle, FileText, Share, Sparkles, Volume2, Map, Filter, ArrowRightLeft, ListFilter
+  Navigation, CheckCircle2, Send, ShieldCheck,
+  AlertTriangle, Eye, Camera, PenTool, Mail, Trash2,
+  Copy, Settings, Lock, Key, EyeOff, AlertCircle, FileText,
+  Share2, Zap, Filter, ArrowRightLeft, UserPlus, Users,
+  MessageCircle, ChevronLeft, Edit3, ToggleLeft, ToggleRight,
+  Bell, Clock, CheckSquare, XCircle, Gift, User
 } from 'lucide-react';
-import { Delivery, DeliveryStatus, AppRole, ChatMessage, FailureReason, ManualStop } from './types';
+import { Delivery, DeliveryStatus, AppRole, FailureReason, ViewMode, UserAccount, MessageTemplate } from './types';
 import { getDeliveries } from './services/shopifyService';
-import { DELIVERY_FEES, PER_MILE_RATE } from './src/constants';
-import { summarizeRoute, getOptimizedRoute, generateCustomerSMS, generateSpeech, playRawAudio, OptimizationResult } from './services/geminiService';
+import { DELIVERY_FEES } from './src/constants';
+import { getOptimizedRoute, generateCustomerSMS, OptimizationResult } from './services/geminiService';
 
 const BRAND_LOGO = "https://cdn.shopify.com/s/files/1/0559/8498/0141/files/The_Sweet_Tooth_Chocolate_Factory_Logo.png?v=1759286605";
-const ACCESS_PASSCODE = "2025"; 
+const KATIE_PHONE = "(305) 994-4070";
 
-// --- UTILS ---
+// ─────────────────────────────────────────────────────────────────────────────
+// UTILS
+// ─────────────────────────────────────────────────────────────────────────────
 
 const base64ToBlob = (base64: string, mimeType: string) => {
   const byteString = atob(base64.split(',')[1]);
   const ab = new ArrayBuffer(byteString.length);
   const ia = new Uint8Array(ab);
-  for (let i = 0; i < byteString.length; i++) {
-    ia[i] = byteString.charCodeAt(i);
-  }
+  for (let i = 0; i < byteString.length; i++) ia[i] = byteString.charCodeAt(i);
   return new Blob([ab], { type: mimeType });
 };
 
-// --- CONNECTION STATUS COMPONENT ---
-
-const ConnectionStatus: React.FC<{ source: 'LIVE' | 'MOCK' | 'ERROR', lastSync: string | null }> = ({ source, lastSync }) => {
-  return (
-    <div className="flex items-center justify-between px-4 py-2 bg-stone-100/50 border-b border-stone-100">
-      <div className="flex items-center gap-2">
-        <div className={`w-1.5 h-1.5 rounded-full ${source === 'LIVE' ? 'bg-green-500 animate-pulse' : source === 'MOCK' ? 'bg-amber-500' : 'bg-red-500'}`} />
-        <span className="text-[9px] font-black uppercase tracking-widest text-stone-500">
-          {source === 'LIVE' ? 'Shopify Live' : source === 'MOCK' ? 'Mock Environment' : 'Sync Error'}
-        </span>
-      </div>
-      {lastSync && (
-        <span className="text-[9px] font-bold text-stone-400 uppercase">
-          Updated {lastSync}
-        </span>
-      )}
-    </div>
-  );
+const isWithinSendingHours = () => {
+  const h = new Date().getHours();
+  return h >= 9 && h < 20;
 };
 
-// --- POD COMPONENTS ---
+const formatTime = (iso: string) =>
+  new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-const SignaturePad: React.FC<{ onSave: (dataUrl: string) => void, onCancel: () => void }> = ({ onSave, onCancel }) => {
+const formatDate = (iso: string) =>
+  new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SIGNATURE PAD
+// ─────────────────────────────────────────────────────────────────────────────
+
+const SignaturePad: React.FC<{ onSave: (dataUrl: string) => void; onCancel: () => void }> = ({ onSave, onCancel }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [isDrawing, setIsDrawing] = useState(false);
+  const isDrawing = useRef(false);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-
     ctx.strokeStyle = '#000000';
     ctx.lineWidth = 3;
     ctx.lineCap = 'round';
-    
+
     const getPos = (e: MouseEvent | TouchEvent) => {
       const rect = canvas.getBoundingClientRect();
       const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
@@ -70,21 +65,19 @@ const SignaturePad: React.FC<{ onSave: (dataUrl: string) => void, onCancel: () =
     };
 
     const start = (e: MouseEvent | TouchEvent) => {
-      setIsDrawing(true);
+      isDrawing.current = true;
       const { x, y } = getPos(e);
       ctx.beginPath();
       ctx.moveTo(x, y);
     };
-
     const move = (e: MouseEvent | TouchEvent) => {
-      if (!isDrawing) return;
+      if (!isDrawing.current) return;
       e.preventDefault();
       const { x, y } = getPos(e);
       ctx.lineTo(x, y);
       ctx.stroke();
     };
-
-    const stop = () => setIsDrawing(false);
+    const stop = () => { isDrawing.current = false; };
 
     canvas.addEventListener('mousedown', start);
     canvas.addEventListener('mousemove', move);
@@ -92,7 +85,6 @@ const SignaturePad: React.FC<{ onSave: (dataUrl: string) => void, onCancel: () =
     canvas.addEventListener('touchstart', start, { passive: false });
     canvas.addEventListener('touchmove', move, { passive: false });
     canvas.addEventListener('touchend', stop);
-
     return () => {
       canvas.removeEventListener('mousedown', start);
       canvas.removeEventListener('mousemove', move);
@@ -101,1151 +93,1265 @@ const SignaturePad: React.FC<{ onSave: (dataUrl: string) => void, onCancel: () =
       canvas.removeEventListener('touchmove', move);
       canvas.removeEventListener('touchend', stop);
     };
-  }, [isDrawing]);
+  }, []);
 
   const handleClear = () => {
     const canvas = canvasRef.current;
-    if (canvas) {
-      const ctx = canvas.getContext('2d');
-      ctx?.clearRect(0, 0, canvas.width, canvas.height);
-    }
+    if (canvas) canvas.getContext('2d')?.clearRect(0, 0, canvas.width, canvas.height);
   };
 
   return (
     <div className="fixed inset-0 bg-black/90 z-[300] flex flex-col p-6 animate-in fade-in">
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex justify-between items-center mb-4">
         <h3 className="text-white font-black uppercase tracking-widest text-xs">Recipient Signature</h3>
         <button onClick={onCancel} className="text-white/50"><X size={24} /></button>
       </div>
+      <p className="text-white/40 text-xs mb-4 font-medium">Optional — ask recipient to sign if available</p>
       <div className="flex-1 bg-white rounded-3xl overflow-hidden relative border-4 border-white">
         <canvas ref={canvasRef} width={400} height={600} className="w-full h-full touch-none" />
         <div className="absolute bottom-4 left-0 right-0 text-center pointer-events-none">
           <p className="text-[10px] font-black uppercase text-stone-300 tracking-widest">Sign inside the box</p>
         </div>
       </div>
-      <div className="mt-6 flex gap-3">
+      <div className="mt-4 flex gap-3">
         <button onClick={handleClear} className="flex-1 py-5 bg-white/10 text-white rounded-2xl font-black uppercase text-[10px]">Clear</button>
-        <button 
+        <button onClick={onCancel} className="flex-1 py-5 bg-white/20 text-white rounded-2xl font-black uppercase text-[10px]">Skip</button>
+        <button
           onClick={() => canvasRef.current && onSave(canvasRef.current.toDataURL())}
-          className="flex-2 py-5 bg-white text-black rounded-2xl font-black uppercase text-[10px]"
-        >
-          Confirm Signature
-        </button>
+          className="flex-2 py-5 bg-white text-black rounded-2xl font-black uppercase text-[10px] px-6"
+        >Confirm</button>
       </div>
     </div>
   );
 };
 
-// --- SHARE MODAL ---
+// ─────────────────────────────────────────────────────────────────────────────
+// LOGIN GATE — 3 roles, per-user PIN, lockout
+// ─────────────────────────────────────────────────────────────────────────────
 
-const SharePodModal: React.FC<{ order: Delivery, onClose: () => void }> = ({ order, onClose }) => {
-  const [recipient, setRecipient] = useState(order.customer.email || order.customer.phone || '');
-  const [isEmail, setIsEmail] = useState(recipient.includes('@'));
+const LoginGate: React.FC<{ onAuthorized: (user: UserAccount) => void }> = ({ onAuthorized }) => {
+  const [name, setName] = useState('');
+  const [pin, setPin] = useState('');
+  const [showPin, setShowPin] = useState(false);
+  const [step, setStep] = useState<'NAME' | 'PIN'>('NAME');
+  const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
-  const shareText = `The Sweet Tooth: Proof of Delivery for Order ${order.orderNumber}. Delivered to ${order.customer.name} at ${order.completedAt}. Address: ${order.address.street}, ${order.address.city}.`;
-
-  const handleEmail = () => {
-    const subject = encodeURIComponent(`Proof of Delivery - Order ${order.orderNumber}`);
-    const body = encodeURIComponent(`${shareText}\n\nNotes: ${order.driverNotes || 'None'}`);
-    window.location.href = `mailto:${recipient}?subject=${subject}&body=${body}`;
+  const handleNameSubmit = () => {
+    if (!name.trim()) { setError('Please enter your name'); return; }
+    setError('');
+    setStep('PIN');
   };
 
-  const handleSms = () => {
-    const body = encodeURIComponent(shareText);
-    window.location.href = `sms:${recipient}${navigator.userAgent.match(/iPhone/i) ? '&' : '?'}body=${body}`;
-  };
-
-  const handleNativeShare = async () => {
-    if (!navigator.share) return alert("System share not supported on this browser.");
-    
-    const files: File[] = [];
-    if (order.confirmationPhoto?.startsWith('data:')) {
-      const blob = base64ToBlob(order.confirmationPhoto, 'image/jpeg');
-      files.push(new File([blob], `POD_Photo_${order.orderNumber}.jpg`, { type: 'image/jpeg' }));
-    }
-    if (order.confirmationSignature?.startsWith('data:')) {
-      const blob = base64ToBlob(order.confirmationSignature, 'image/png');
-      files.push(new File([blob], `POD_Signature_${order.orderNumber}.png`, { type: 'image/png' }));
-    }
-
+  const handlePinSubmit = async () => {
+    if (pin.length !== 4) { setError('Enter your 4-digit PIN'); return; }
+    setIsLoading(true);
+    setError('');
     try {
-      if (files.length > 0 && navigator.canShare && navigator.canShare({ files })) {
-        await navigator.share({
-          files,
-          title: `POD - Order ${order.orderNumber}`,
-          text: shareText
-        });
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name.trim(), pin })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || 'Invalid PIN');
+        setPin('');
       } else {
-        await navigator.share({
-          title: `POD - Order ${order.orderNumber}`,
-          text: shareText
-        });
+        onAuthorized(data.user);
       }
-    } catch (err) {
-      console.error("Share failed", err);
+    } catch {
+      setError('Connection error. Try again.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-black/80 z-[400] flex items-end justify-center p-4 animate-in fade-in">
-      <div className="w-full max-w-sm bg-white rounded-[32px] p-8 shadow-2xl animate-in slide-in-from-bottom duration-300">
-        <div className="flex justify-between items-start mb-6">
-          <div>
-            <h3 className="text-xl font-black uppercase tracking-tighter">Share Confirmation</h3>
-            <p className="text-[10px] font-black text-stone-400 uppercase tracking-widest">Order {order.orderNumber}</p>
-          </div>
-          <button onClick={onClose} className="p-2 bg-stone-50 rounded-full"><X size={20} /></button>
-        </div>
+    <div className="min-h-screen bg-white flex flex-col items-center justify-center p-10 animate-in fade-in duration-500">
+      <img src={BRAND_LOGO} className="h-40 mb-10 object-contain" alt="Logo" />
 
-        <div className="space-y-6">
-          <div>
-            <label className="text-[9px] font-black uppercase text-stone-400 tracking-widest block mb-2">Recipient Contact</label>
-            <input 
-              type="text" 
-              value={recipient}
-              onChange={(e) => setRecipient(e.target.value)}
-              placeholder="Email or Phone Number"
-              className="w-full bg-stone-50 border border-stone-100 rounded-2xl px-5 py-4 text-sm font-black outline-none focus:border-black transition-all"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <button onClick={handleEmail} className="flex flex-col items-center justify-center gap-2 p-5 bg-white border border-stone-100 rounded-[24px] hover:bg-stone-50 transition-colors">
-              <div className="w-10 h-10 bg-pink-50 text-pink-500 rounded-full flex items-center justify-center"><Mail size={20} /></div>
-              <span className="text-[10px] font-black uppercase">Email POD</span>
-            </button>
-            <button onClick={handleSms} className="flex flex-col items-center justify-center gap-2 p-5 bg-white border border-stone-100 rounded-[24px] hover:bg-stone-50 transition-colors">
-              <div className="w-10 h-10 bg-blue-50 text-blue-500 rounded-full flex items-center justify-center"><MessageCircle size={20} /></div>
-              <span className="text-[10px] font-black uppercase">Text POD</span>
-            </button>
-          </div>
-
-          <button 
-            onClick={handleNativeShare}
-            className="w-full py-5 bg-black text-white rounded-[24px] font-black uppercase tracking-widest flex items-center justify-center gap-3 active:scale-95 transition-all shadow-xl"
-          >
-            <Share2 size={18} /> Open System Share
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// --- LOGIN GATE ---
-
-const LoginGate: React.FC<{ onAuthorized: (role: AppRole) => void }> = ({ onAuthorized }) => {
-  const [passcode, setPasscode] = useState("");
-  const [error, setError] = useState(false);
-  const [showPasscode, setShowPasscode] = useState(false);
-  const [selectedRole, setSelectedRole] = useState<AppRole | null>(null);
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (passcode.trim() === ACCESS_PASSCODE && selectedRole) {
-      onAuthorized(selectedRole);
-    } else {
-      setError(true);
-      setTimeout(() => {
-        setError(false);
-        setPasscode("");
-      }, 1500);
-    }
-  };
-
-  if (!selectedRole) {
-    return (
-      <div className="min-h-screen bg-white flex flex-col items-center justify-center p-10 text-center animate-in fade-in duration-500">
-        <img src={BRAND_LOGO} className="h-48 mb-12 object-contain" alt="Logo" />
-        <h2 className="text-xl font-black text-black tracking-tight mb-8 uppercase">Select Login</h2>
+      {step === 'NAME' ? (
         <div className="w-full max-w-xs space-y-4">
-          <button onClick={() => setSelectedRole('ADMIN')} className="w-full py-6 bg-black text-white rounded-[28px] font-black uppercase tracking-widest shadow-xl flex items-center justify-center gap-3 active:scale-95 transition-all">
-            <ShieldCheck size={20} /> Admin
-          </button>
-          <button onClick={() => setSelectedRole('DRIVER')} className="w-full py-6 bg-white border-2 border-black text-black rounded-[28px] font-black uppercase tracking-widest flex items-center justify-center gap-3 active:scale-95 transition-all">
-            <Truck size={20} /> Driver
-          </button>
-        </div>
-        <p className="mt-12 text-[10px] font-black text-stone-300 uppercase tracking-widest">The Sweet Tooth • Internal Use Only</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="min-h-screen bg-white flex flex-col items-center justify-center p-10 animate-in slide-in-from-bottom duration-500">
-      <button onClick={() => setSelectedRole(null)} className="absolute top-10 left-10 p-2 text-stone-300"><X size={24} /></button>
-      <div className="w-12 h-12 bg-black text-white rounded-2xl flex items-center justify-center mb-6">
-        <Lock size={20} />
-      </div>
-      <h2 className="text-xl font-black text-black tracking-tight mb-2 uppercase text-center">Security Access</h2>
-      <p className="text-[10px] font-black text-stone-400 uppercase tracking-widest mb-8 text-center">Enter the 4-digit access code for <span className="text-black">{selectedRole}</span></p>
-      
-      <form onSubmit={handleSubmit} className="w-full max-w-xs relative">
-        <div className="relative">
-          <input 
+          <h2 className="text-xl font-black text-black tracking-tight uppercase text-center mb-6">Who are you?</h2>
+          <input
             autoFocus
-            autoComplete="off"
-            type={showPasscode ? "text" : "password"}
-            inputMode="numeric"
-            pattern="[0-9]*"
-            value={passcode}
-            onChange={(e) => setPasscode(e.target.value)}
-            placeholder="0000"
-            maxLength={4}
-            className={`w-full bg-stone-50 border-2 rounded-[24px] px-6 py-5 text-center text-4xl font-black tracking-[0.5em] outline-none transition-all ${error ? 'border-red-500 animate-shake' : 'border-stone-100 focus:border-black'}`}
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleNameSubmit()}
+            placeholder="Enter your name"
+            className="w-full bg-stone-50 border-2 border-stone-100 rounded-[24px] px-6 py-5 text-center text-lg font-black outline-none focus:border-black transition-all"
           />
-          <button 
-            type="button"
-            onClick={() => setShowPasscode(!showPasscode)}
-            className="absolute right-6 top-1/2 -translate-y-1/2 text-stone-300"
-          >
-            {showPasscode ? <EyeOff size={18} /> : <Eye size={18} />}
-          </button>
+          {error && <p className="text-[11px] font-black text-red-500 uppercase text-center">{error}</p>}
+          <button
+            onClick={handleNameSubmit}
+            className="w-full py-5 bg-black text-white rounded-[24px] font-black uppercase tracking-widest shadow-lg active:scale-95 transition-all"
+          >Continue</button>
         </div>
-        {error && <p className="text-[10px] font-black text-red-500 uppercase mt-4 text-center">Invalid Passcode</p>}
-        <button type="submit" className="w-full mt-6 py-5 bg-black text-white rounded-[24px] font-black uppercase tracking-widest shadow-lg active:scale-95 transition-all">
-          Unlock Portal
-        </button>
-      </form>
-      <p className="mt-12 text-[8px] font-black text-stone-300 uppercase tracking-widest text-center max-w-[200px] leading-relaxed">
-        Activity is monitored and recorded for security.
-      </p>
-    </div>
-  );
-};
-
-// --- UI COMPONENTS ---
-
-const Header: React.FC<{ onLogout: () => void, onLogoClick: () => void, lastSync: string | null, isSyncing: boolean }> = ({ onLogout, onLogoClick, lastSync, isSyncing }) => (
-  <div className="bg-white border-b border-stone-100 py-4 px-6 sticky top-0 z-[100] flex items-center justify-between shadow-sm">
-    <div 
-      onClick={onLogoClick} 
-      className="flex items-center cursor-pointer hover:opacity-70 active:scale-95 transition-all"
-    >
-      <img src={BRAND_LOGO} alt="The Sweet Tooth" className="h-12 w-auto object-contain" />
-    </div>
-    
-    <div className="flex items-center gap-4">
-      {lastSync && (
-        <div className="flex flex-col items-end mr-2">
-          <div className="flex items-center gap-1.5">
-            <span className={`w-1.5 h-1.5 rounded-full ${isSyncing ? 'bg-pink-400 animate-pulse' : 'bg-green-500'}`}></span>
-            <span className="text-[8px] font-black uppercase text-stone-400 tracking-widest">Shopify Live</span>
+      ) : (
+        <div className="w-full max-w-xs space-y-4">
+          <button onClick={() => { setStep('NAME'); setPin(''); setError(''); }} className="flex items-center gap-1 text-stone-400 text-xs font-black uppercase mb-4">
+            <ChevronLeft size={14} /> Back
+          </button>
+          <h2 className="text-xl font-black text-black tracking-tight uppercase text-center mb-2">Hi, {name}!</h2>
+          <p className="text-[10px] font-black text-stone-400 uppercase tracking-widest text-center mb-6">Enter your 4-digit PIN</p>
+          <div className="relative">
+            <input
+              autoFocus
+              type={showPin ? 'text' : 'password'}
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={pin}
+              onChange={(e) => setPin(e.target.value.slice(0, 4))}
+              onKeyDown={(e) => e.key === 'Enter' && handlePinSubmit()}
+              placeholder="0000"
+              maxLength={4}
+              className={`w-full bg-stone-50 border-2 rounded-[24px] px-6 py-5 text-center text-4xl font-black tracking-[0.5em] outline-none transition-all ${error ? 'border-red-500' : 'border-stone-100 focus:border-black'}`}
+            />
+            <button type="button" onClick={() => setShowPin(!showPin)} className="absolute right-6 top-1/2 -translate-y-1/2 text-stone-300">
+              {showPin ? <EyeOff size={18} /> : <Eye size={18} />}
+            </button>
           </div>
-          <p className="text-[7px] font-bold text-stone-300 uppercase">Updated {lastSync}</p>
+          {error && <p className="text-[11px] font-black text-red-500 uppercase text-center">{error}</p>}
+          <button
+            onClick={handlePinSubmit}
+            disabled={isLoading}
+            className="w-full py-5 bg-black text-white rounded-[24px] font-black uppercase tracking-widest shadow-lg active:scale-95 transition-all disabled:opacity-50"
+          >{isLoading ? 'Checking...' : 'Unlock'}</button>
         </div>
       )}
-      <button onClick={onLogout} className="p-2 text-stone-400 hover:text-red-500 transition-colors">
-        <LogOut size={18} />
-      </button>
-    </div>
-  </div>
-);
-
-const DateHeader: React.FC<{ selectedDate: Date }> = ({ selectedDate }) => {
-  const isToday = new Date().toDateString() === selectedDate.toDateString();
-  const displayDate = selectedDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-  return (
-    <div className="mb-6">
-      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-stone-400 mb-1">
-        {isToday ? "Today's Schedule" : "Schedule for"}
-      </p>
-      <h1 className="text-2xl font-black text-black tracking-tight">{displayDate}</h1>
+      <p className="mt-12 text-[10px] font-black text-stone-300 uppercase tracking-widest">The Sweet Tooth • Internal Use Only</p>
     </div>
   );
 };
 
-const OrderRow: React.FC<{ order: Delivery, isSelected: boolean, onSelect: () => void, onView: () => void }> = ({ order, isSelected, onSelect, onView }) => {
-  const totalAmount = order.items.reduce((sum, item) => sum + (item.price * item.quantity), 0) + order.deliveryFee;
-  const statusColor = order.status === DeliveryStatus.DELIVERED ? 'bg-black text-white' : 
-                      order.status === DeliveryStatus.FAILED ? 'bg-red-500 text-white' :
-                      order.status === DeliveryStatus.IN_TRANSIT ? 'bg-[#FDF0F6] text-black border border-pink-200' : 'bg-stone-100 text-stone-500';
-  
+// ─────────────────────────────────────────────────────────────────────────────
+// ORDER CARD — full gift/product info
+// ─────────────────────────────────────────────────────────────────────────────
+
+const OrderCard: React.FC<{ order: Delivery; role: AppRole; onTap: () => void; isSelected: boolean }> = ({ order, role, onTap, isSelected }) => {
+  const statusColor =
+    order.status === DeliveryStatus.DELIVERED ? 'bg-green-500 text-white' :
+    order.status === DeliveryStatus.FAILED ? 'bg-red-500 text-white' :
+    order.status === DeliveryStatus.IN_TRANSIT ? 'bg-blue-500 text-white' :
+    'bg-stone-200 text-stone-600';
+
   return (
-    <div 
-      onClick={onSelect}
-      className={`p-4 border-b border-stone-50 transition-all cursor-pointer flex items-center justify-between ${isSelected ? 'bg-[#FDF0F6] scale-[1.01] shadow-sm z-10 relative' : 'hover:bg-stone-50'}`}
+    <div
+      onClick={onTap}
+      className={`p-5 border-b border-stone-50 cursor-pointer transition-all ${isSelected ? 'bg-pink-50 border-l-4 border-l-pink-400' : 'hover:bg-stone-50'}`}
     >
-      <div className="flex-1">
-        <div className="flex items-center gap-2 mb-1">
-          <span className="text-[11px] font-black text-stone-900">{order.orderNumber}</span>
-          <span className={`text-[7px] px-1.5 py-0.5 rounded-full font-black uppercase ${statusColor}`}>
-            {order.status.replace('_', ' ')}
-          </span>
+      <div className="flex items-start justify-between mb-2">
+        <div>
+          <span className="text-[10px] font-black text-stone-400 uppercase">Order {order.orderNumber}</span>
+          <div className="flex items-center gap-2 mt-0.5">
+            <span className={`text-[8px] px-2 py-0.5 rounded-full font-black uppercase ${statusColor}`}>
+              {order.status.replace('_', ' ')}
+            </span>
+            {order.priority === 'Urgent' && (
+              <span className="text-[8px] px-2 py-0.5 rounded-full font-black uppercase bg-orange-100 text-orange-600">Urgent</span>
+            )}
+          </div>
         </div>
-        <p className="text-[11px] font-black text-stone-900 truncate max-w-[160px]">{order.customer.name}</p>
-        <p className="text-[9px] font-bold text-stone-400 uppercase tracking-tight">{order.address.city}</p>
+        <ChevronRight size={16} className="text-stone-300 mt-1" />
       </div>
-      <div className="flex items-center gap-3">
-        <p className="text-[11px] font-black text-stone-900">${totalAmount.toFixed(2)}</p>
-        {isSelected ? (
-          <button onClick={(e) => { e.stopPropagation(); onView(); }} className="p-2 bg-black text-white rounded-lg shadow-md animate-in zoom-in-50">
-            <Eye size={16} />
-          </button>
-        ) : (
-          <ChevronRight size={14} className="text-stone-200" />
+
+      {/* Recipient */}
+      <div className="flex items-center gap-2 mb-1">
+        <User size={12} className="text-stone-400 shrink-0" />
+        <p className="text-sm font-black text-stone-900">{order.giftReceiverName || order.customer.name}</p>
+      </div>
+
+      {/* From */}
+      {order.giftSenderName && (
+        <div className="flex items-center gap-2 mb-1">
+          <Gift size={12} className="text-pink-400 shrink-0" />
+          <p className="text-xs font-bold text-stone-500">From: {order.giftSenderName}</p>
+        </div>
+      )}
+
+      {/* Products */}
+      {order.items?.length > 0 && (
+        <div className="flex items-start gap-2 mb-1">
+          <Package size={12} className="text-stone-400 shrink-0 mt-0.5" />
+          <p className="text-xs font-bold text-stone-600 leading-tight">
+            {order.items.map(i => `${i.quantity}x ${i.name}`).join(', ')}
+          </p>
+        </div>
+      )}
+
+      {/* Gift message */}
+      {order.giftMessage && (
+        <div className="mt-2 p-2 bg-pink-50 rounded-xl border border-pink-100">
+          <p className="text-[9px] font-black uppercase text-pink-400 mb-0.5">Gift Message</p>
+          <p className="text-xs text-stone-600 italic">"{order.giftMessage}"</p>
+        </div>
+      )}
+
+      {/* Address + fee (admin only) */}
+      <div className="flex items-center justify-between mt-2">
+        <div className="flex items-center gap-1.5">
+          <MapPin size={11} className="text-stone-300" />
+          <p className="text-[10px] font-bold text-stone-400">{order.address.city}, {order.address.zip}</p>
+        </div>
+        {(role === 'SUPER_ADMIN' || role === 'MANAGER') && (
+          <span className="text-[10px] font-black text-stone-500">${order.deliveryFee}</span>
         )}
       </div>
     </div>
   );
 };
 
-// --- CHAT VIEW ---
+// ─────────────────────────────────────────────────────────────────────────────
+// ORDER DETAIL — 3-tap flow + notification
+// ─────────────────────────────────────────────────────────────────────────────
 
-const ChatView: React.FC<{ role: AppRole }> = ({ role }) => {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [input, setInput] = useState("");
-  const scrollRef = useRef<HTMLDivElement>(null);
+const OrderDetail: React.FC<{
+  order: Delivery;
+  role: AppRole;
+  currentUser: UserAccount;
+  allUsers: UserAccount[];
+  onUpdate: (id: string, updates: Partial<Delivery>) => void;
+  onBack: () => void;
+}> = ({ order, role, currentUser, allUsers, onUpdate, onBack }) => {
+  const [isSigning, setIsSigning] = useState(false);
+  const [photoData, setPhotoData] = useState<string | null>(order.confirmationPhoto || null);
+  const [sigData, setSigData] = useState<string | null>(order.confirmationSignature || null);
+  const [failReason, setFailReason] = useState<FailureReason>('NOT_HOME');
+  const [driverNote, setDriverNote] = useState(order.driverNotes || '');
+  const [showFailMenu, setShowFailMenu] = useState(false);
+  const [adminNote, setAdminNote] = useState('');
+  const [showNotifyPreview, setShowNotifyPreview] = useState<null | 'SUCCESS' | 'FAILURE'>(null);
+  const [notifyPreviewText, setNotifyPreviewText] = useState('');
+  const [notifyChannel, setNotifyChannel] = useState('');
+  const [notifySent, setNotifySent] = useState(false);
+  const [isSendingNotify, setIsSendingNotify] = useState(false);
+  const [reassignTo, setReassignTo] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const isAdmin = role === 'SUPER_ADMIN' || role === 'MANAGER';
 
-  const handleSend = () => {
-    if (!input.trim()) return;
-    const newMessage: ChatMessage = {
-      id: Date.now().toString(),
-      senderId: role === 'ADMIN' ? 'admin' : 'driver',
-      senderName: role === 'ADMIN' ? 'Dispatch' : 'Driver',
-      text: input,
-      timestamp: new Date().toISOString(),
-      isRead: false
-    };
-    setMessages([...messages, newMessage]);
-    setInput("");
+  const handlePhoto = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => setPhotoData(reader.result as string);
+    reader.readAsDataURL(file);
   };
 
+  const handleComplete = async () => {
+    const now = new Date().toISOString();
+    onUpdate(order.id, {
+      status: DeliveryStatus.DELIVERED,
+      confirmationPhoto: photoData || undefined,
+      confirmationSignature: sigData || undefined,
+      driverNotes: driverNote,
+      completedAt: now,
+      submittedAt: now
+    });
+    await fetch('/api/pod', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        orderId: order.id, photo: photoData, signature: sigData,
+        notes: driverNote, completedAt: now, status: 'DELIVERED',
+        driverId: currentUser.id, driverName: currentUser.name
+      })
+    });
+  };
+
+  const handleFailed = async () => {
+    const now = new Date().toISOString();
+    onUpdate(order.id, {
+      status: DeliveryStatus.FAILED,
+      confirmationPhoto: photoData || undefined,
+      confirmationSignature: sigData || undefined,
+      driverNotes: driverNote,
+      submittedAt: now,
+      attempts: [
+        ...(order.attempts || []),
+        { id: Date.now().toString(), timestamp: now, driverId: currentUser.id, driverName: currentUser.name, type: 'FIRST', reason: failReason, notes: driverNote, photo: photoData || undefined, signature: sigData || undefined }
+      ]
+    });
+    await fetch('/api/pod', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        orderId: order.id, photo: photoData, signature: sigData,
+        notes: driverNote, submittedAt: now, status: 'FAILED',
+        driverId: currentUser.id, driverName: currentUser.name, failReason
+      })
+    });
+    setShowFailMenu(false);
+  };
+
+  const loadPreview = async (type: 'SUCCESS' | 'FAILURE') => {
+    const res = await fetch('/api/notify/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type, order })
+    });
+    const data = await res.json();
+    setNotifyPreviewText(data.preview);
+    setNotifyChannel(data.channel);
+    setShowNotifyPreview(type);
+    setNotifySent(false);
+  };
+
+  const handleSend = async () => {
+    if (!showNotifyPreview) return;
+    if (!isWithinSendingHours()) {
+      alert('Messages can only be sent between 9 AM and 8 PM.');
+      return;
+    }
+    setIsSendingNotify(true);
+    const res = await fetch('/api/notify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: showNotifyPreview, order })
+    });
+    const data = await res.json();
+    setIsSendingNotify(false);
+    if (data.sent) {
+      setNotifySent(true);
+      onUpdate(order.id, showNotifyPreview === 'SUCCESS' ? { successNotificationSent: true } : { failureNotificationSent: true });
+    } else {
+      alert(data.error || 'Failed to send. Check Twilio/SendGrid setup.');
+    }
+  };
+
+  const handleAddAdminNote = async () => {
+    if (!adminNote.trim()) return;
+    await fetch(`/api/orders/${order.id}/note`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ note: adminNote })
+    });
+    onUpdate(order.id, { adminNotes: order.adminNotes ? `${order.adminNotes}\n[${new Date().toLocaleString()}] ${adminNote}` : `[${new Date().toLocaleString()}] ${adminNote}` });
+    setAdminNote('');
+  };
+
+  const handleReassign = async () => {
+    if (!reassignTo) return;
+    const driver = allUsers.find(u => u.id === reassignTo);
+    if (!driver) return;
+    await fetch(`/api/orders/${order.id}/assign`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ driverId: driver.id, driverName: driver.name })
+    });
+    onUpdate(order.id, { driverId: driver.id, driverName: driver.name });
+    setReassignTo('');
+  };
+
+  const isCompleted = order.status === DeliveryStatus.DELIVERED || order.status === DeliveryStatus.FAILED;
+
   return (
-    <div className="flex flex-col h-full bg-stone-50">
-      <div className="p-4 bg-white border-b border-stone-100 shadow-sm">
-        <h2 className="text-xl font-black text-black tracking-tighter uppercase">Team Dispatch</h2>
-        <p className="text-[8px] font-black text-stone-400 uppercase tracking-widest">Internal Logistics Chat</p>
+    <div className="flex flex-col min-h-screen bg-white">
+      {/* Header */}
+      <div className="sticky top-0 z-10 bg-white border-b border-stone-100 px-4 py-4 flex items-center gap-3 shadow-sm">
+        <button onClick={onBack} className="p-2 bg-stone-100 rounded-full"><ChevronLeft size={20} /></button>
+        <div className="flex-1">
+          <p className="text-[10px] font-black text-stone-400 uppercase">Order {order.orderNumber}</p>
+          <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase mt-0.5 ${
+            order.status === DeliveryStatus.DELIVERED ? 'bg-green-100 text-green-700' :
+            order.status === DeliveryStatus.FAILED ? 'bg-red-100 text-red-700' :
+            order.status === DeliveryStatus.IN_TRANSIT ? 'bg-blue-100 text-blue-700' :
+            'bg-stone-100 text-stone-500'
+          }`}>{order.status.replace('_', ' ')}</div>
+        </div>
+        {order.submittedAt && (
+          <span className="text-[9px] font-black text-stone-400 uppercase">Submitted {formatTime(order.submittedAt)}</span>
+        )}
       </div>
-      <div className="flex-1 overflow-y-auto p-4 space-y-4" ref={scrollRef}>
-        {messages.map(msg => (
-          <div key={msg.id} className={`flex flex-col ${msg.senderId === (role === 'ADMIN' ? 'admin' : 'driver') ? 'items-end' : 'items-start'}`}>
-            <div className={`p-4 rounded-[20px] max-w-[85%] text-sm font-black shadow-sm ${msg.senderId === (role === 'ADMIN' ? 'admin' : 'driver') ? 'bg-black text-white' : 'bg-white border border-stone-100'}`}>
-              {msg.text}
+
+      <div className="flex-1 overflow-y-auto p-5 space-y-5 pb-32">
+
+        {/* Recipient & Gift */}
+        <section className="p-5 bg-white border border-stone-100 rounded-[28px] shadow-sm space-y-3">
+          <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest">Delivery Details</p>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-stone-100 rounded-full flex items-center justify-center shrink-0">
+              <User size={18} className="text-stone-500" />
+            </div>
+            <div>
+              <p className="font-black text-stone-900">{order.giftReceiverName || order.customer.name}</p>
+              <p className="text-xs text-stone-400 font-medium">{order.customer.phone || order.customer.email}</p>
             </div>
           </div>
-        ))}
-      </div>
-      <div className="p-4 bg-white border-t border-stone-100 pb-28">
-        <div className="relative">
-          <input 
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && handleSend()}
-            placeholder="Type a message..."
-            className="w-full bg-stone-50 border border-stone-100 rounded-[24px] px-6 py-4 text-sm font-black outline-none"
-          />
-          <button onClick={handleSend} className="absolute right-2 top-2 w-10 h-10 bg-black text-white rounded-full flex items-center justify-center">
-            <Send size={16} />
-          </button>
+          {order.giftSenderName && (
+            <div className="flex items-center gap-2 pt-1 border-t border-stone-50">
+              <Gift size={14} className="text-pink-400" />
+              <p className="text-xs font-bold text-stone-500">Gift from: <span className="text-stone-800">{order.giftSenderName}</span></p>
+            </div>
+          )}
+        </section>
+
+        {/* Products */}
+        {order.items?.length > 0 && (
+          <section className="p-5 bg-white border border-stone-100 rounded-[28px] shadow-sm space-y-2">
+            <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest">Products</p>
+            {order.items.map((item, i) => (
+              <div key={i} className="flex items-center justify-between py-2 border-b border-stone-50 last:border-0">
+                <div>
+                  <p className="text-sm font-black text-stone-900">{item.name}</p>
+                  {item.specialInstructions && <p className="text-xs text-stone-400 italic">{item.specialInstructions}</p>}
+                </div>
+                <span className="text-sm font-black text-stone-500">×{item.quantity}</span>
+              </div>
+            ))}
+          </section>
+        )}
+
+        {/* Gift message */}
+        {order.giftMessage && (
+          <section className="p-5 bg-pink-50 border border-pink-100 rounded-[28px] space-y-2">
+            <p className="text-[9px] font-black uppercase text-pink-400 tracking-widest">Gift Message</p>
+            <p className="text-sm text-stone-700 italic leading-relaxed">"{order.giftMessage}"</p>
+          </section>
+        )}
+
+        {/* Address */}
+        <section className="p-5 bg-white border border-stone-100 rounded-[28px] shadow-sm space-y-3">
+          <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest">Delivery Address</p>
+          <p className="font-black text-stone-900">{order.address.street}</p>
+          <p className="text-sm text-stone-500">{order.address.city}, FL {order.address.zip}</p>
+          {order.deliveryInstructions && (
+            <div className="mt-2 p-3 bg-amber-50 rounded-xl border border-amber-100">
+              <p className="text-[9px] font-black uppercase text-amber-600 mb-1">Instructions</p>
+              <p className="text-xs text-stone-700 leading-relaxed">{order.deliveryInstructions}</p>
+            </div>
+          )}
+          <a
+            href={`https://maps.google.com/?q=${encodeURIComponent(order.address.street + ' ' + order.address.city + ' FL')}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-center gap-2 w-full py-4 bg-black text-white rounded-2xl font-black uppercase text-xs active:scale-95 transition-all mt-2"
+          >
+            <Navigation size={16} /> Open in Maps
+          </a>
+        </section>
+
+        {/* Contact */}
+        <div className="grid grid-cols-2 gap-3">
+          {order.customer.phone && (
+            <a href={`tel:${order.customer.phone}`} className="flex items-center justify-center gap-2 py-5 bg-stone-100 text-black rounded-2xl font-black uppercase text-xs active:scale-95 transition-all">
+              <Phone size={16} /> Call
+            </a>
+          )}
+          {order.customer.phone && (
+            <a href={`sms:${order.customer.phone}`} className="flex items-center justify-center gap-2 py-5 bg-stone-100 text-black rounded-2xl font-black uppercase text-xs active:scale-95 transition-all">
+              <MessageCircle size={16} /> Text
+            </a>
+          )}
         </div>
+
+        {/* Admin Notes */}
+        {isAdmin && (
+          <section className="p-5 bg-white border border-stone-100 rounded-[28px] shadow-sm space-y-3">
+            <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest">Admin Notes</p>
+            {order.adminNotes && (
+              <div className="bg-stone-50 rounded-xl p-3">
+                <p className="text-xs text-stone-600 leading-relaxed whitespace-pre-line">{order.adminNotes}</p>
+              </div>
+            )}
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={adminNote}
+                onChange={(e) => setAdminNote(e.target.value)}
+                placeholder="Add note..."
+                className="flex-1 bg-stone-50 border border-stone-100 rounded-xl px-4 py-3 text-sm font-medium outline-none focus:border-black transition-all"
+              />
+              <button onClick={handleAddAdminNote} className="px-4 py-3 bg-black text-white rounded-xl font-black text-xs uppercase">Add</button>
+            </div>
+          </section>
+        )}
+
+        {/* Reassign (admin/manager) */}
+        {isAdmin && (
+          <section className="p-5 bg-white border border-stone-100 rounded-[28px] shadow-sm space-y-3">
+            <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest">Reassign Driver</p>
+            <p className="text-xs text-stone-500">Currently: <span className="font-black text-stone-800">{order.driverName || 'Unassigned'}</span></p>
+            <div className="flex gap-2">
+              <select
+                value={reassignTo}
+                onChange={(e) => setReassignTo(e.target.value)}
+                className="flex-1 bg-stone-50 border border-stone-100 rounded-xl px-4 py-3 text-sm font-medium outline-none focus:border-black"
+              >
+                <option value="">Select driver...</option>
+                {allUsers.filter(u => u.role === 'DRIVER' && u.isActive).map(u => (
+                  <option key={u.id} value={u.id}>{u.name}</option>
+                ))}
+              </select>
+              <button onClick={handleReassign} disabled={!reassignTo} className="px-4 py-3 bg-black text-white rounded-xl font-black text-xs uppercase disabled:opacity-40">Assign</button>
+            </div>
+          </section>
+        )}
+
+        {/* Fees (admin only) */}
+        {isAdmin && (
+          <section className="p-5 bg-stone-50 border border-stone-100 rounded-[28px] space-y-2">
+            <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest">Delivery Fee</p>
+            <p className="text-2xl font-black text-stone-900">${order.deliveryFee.toFixed(2)}</p>
+            <p className="text-xs text-stone-400">ZIP {order.address.zip}</p>
+          </section>
+        )}
+
+        {/* ── DRIVER ACTIONS (only if not completed) ── */}
+        {!isCompleted && (
+          <section className="space-y-3">
+            <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest px-1">Proof of Delivery</p>
+
+            {/* Photo */}
+            <input type="file" accept="image/*" capture="environment" ref={fileInputRef} onChange={handlePhoto} className="hidden" />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className={`w-full py-6 rounded-[28px] font-black uppercase tracking-wider text-sm flex items-center justify-center gap-3 active:scale-95 transition-all shadow-sm ${photoData ? 'bg-green-50 text-green-700 border-2 border-green-200' : 'bg-stone-100 text-stone-700'}`}
+            >
+              <Camera size={22} />
+              {photoData ? '✓ PHOTO TAKEN — RETAKE' : 'TAKE PHOTO'}
+            </button>
+
+            {photoData && <img src={photoData} className="w-full rounded-[20px] object-cover max-h-48 border border-stone-100" alt="POD" />}
+
+            {/* Signature */}
+            <button
+              onClick={() => setIsSigning(true)}
+              className={`w-full py-6 rounded-[28px] font-black uppercase tracking-wider text-sm flex items-center justify-center gap-3 active:scale-95 transition-all shadow-sm ${sigData ? 'bg-green-50 text-green-700 border-2 border-green-200' : 'bg-stone-100 text-stone-700'}`}
+            >
+              <PenTool size={22} />
+              {sigData ? '✓ SIGNED — REDO' : 'GET SIGNATURE (OPTIONAL)'}
+            </button>
+
+            {/* Driver note */}
+            <textarea
+              value={driverNote}
+              onChange={(e) => setDriverNote(e.target.value)}
+              placeholder="Delivery notes (optional)..."
+              rows={2}
+              className="w-full bg-stone-50 border border-stone-100 rounded-[20px] px-5 py-4 text-sm font-medium outline-none focus:border-black transition-all resize-none"
+            />
+
+            {/* Complete */}
+            <button
+              onClick={handleComplete}
+              className="w-full py-7 bg-green-500 text-white rounded-[32px] font-black uppercase tracking-widest text-base shadow-xl flex items-center justify-center gap-3 active:scale-95 transition-all"
+            >
+              <CheckCircle2 size={24} /> COMPLETE DELIVERY
+            </button>
+
+            {/* Failed */}
+            <button
+              onClick={() => setShowFailMenu(true)}
+              className="w-full py-6 bg-white border-2 border-red-200 text-red-500 rounded-[28px] font-black uppercase tracking-widest text-sm flex items-center justify-center gap-3 active:scale-95 transition-all"
+            >
+              <XCircle size={20} /> MARK AS FAILED
+            </button>
+          </section>
+        )}
+
+        {/* ── COMPLETED STATE ── */}
+        {isCompleted && (
+          <section className="space-y-4">
+            <div className={`p-5 rounded-[28px] border space-y-3 ${order.status === DeliveryStatus.DELIVERED ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+              <p className={`text-[9px] font-black uppercase tracking-widest ${order.status === DeliveryStatus.DELIVERED ? 'text-green-600' : 'text-red-500'}`}>
+                {order.status === DeliveryStatus.DELIVERED ? 'Delivery Completed' : 'Delivery Failed'}
+              </p>
+              {order.completedAt && <p className="text-xs font-bold text-stone-600">Completed: {formatDate(order.completedAt)} at {formatTime(order.completedAt)}</p>}
+              {order.submittedAt && <p className="text-xs font-bold text-stone-500">Submitted: {formatTime(order.submittedAt)}</p>}
+              {order.driverNotes && <p className="text-xs italic text-stone-600">"{order.driverNotes}"</p>}
+            </div>
+
+            {order.confirmationPhoto && (
+              <img src={order.confirmationPhoto} className="w-full rounded-[20px] object-cover max-h-48 border border-stone-100" alt="Delivery photo" />
+            )}
+            {order.confirmationSignature && (
+              <div className="bg-white border border-stone-100 rounded-[20px] p-3">
+                <p className="text-[9px] font-black uppercase text-stone-400 mb-2">Signature</p>
+                <img src={order.confirmationSignature} className="w-full max-h-24 object-contain" alt="Signature" />
+              </div>
+            )}
+
+            {/* Notification section — always visible after completion */}
+            <div className="p-5 bg-white border border-stone-100 rounded-[28px] shadow-sm space-y-3">
+              <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest">Customer Notification</p>
+              {!isWithinSendingHours() && (
+                <div className="flex items-center gap-2 p-3 bg-amber-50 rounded-xl border border-amber-100">
+                  <Clock size={14} className="text-amber-500" />
+                  <p className="text-xs font-black text-amber-700">Sending only allowed 9 AM – 8 PM</p>
+                </div>
+              )}
+              {order.status === DeliveryStatus.DELIVERED && !order.successNotificationSent && (
+                <button
+                  onClick={() => loadPreview('SUCCESS')}
+                  className="w-full py-5 bg-black text-white rounded-[24px] font-black uppercase text-sm flex items-center justify-center gap-2 active:scale-95 transition-all"
+                >
+                  <Bell size={18} /> Preview & Send Success Message
+                </button>
+              )}
+              {order.status === DeliveryStatus.DELIVERED && order.successNotificationSent && (
+                <div className="flex items-center gap-2 p-3 bg-green-50 rounded-xl">
+                  <Check size={14} className="text-green-600" />
+                  <p className="text-xs font-black text-green-700">Success message sent</p>
+                </div>
+              )}
+              {order.status === DeliveryStatus.FAILED && !order.failureNotificationSent && (
+                <button
+                  onClick={() => loadPreview('FAILURE')}
+                  className="w-full py-5 bg-black text-white rounded-[24px] font-black uppercase text-sm flex items-center justify-center gap-2 active:scale-95 transition-all"
+                >
+                  <Bell size={18} /> Preview & Send Failure Message
+                </button>
+              )}
+              {order.status === DeliveryStatus.FAILED && order.failureNotificationSent && (
+                <div className="flex items-center gap-2 p-3 bg-green-50 rounded-xl">
+                  <Check size={14} className="text-green-600" />
+                  <p className="text-xs font-black text-green-700">Reschedule message sent with Katie's number</p>
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+      </div>
+
+      {/* Failure menu */}
+      {showFailMenu && (
+        <div className="fixed inset-0 bg-black/60 z-[200] flex items-end">
+          <div className="w-full bg-white rounded-t-[40px] p-6 space-y-4 animate-in slide-in-from-bottom">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xl font-black uppercase">Why did it fail?</h3>
+              <button onClick={() => setShowFailMenu(false)}><X size={24} className="text-stone-400" /></button>
+            </div>
+            <select
+              value={failReason}
+              onChange={(e) => setFailReason(e.target.value as FailureReason)}
+              className="w-full bg-stone-50 border border-stone-100 rounded-2xl px-5 py-4 text-sm font-black outline-none"
+            >
+              <option value="NOT_HOME">Not Home</option>
+              <option value="BAD_ADDRESS">Bad Address</option>
+              <option value="REFUSED">Refused Delivery</option>
+              <option value="CONCIERGE_REJECTED">Concierge Rejected</option>
+              <option value="GATE_CODE_MISSING">Gate Code Missing</option>
+              <option value="RECIPIENT_UNAVAILABLE">Recipient Unavailable</option>
+              <option value="LEFT_WITH_NEIGHBOR">Left with Neighbor</option>
+              <option value="OTHER">Other</option>
+            </select>
+            <textarea
+              value={driverNote}
+              onChange={(e) => setDriverNote(e.target.value)}
+              placeholder="Additional notes..."
+              rows={2}
+              className="w-full bg-stone-50 border border-stone-100 rounded-2xl px-5 py-4 text-sm font-medium outline-none resize-none"
+            />
+            <button
+              onClick={handleFailed}
+              className="w-full py-6 bg-red-500 text-white rounded-[28px] font-black uppercase text-sm flex items-center justify-center gap-2 active:scale-95 transition-all"
+            >
+              <XCircle size={20} /> SUBMIT FAILED DELIVERY
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Notify preview modal */}
+      {showNotifyPreview && (
+        <div className="fixed inset-0 bg-black/70 z-[200] flex items-end p-4">
+          <div className="w-full bg-white rounded-[36px] p-6 space-y-4 animate-in slide-in-from-bottom">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-black uppercase">Preview Message</h3>
+              <button onClick={() => setShowNotifyPreview(null)}><X size={22} className="text-stone-400" /></button>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-black uppercase bg-stone-100 px-3 py-1 rounded-full text-stone-600">Sending via {notifyChannel}</span>
+            </div>
+            <div className="bg-stone-50 rounded-2xl p-4">
+              <p className="text-sm text-stone-700 leading-relaxed">{notifyPreviewText}</p>
+            </div>
+            {notifySent ? (
+              <div className="flex items-center justify-center gap-2 py-5 bg-green-50 rounded-[24px]">
+                <Check size={20} className="text-green-600" />
+                <span className="font-black text-green-700 uppercase">Message Sent!</span>
+              </div>
+            ) : (
+              <button
+                onClick={handleSend}
+                disabled={isSendingNotify || !isWithinSendingHours()}
+                className="w-full py-7 bg-green-500 text-white rounded-[32px] font-black uppercase tracking-widest text-lg flex items-center justify-center gap-3 active:scale-95 transition-all disabled:opacity-50 shadow-xl"
+              >
+                {isSendingNotify ? <RefreshCw size={22} className="animate-spin" /> : <Send size={22} />}
+                SEND
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {isSigning && (
+        <SignaturePad
+          onSave={(sig) => { setSigData(sig); setIsSigning(false); }}
+          onCancel={() => setIsSigning(false)}
+        />
+      )}
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SCHEDULE VIEW — day/week/month/custom
+// ─────────────────────────────────────────────────────────────────────────────
+
+const ScheduleView: React.FC<{
+  deliveries: Delivery[];
+  role: AppRole;
+  currentUserId: string;
+  onSelectOrder: (order: Delivery) => void;
+}> = ({ deliveries, role, currentUserId, onSelectOrder }) => {
+  const [viewMode, setViewMode] = useState<ViewMode>('DAY');
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [customStart, setCustomStart] = useState(new Date().toISOString().split('T')[0]);
+  const [customEnd, setCustomEnd] = useState(new Date().toISOString().split('T')[0]);
+  const [filterDriver, setFilterDriver] = useState('ALL');
+  const isAdmin = role === 'SUPER_ADMIN' || role === 'MANAGER';
+
+  const getDateRange = (): [string, string] => {
+    const d = new Date(selectedDate);
+    if (viewMode === 'DAY') {
+      return [selectedDate, selectedDate];
+    } else if (viewMode === 'WEEK') {
+      const start = new Date(d);
+      start.setDate(d.getDate() - d.getDay());
+      const end = new Date(start);
+      end.setDate(start.getDate() + 6);
+      return [start.toISOString().split('T')[0], end.toISOString().split('T')[0]];
+    } else if (viewMode === 'MONTH') {
+      const start = new Date(d.getFullYear(), d.getMonth(), 1);
+      const end = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+      return [start.toISOString().split('T')[0], end.toISOString().split('T')[0]];
+    } else {
+      return [customStart, customEnd];
+    }
+  };
+
+  const [rangeStart, rangeEnd] = getDateRange();
+
+  const filtered = useMemo(() => {
+    return deliveries.filter(d => {
+      const date = d.deliveryDate?.split('T')[0] || new Date().toISOString().split('T')[0];
+      const inRange = date >= rangeStart && date <= rangeEnd;
+      const myOrder = !isAdmin ? d.driverId === currentUserId : true;
+      const driverMatch = isAdmin && filterDriver !== 'ALL' ? d.driverId === filterDriver : true;
+      return inRange && myOrder && driverMatch;
+    });
+  }, [deliveries, rangeStart, rangeEnd, currentUserId, isAdmin, filterDriver]);
+
+  // Group by date
+  const grouped = useMemo(() => {
+    const map: Record<string, Delivery[]> = {};
+    filtered.forEach(d => {
+      const date = d.deliveryDate?.split('T')[0] || new Date().toISOString().split('T')[0];
+      if (!map[date]) map[date] = [];
+      map[date].push(d);
+    });
+    return Object.entries(map).sort(([a], [b]) => a.localeCompare(b));
+  }, [filtered]);
+
+  const drivers = useMemo(() => {
+    const seen = new Set<string>();
+    const list: { id: string; name: string }[] = [];
+    deliveries.forEach(d => {
+      if (d.driverId && !seen.has(d.driverId)) {
+        seen.add(d.driverId);
+        list.push({ id: d.driverId, name: d.driverName || d.driverId });
+      }
+    });
+    return list;
+  }, [deliveries]);
+
+  return (
+    <div className="flex flex-col h-full bg-white">
+      {/* View toggle */}
+      <div className="sticky top-0 bg-white z-10 border-b border-stone-100 p-4 space-y-3">
+        <div className="flex gap-2">
+          {(['DAY', 'WEEK', 'MONTH', 'CUSTOM'] as ViewMode[]).map(m => (
+            <button
+              key={m}
+              onClick={() => setViewMode(m)}
+              className={`flex-1 py-2 rounded-xl font-black uppercase text-[10px] transition-all ${viewMode === m ? 'bg-black text-white' : 'bg-stone-100 text-stone-500'}`}
+            >{m}</button>
+          ))}
+        </div>
+        {viewMode === 'CUSTOM' ? (
+          <div className="flex gap-2">
+            <input type="date" value={customStart} onChange={e => setCustomStart(e.target.value)}
+              className="flex-1 bg-stone-50 border border-stone-100 rounded-xl px-3 py-2 text-xs font-black outline-none" />
+            <span className="self-center text-stone-400 font-black text-xs">to</span>
+            <input type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)}
+              className="flex-1 bg-stone-50 border border-stone-100 rounded-xl px-3 py-2 text-xs font-black outline-none" />
+          </div>
+        ) : (
+          <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)}
+            className="w-full bg-stone-50 border border-stone-100 rounded-xl px-4 py-3 text-sm font-black outline-none text-center" />
+        )}
+        {isAdmin && drivers.length > 0 && (
+          <select value={filterDriver} onChange={e => setFilterDriver(e.target.value)}
+            className="w-full bg-stone-50 border border-stone-100 rounded-xl px-4 py-3 text-sm font-medium outline-none">
+            <option value="ALL">All Drivers</option>
+            {drivers.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+          </select>
+        )}
+      </div>
+
+      {/* Results */}
+      <div className="flex-1 overflow-y-auto pb-24">
+        {grouped.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-24 text-center">
+            <Calendar size={36} className="text-stone-200 mb-3" />
+            <p className="text-[11px] font-black uppercase text-stone-300">No deliveries in this range</p>
+          </div>
+        ) : (
+          grouped.map(([date, orders]) => (
+            <div key={date}>
+              <div className="px-5 py-3 bg-stone-50 border-b border-stone-100">
+                <p className="text-[11px] font-black uppercase text-stone-500 tracking-widest">
+                  {new Date(date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+                  <span className="ml-2 text-stone-400">({orders.length} {orders.length === 1 ? 'delivery' : 'deliveries'})</span>
+                </p>
+              </div>
+              {orders.map(order => (
+                <OrderCard
+                  key={order.id}
+                  order={order}
+                  role={role}
+                  onTap={() => onSelectOrder(order)}
+                  isSelected={false}
+                />
+              ))}
+            </div>
+          ))
+        )}
       </div>
     </div>
   );
 };
 
-// --- MAIN APP COMPONENT ---
+// ─────────────────────────────────────────────────────────────────────────────
+// ADMIN PANEL — drivers, templates, fees
+// ─────────────────────────────────────────────────────────────────────────────
 
-export default function App() {
-  const [role, setRole] = useState<AppRole | null>(() => localStorage.getItem('role') as AppRole);
-  const [isAuthorized, setIsAuthorized] = useState(() => localStorage.getItem('isAuthorized') === 'true');
-  
-  const [deliveries, setDeliveries] = useState<Delivery[]>([]);
-  const [selectedOrder, setSelectedOrder] = useState<Delivery | null>(null);
-  const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
-  const [dataSource, setDataSource] = useState<'LIVE' | 'MOCK' | 'ERROR'>('MOCK');
-  const [tab, setTab] = useState<'DELIVERIES' | 'CHAT' | 'ADMIN'>('DELIVERIES');
-  const [isSharingPod, setIsSharingPod] = useState(false);
-  
-  // Failed Delivery Menu State
-  const [isFailedMenuOpen, setIsFailedMenuOpen] = useState(false);
-  
-  // Admin Fees State
-  const [feeStartDate, setFeeStartDate] = useState(() => {
-    const d = new Date();
-    d.setDate(d.getDate() - 7);
-    return d.toISOString().split('T')[0];
-  });
-  const [feeEndDate, setFeeEndDate] = useState(() => new Date().toISOString().split('T')[0]);
-  const [feeSearchZip, setFeeSearchZip] = useState("");
-  const [calculatedFee, setCalculatedFee] = useState<number | null>(null);
-  
-  // AI State
-  const [aiBriefing, setAiBriefing] = useState<string | null>(null);
-  const [isBriefing, setIsBriefing] = useState(false);
-  const [isOptimizing, setIsOptimizing] = useState(false);
-  const [optimizationResult, setOptimizationResult] = useState<OptimizationResult | null>(null);
-  const [manualStops, setManualStops] = useState<ManualStop[]>([]);
-  
-  // POD State
-  const [isSigning, setIsSigning] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const currentUrl = window.location.href;
+const AdminPanel: React.FC<{
+  role: AppRole;
+  deliveries: Delivery[];
+  onRefresh: () => void;
+}> = ({ role, deliveries, onRefresh }) => {
+  const [activeTab, setActiveTab] = useState<'DRIVERS' | 'TEMPLATES' | 'FEES'>('DRIVERS');
+  const [users, setUsers] = useState<UserAccount[]>([]);
+  const [templates, setTemplates] = useState<MessageTemplate[]>([]);
+  const [newDriver, setNewDriver] = useState({ name: '', pin: '', phone: '', vehicle: '' });
+  const [addError, setAddError] = useState('');
+  const [addSuccess, setAddSuccess] = useState('');
+  const [resetPinId, setResetPinId] = useState<string | null>(null);
+  const [newPinVal, setNewPinVal] = useState('');
+  const [editingTemplate, setEditingTemplate] = useState<string | null>(null);
+  const [templateEdits, setTemplateEdits] = useState<Record<string, string>>({});
+  const [feeZip, setFeeZip] = useState('');
+  const [feeResult, setFeeResult] = useState<number | null>(null);
+  const [feeStart, setFeeStart] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 7); return d.toISOString().split('T')[0]; });
+  const [feeEnd, setFeeEnd] = useState(() => new Date().toISOString().split('T')[0]);
+  const isSuperAdmin = role === 'SUPER_ADMIN';
 
   useEffect(() => {
-    if (isAuthorized && role) {
+    fetch('/api/users').then(r => r.json()).then(d => setUsers(d.users || []));
+    fetch('/api/templates').then(r => r.json()).then(d => setTemplates(d.templates || []));
+  }, []);
+
+  const handleAddDriver = async () => {
+    setAddError(''); setAddSuccess('');
+    if (!newDriver.name || !newDriver.pin) { setAddError('Name and PIN are required'); return; }
+    if (newDriver.pin.length !== 4) { setAddError('PIN must be 4 digits'); return; }
+    const res = await fetch('/api/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...newDriver, role: 'DRIVER' })
+    });
+    const data = await res.json();
+    if (!res.ok) { setAddError(data.error); return; }
+    setUsers(prev => [...prev, data.user]);
+    setNewDriver({ name: '', pin: '', phone: '', vehicle: '' });
+    setAddSuccess(`${data.user.name} added successfully!`);
+    setTimeout(() => setAddSuccess(''), 3000);
+  };
+
+  const toggleActive = async (user: UserAccount) => {
+    const res = await fetch(`/api/users/${user.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ isActive: !user.isActive })
+    });
+    const data = await res.json();
+    setUsers(prev => prev.map(u => u.id === user.id ? data.user : u));
+  };
+
+  const handleResetPin = async (userId: string) => {
+    if (newPinVal.length !== 4) { alert('Must be 4 digits'); return; }
+    await fetch(`/api/users/${userId}/reset-pin`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ newPin: newPinVal })
+    });
+    setResetPinId(null);
+    setNewPinVal('');
+    alert('PIN reset successfully');
+  };
+
+  const handleSaveTemplate = async (id: string) => {
+    const body = templateEdits[id];
+    if (!body) return;
+    const res = await fetch(`/api/templates/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ body })
+    });
+    const data = await res.json();
+    setTemplates(prev => prev.map(t => t.id === id ? data.template : t));
+    setEditingTemplate(null);
+  };
+
+  const totalFees = deliveries
+    .filter(d => d.status === DeliveryStatus.DELIVERED && d.completedAt)
+    .filter(d => { const dt = d.completedAt!.split('T')[0]; return dt >= feeStart && dt <= feeEnd; })
+    .reduce((s, d) => s + (d.deliveryFee || 0), 0);
+
+  const drivers = users.filter(u => u.role === 'DRIVER');
+
+  return (
+    <div className="flex flex-col h-full bg-white">
+      {/* Tabs */}
+      <div className="sticky top-0 bg-white z-10 border-b border-stone-100 px-4 pt-4 pb-0">
+        <div className="flex gap-1 bg-stone-100 rounded-2xl p-1">
+          {(['DRIVERS', 'TEMPLATES', 'FEES'] as const).map(tab => (
+            <button key={tab} onClick={() => setActiveTab(tab)}
+              className={`flex-1 py-2.5 rounded-xl font-black uppercase text-[10px] transition-all ${activeTab === tab ? 'bg-white text-black shadow-sm' : 'text-stone-400'}`}
+            >{tab}</button>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-5 pb-28">
+
+        {/* DRIVERS TAB */}
+        {activeTab === 'DRIVERS' && (
+          <div className="space-y-5">
+            {/* Add new driver */}
+            <div className="p-5 bg-white border border-stone-100 rounded-[28px] shadow-sm space-y-3">
+              <div className="flex items-center gap-2">
+                <UserPlus size={18} className="text-stone-500" />
+                <p className="font-black uppercase text-sm text-stone-800">Add Driver</p>
+              </div>
+              <input
+                type="text" placeholder="Name" value={newDriver.name}
+                onChange={e => setNewDriver(p => ({ ...p, name: e.target.value }))}
+                className="w-full bg-stone-50 border border-stone-100 rounded-2xl px-4 py-3 text-sm font-medium outline-none focus:border-black"
+              />
+              <input
+                type="text" placeholder="4-digit PIN" maxLength={4} inputMode="numeric" value={newDriver.pin}
+                onChange={e => setNewDriver(p => ({ ...p, pin: e.target.value.replace(/\D/g, '').slice(0, 4) }))}
+                className="w-full bg-stone-50 border border-stone-100 rounded-2xl px-4 py-3 text-sm font-medium outline-none focus:border-black"
+              />
+              <input
+                type="tel" placeholder="Phone (optional)" value={newDriver.phone}
+                onChange={e => setNewDriver(p => ({ ...p, phone: e.target.value }))}
+                className="w-full bg-stone-50 border border-stone-100 rounded-2xl px-4 py-3 text-sm font-medium outline-none focus:border-black"
+              />
+              <input
+                type="text" placeholder="Vehicle (optional)" value={newDriver.vehicle}
+                onChange={e => setNewDriver(p => ({ ...p, vehicle: e.target.value }))}
+                className="w-full bg-stone-50 border border-stone-100 rounded-2xl px-4 py-3 text-sm font-medium outline-none focus:border-black"
+              />
+              {addError && <p className="text-xs font-black text-red-500">{addError}</p>}
+              {addSuccess && <p className="text-xs font-black text-green-600">{addSuccess}</p>}
+              <button onClick={handleAddDriver}
+                className="w-full py-5 bg-black text-white rounded-[24px] font-black uppercase tracking-widest active:scale-95 transition-all"
+              >Add Driver</button>
+            </div>
+
+            {/* Driver list */}
+            {drivers.map(u => (
+              <div key={u.id} className={`p-5 bg-white border rounded-[28px] shadow-sm space-y-3 ${u.isActive ? 'border-stone-100' : 'border-stone-200 opacity-60'}`}>
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="font-black text-stone-900">{u.name}</p>
+                    <p className="text-xs text-stone-400 font-medium">{u.phone || 'No phone'} • {u.vehicle || 'No vehicle'}</p>
+                  </div>
+                  <span className={`text-[9px] font-black uppercase px-2 py-1 rounded-full ${u.isActive ? 'bg-green-100 text-green-700' : 'bg-stone-100 text-stone-500'}`}>
+                    {u.isActive ? 'Active' : 'Inactive'}
+                  </span>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => toggleActive(u)}
+                    className={`flex-1 py-3 rounded-2xl font-black uppercase text-xs ${u.isActive ? 'bg-red-50 text-red-500' : 'bg-green-50 text-green-600'}`}
+                  >{u.isActive ? 'Deactivate' : 'Activate'}</button>
+                  <button onClick={() => { setResetPinId(u.id); setNewPinVal(''); }}
+                    className="flex-1 py-3 bg-stone-100 text-stone-700 rounded-2xl font-black uppercase text-xs"
+                  >Reset PIN</button>
+                </div>
+                {resetPinId === u.id && (
+                  <div className="flex gap-2 mt-1">
+                    <input
+                      type="text" placeholder="New PIN" maxLength={4} inputMode="numeric" value={newPinVal}
+                      onChange={e => setNewPinVal(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                      className="flex-1 bg-stone-50 border border-stone-100 rounded-xl px-4 py-3 text-sm font-black outline-none text-center tracking-widest"
+                    />
+                    <button onClick={() => handleResetPin(u.id)}
+                      className="px-4 py-3 bg-black text-white rounded-xl font-black text-xs uppercase">Save</button>
+                    <button onClick={() => setResetPinId(null)}
+                      className="px-4 py-3 bg-stone-100 text-stone-500 rounded-xl font-black text-xs uppercase">Cancel</button>
+                  </div>
+                )}
+              </div>
+            ))}
+
+            {drivers.length === 0 && (
+              <div className="text-center py-12">
+                <Users size={32} className="mx-auto text-stone-200 mb-2" />
+                <p className="text-[11px] font-black uppercase text-stone-300">No drivers added yet</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TEMPLATES TAB */}
+        {activeTab === 'TEMPLATES' && (
+          <div className="space-y-5">
+            <div className="p-4 bg-amber-50 rounded-2xl border border-amber-100">
+              <p className="text-xs font-black text-amber-700">Use these variables in messages:</p>
+              <div className="flex flex-wrap gap-1 mt-2">
+                {['{{customer_name}}', '{{order_number}}', '{{driver_name}}', '{{address}}', '{{katie_phone}}'].map(v => (
+                  <span key={v} className="text-[10px] font-black bg-white border border-amber-200 rounded-lg px-2 py-1 text-amber-700">{v}</span>
+                ))}
+              </div>
+            </div>
+            {templates.map(t => (
+              <div key={t.id} className="p-5 bg-white border border-stone-100 rounded-[28px] shadow-sm space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="font-black text-stone-900">{t.label}</p>
+                  <span className={`text-[9px] font-black uppercase px-2 py-1 rounded-full ${t.id === 'SUCCESS' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
+                    {t.id}
+                  </span>
+                </div>
+                {editingTemplate === t.id ? (
+                  <>
+                    <textarea
+                      value={templateEdits[t.id] ?? t.body}
+                      onChange={e => setTemplateEdits(prev => ({ ...prev, [t.id]: e.target.value }))}
+                      rows={5}
+                      className="w-full bg-stone-50 border border-stone-200 rounded-2xl px-4 py-3 text-sm font-medium outline-none focus:border-black resize-none"
+                    />
+                    <div className="flex gap-2">
+                      <button onClick={() => handleSaveTemplate(t.id)}
+                        className="flex-1 py-3 bg-black text-white rounded-2xl font-black uppercase text-xs">Save</button>
+                      <button onClick={() => setEditingTemplate(null)}
+                        className="flex-1 py-3 bg-stone-100 text-stone-500 rounded-2xl font-black uppercase text-xs">Cancel</button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm text-stone-600 leading-relaxed bg-stone-50 rounded-xl p-3">{t.body}</p>
+                    <button onClick={() => { setEditingTemplate(t.id); setTemplateEdits(prev => ({ ...prev, [t.id]: t.body })); }}
+                      className="w-full py-3 bg-stone-100 text-stone-700 rounded-2xl font-black uppercase text-xs flex items-center justify-center gap-2"
+                    ><Edit3 size={14} /> Edit Template</button>
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* FEES TAB */}
+        {activeTab === 'FEES' && (
+          <div className="space-y-5">
+            {/* Summary */}
+            <div className="p-5 bg-white border border-stone-100 rounded-[28px] shadow-sm space-y-4">
+              <p className="font-black uppercase text-sm text-stone-800 flex items-center gap-2"><FileText size={16} /> Revenue Summary</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[8px] font-black uppercase text-stone-400 mb-1 block">Start</label>
+                  <input type="date" value={feeStart} onChange={e => setFeeStart(e.target.value)}
+                    className="w-full bg-stone-50 border border-stone-100 rounded-xl px-3 py-2 text-xs font-black outline-none" />
+                </div>
+                <div>
+                  <label className="text-[8px] font-black uppercase text-stone-400 mb-1 block">End</label>
+                  <input type="date" value={feeEnd} onChange={e => setFeeEnd(e.target.value)}
+                    className="w-full bg-stone-50 border border-stone-100 rounded-xl px-3 py-2 text-xs font-black outline-none" />
+                </div>
+              </div>
+              <div className="flex items-center justify-between pt-3 border-t border-stone-50">
+                <span className="text-sm font-black uppercase text-stone-400">Total Delivery Fees</span>
+                <span className="text-3xl font-black text-stone-900">${totalFees.toFixed(2)}</span>
+              </div>
+            </div>
+
+            {/* Fee calculator */}
+            <div className="p-5 bg-white border border-stone-100 rounded-[28px] shadow-sm space-y-4">
+              <p className="font-black uppercase text-sm text-stone-800 flex items-center gap-2"><MapPin size={16} /> Rate Calculator</p>
+              <div className="flex gap-2">
+                <input
+                  type="text" placeholder="Enter ZIP code" value={feeZip}
+                  onChange={e => setFeeZip(e.target.value.replace(/\D/g, '').slice(0, 5))}
+                  className="flex-1 bg-stone-50 border border-stone-100 rounded-2xl px-4 py-4 text-lg font-black outline-none focus:border-black text-center tracking-widest"
+                />
+                <button
+                  onClick={() => setFeeResult(DELIVERY_FEES[feeZip] ?? null)}
+                  className="px-5 py-4 bg-black text-white rounded-2xl font-black uppercase text-xs"
+                >Check</button>
+              </div>
+              {feeResult !== null && (
+                <div className="flex items-center justify-between p-4 bg-green-50 rounded-2xl border border-green-100">
+                  <span className="font-black text-stone-700 uppercase text-sm">ZIP {feeZip}</span>
+                  <span className="text-2xl font-black text-green-700">${feeResult}</span>
+                </div>
+              )}
+              {feeZip.length === 5 && feeResult === null && (
+                <p className="text-xs font-black text-red-400 text-center">ZIP not in rate table</p>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MAIN APP
+// ─────────────────────────────────────────────────────────────────────────────
+
+export default function App() {
+  const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => {
+    try { return JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch { return null; }
+  });
+  const [deliveries, setDeliveries] = useState<Delivery[]>([]);
+  const [allUsers, setAllUsers] = useState<UserAccount[]>([]);
+  const [selectedOrder, setSelectedOrder] = useState<Delivery | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [lastSync, setLastSync] = useState<string | null>(null);
+  const [dataSource, setDataSource] = useState<'LIVE' | 'MOCK' | 'ERROR'>('MOCK');
+  const [tab, setTab] = useState<'SCHEDULE' | 'ADMIN'>('SCHEDULE');
+
+  const isAdmin = currentUser?.role === 'SUPER_ADMIN' || currentUser?.role === 'MANAGER';
+
+  useEffect(() => {
+    if (currentUser) {
       fetchOrders();
+      fetch('/api/users').then(r => r.json()).then(d => setAllUsers(d.users || []));
       const interval = setInterval(fetchOrders, 300000);
       return () => clearInterval(interval);
     }
-  }, [isAuthorized, role]);
+  }, [currentUser]);
 
   const fetchOrders = async () => {
     setIsLoading(true);
     try {
       const fetched = await getDeliveries();
       setDeliveries(fetched);
-      setDataSource(fetched.some(d => d.id === '33989') ? 'MOCK' : 'LIVE');
-      setLastSyncTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-    } catch (err) {
-      console.error("Sync Error", err);
+      setDataSource(fetched.some((d: Delivery) => d.id === '33989') ? 'MOCK' : 'LIVE');
+      setLastSync(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+    } catch {
       setDataSource('ERROR');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleSummarize = async () => {
-    if (deliveries.length === 0) return;
-    setIsBriefing(true);
-    const notes = deliveries.map(d => `${d.orderNumber}: ${d.deliveryInstructions || 'No instructions'}`);
-    const summary = await summarizeRoute(notes);
-    setAiBriefing(summary);
-    setIsBriefing(false);
-    
-    // Auto-play speech
-    const audioData = await generateSpeech(summary);
-    if (audioData) {
-      playRawAudio(audioData);
-    }
-  };
-
-  const handleOptimize = async () => {
-    setIsOptimizing(true);
-    const result = await getOptimizedRoute(deliveries, manualStops, null, { skipTolls: false });
-    setOptimizationResult(result);
-    
-    // Reorder deliveries based on optimization
-    const ordered = [...deliveries].sort((a, b) => {
-      const indexA = result.orderedIds.indexOf(a.id);
-      const indexB = result.orderedIds.indexOf(b.id);
-      return indexA - indexB;
-    });
-    setDeliveries(ordered);
-    setIsOptimizing(false);
-  };
-
-  const handleUpdateOrder = async (id: string, updates: Partial<Delivery>) => {
+  const handleUpdateOrder = useCallback((id: string, updates: Partial<Delivery>) => {
     setDeliveries(prev => prev.map(d => d.id === id ? { ...d, ...updates } : d));
-    const currentOrder = deliveries.find(d => d.id === id);
-    if (selectedOrder?.id === id) {
-      setSelectedOrder(prev => prev ? { ...prev, ...updates } : null);
-    }
-
-    // If we are updating POD data, sync to server
-    if (updates.status === DeliveryStatus.DELIVERED || updates.confirmationPhoto || updates.confirmationSignature || updates.driverNotes) {
-      try {
-        const fullOrder = { ...(currentOrder || {}), ...updates };
-        await fetch('/api/pod', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            orderId: id,
-            photo: fullOrder.confirmationPhoto,
-            signature: fullOrder.confirmationSignature,
-            notes: fullOrder.driverNotes,
-            completedAt: fullOrder.completedAt,
-            status: fullOrder.status
-          })
-        });
-      } catch (err) {
-        console.error("Failed to sync POD to server", err);
-      }
-    }
-  };
-
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file && selectedOrder) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        handleUpdateOrder(selectedOrder.id, { confirmationPhoto: reader.result as string });
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const finalizeDelivery = () => {
-    if (selectedOrder) {
-      handleUpdateOrder(selectedOrder.id, { 
-        status: DeliveryStatus.DELIVERED,
-        completedAt: new Date().toISOString()
-      });
-    }
-  };
-
-  const handleFailedDeliveryAction = (action: 'TOMORROW' | 'CUSTOM' | 'CONTACT', customDate?: string) => {
-    if (!selectedOrder) return;
-    
-    let note = "";
-    if (action === 'TOMORROW') {
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      note = `Rescheduled for tomorrow (${tomorrow.toLocaleDateString()})`;
-    } else if (action === 'CUSTOM' && customDate) {
-      note = `Rescheduled for ${customDate}`;
-    } else if (action === 'CONTACT') {
-      note = "Contacted customer for resolution";
-    }
-
-    handleUpdateOrder(selectedOrder.id, { 
-      status: DeliveryStatus.FAILED,
-      driverNotes: note,
-      attempts: [
-        ...(selectedOrder.attempts || []),
-        {
-          id: Date.now().toString(),
-          timestamp: new Date().toISOString(),
-          driverId: 'smith',
-          driverName: 'Smith',
-          type: 'FIRST',
-          reason: 'RECIPIENT_UNAVAILABLE',
-          notes: note
-        }
-      ]
-    });
-    setIsFailedMenuOpen(false);
-  };
-
-  const handleCalculateFee = () => {
-    const fee = DELIVERY_FEES[feeSearchZip];
-    if (fee !== undefined) {
-      setCalculatedFee(fee);
-    } else {
-      setCalculatedFee(null);
-    }
-  };
-
-  const copyAppURL = () => {
-    navigator.clipboard.writeText(currentUrl);
-    alert("App Link Copied! Send this to your drivers.");
-  };
-
-  const shareNative = async () => {
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: 'Sweet Tooth Driver App',
-          text: 'Access the delivery portal for The Sweet Tooth.',
-          url: currentUrl,
-        });
-      } catch (err) {
-        copyAppURL();
-      }
-    } else {
-      copyAppURL();
-    }
-  };
+    if (selectedOrder?.id === id) setSelectedOrder(prev => prev ? { ...prev, ...updates } : null);
+  }, [selectedOrder]);
 
   const logout = () => {
-    localStorage.removeItem('role');
-    localStorage.removeItem('isAuthorized');
-    setRole(null);
-    setIsAuthorized(false);
+    localStorage.removeItem('currentUser');
+    setCurrentUser(null);
     setDeliveries([]);
     setSelectedOrder(null);
-    setActiveOrderId(null);
   };
 
-  const returnToHome = () => {
-    if (selectedOrder) { setSelectedOrder(null); setActiveOrderId(null); return; }
-    if (tab !== 'DELIVERIES') { setTab('DELIVERIES'); return; }
-  };
+  if (!currentUser) {
+    return (
+      <LoginGate onAuthorized={(user) => {
+        setCurrentUser(user);
+        localStorage.setItem('currentUser', JSON.stringify(user));
+      }} />
+    );
+  }
 
-  const failedDeliveries = useMemo(() => {
-    return deliveries.filter(d => d.status === DeliveryStatus.FAILED);
-  }, [deliveries]);
-
-  if (!isAuthorized) {
-    return <LoginGate onAuthorized={(role) => {
-      setRole(role);
-      setIsAuthorized(true);
-      localStorage.setItem('role', role);
-      localStorage.setItem('isAuthorized', 'true');
-    }} />;
+  if (selectedOrder) {
+    return (
+      <div className="max-w-md mx-auto min-h-screen bg-white">
+        <OrderDetail
+          order={selectedOrder}
+          role={currentUser.role}
+          currentUser={currentUser}
+          allUsers={allUsers}
+          onUpdate={handleUpdateOrder}
+          onBack={() => setSelectedOrder(null)}
+        />
+      </div>
+    );
   }
 
   return (
-    <HashRouter>
-      <div className="max-w-md mx-auto min-h-screen bg-white flex flex-col relative overflow-hidden border-x border-stone-50">
-        <Header onLogout={logout} onLogoClick={returnToHome} lastSync={lastSyncTime} isSyncing={isLoading} />
-        
-        <main className="flex-1 overflow-y-auto pb-24">
-          {tab === 'DELIVERIES' && (
-            <div className="animate-in fade-in">
-              <ConnectionStatus source={dataSource} lastSync={lastSyncTime} />
-              
-              <div className="p-6">
-                <DateHeader selectedDate={new Date()} />
-                
-                {/* AI Route Controls */}
-                <div className="grid grid-cols-2 gap-3 mt-6 mb-8">
-                  <button 
-                    onClick={handleSummarize}
-                    disabled={isBriefing || deliveries.length === 0}
-                    className="flex flex-col items-center justify-center gap-2 p-4 bg-white border border-stone-100 rounded-[24px] shadow-sm hover:bg-stone-50 transition-all active:scale-95 disabled:opacity-50"
-                  >
-                    <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center">
-                      {isBriefing ? <RefreshCw size={20} className="animate-spin" /> : <Sparkles size={20} />}
-                    </div>
-                    <span className="text-[10px] font-black uppercase tracking-tight">AI Briefing</span>
-                  </button>
-                  
-                  <button 
-                    onClick={handleOptimize}
-                    disabled={isOptimizing || deliveries.length === 0}
-                    className="flex flex-col items-center justify-center gap-2 p-4 bg-white border border-stone-100 rounded-[24px] shadow-sm hover:bg-stone-50 transition-all active:scale-95 disabled:opacity-50"
-                  >
-                    <div className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center">
-                      {isOptimizing ? <RefreshCw size={20} className="animate-spin" /> : <Zap size={20} />}
-                    </div>
-                    <span className="text-[10px] font-black uppercase tracking-tight">Optimize Route</span>
-                  </button>
-                </div>
-
-                {aiBriefing && (
-                  <div className="mb-8 p-5 bg-indigo-600 text-white rounded-[32px] shadow-lg animate-in slide-in-from-top-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                        <Sparkles size={16} />
-                        <span className="text-[10px] font-black uppercase tracking-widest">Route Summary</span>
-                      </div>
-                      <button onClick={() => setAiBriefing(null)} className="text-white/60 hover:text-white">
-                        <X size={16} />
-                      </button>
-                    </div>
-                    <p className="text-sm font-medium leading-relaxed italic">"{aiBriefing}"</p>
-                    <div className="mt-4 flex items-center gap-2">
-                      <button 
-                        onClick={() => generateSpeech(aiBriefing).then(data => data && playRawAudio(data))}
-                        className="flex items-center gap-2 px-3 py-1.5 bg-white/20 rounded-full text-[9px] font-black uppercase hover:bg-white/30 transition-colors"
-                      >
-                        <Volume2 size={12} />
-                        Play Audio
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2">
-                    <h2 className="text-xl font-black text-black tracking-tighter uppercase">Local Routes</h2>
-                    <div className="flex h-2 w-2 relative">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-pink-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-pink-500"></span>
-                    </div>
-                  </div>
-                  <button onClick={fetchOrders} className={`${isLoading ? 'animate-spin' : ''} text-stone-300`}>
-                    <RefreshCw size={18} />
-                  </button>
-                </div>
-
-                <div className="bg-white border border-stone-100 rounded-[32px] overflow-hidden shadow-sm">
-                  {deliveries.map(d => (
-                    <OrderRow 
-                      key={d.id} 
-                      order={d} 
-                      isSelected={activeOrderId === d.id}
-                      onSelect={() => setActiveOrderId(d.id)}
-                      onView={() => setSelectedOrder(d)}
-                    />
-                  ))}
-                  {deliveries.length === 0 && (
-                    <div className="py-24 text-center">
-                      <Package size={32} className="mx-auto text-stone-100 mb-2" />
-                      <p className="text-[10px] font-black uppercase text-stone-300">Searching for Orders...</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {tab === 'CHAT' && <ChatView role={role!} />}
-          
-          {tab === 'ADMIN' && (
-            <div className="p-6 space-y-8 animate-in fade-in">
-              <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-black text-black tracking-tighter uppercase">Admin</h2>
-                <div className="px-3 py-1 bg-green-50 text-green-600 rounded-full text-[8px] font-black uppercase flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span>
-                  Active System
-                </div>
-              </div>
-              
-              {role === 'ADMIN' && (
-                <section className="space-y-6">
-                   {/* Delivery Fees View */}
-                   <div className="p-6 bg-white border border-stone-100 rounded-[32px] shadow-sm space-y-6">
-                      <div className="flex items-center gap-2">
-                        <FileText size={20} className="text-pink-500" />
-                        <h3 className="text-lg font-black uppercase tracking-tighter">Delivery Fees</h3>
-                      </div>
-                      
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="text-[8px] font-black uppercase text-stone-400 mb-1 block">Start Date</label>
-                          <input 
-                            type="date" 
-                            value={feeStartDate}
-                            onChange={(e) => setFeeStartDate(e.target.value)}
-                            className="w-full bg-stone-50 border border-stone-100 rounded-xl px-3 py-2 text-[10px] font-black outline-none"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[8px] font-black uppercase text-stone-400 mb-1 block">End Date</label>
-                          <input 
-                            type="date" 
-                            value={feeEndDate}
-                            onChange={(e) => setFeeEndDate(e.target.value)}
-                            className="w-full bg-stone-50 border border-stone-100 rounded-xl px-3 py-2 text-[10px] font-black outline-none"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="pt-4 border-t border-stone-50 flex items-center justify-between">
-                        <span className="text-[10px] font-black uppercase text-stone-400">Total Fees</span>
-                        <span className="text-2xl font-black text-black">
-                          ${deliveries
-                            .filter(d => d.status === DeliveryStatus.DELIVERED)
-                            .filter(d => {
-                              if (!d.completedAt) return false;
-                              const date = d.completedAt.split('T')[0];
-                              return date >= feeStartDate && date <= feeEndDate;
-                            })
-                            .reduce((sum, d) => sum + (d.deliveryFee || 0), 0)
-                            .toFixed(2)}
-                        </span>
-                      </div>
-                   </div>
-
-                   {/* Fee Calculator */}
-                   <div className="p-6 bg-stone-50 rounded-[32px] border border-stone-100 space-y-4">
-                      <div className="flex items-center gap-2">
-                        <MapPin size={20} className="text-blue-500" />
-                        <h3 className="text-lg font-black uppercase tracking-tighter">Fee Calculator</h3>
-                      </div>
-                      <div className="flex gap-2">
-                        <input 
-                          type="text" 
-                          placeholder="Enter Zip Code"
-                          value={feeSearchZip}
-                          onChange={(e) => setFeeSearchZip(e.target.value)}
-                          className="flex-1 bg-white border border-stone-100 rounded-xl px-4 py-3 text-xs font-black outline-none focus:border-black transition-all"
-                        />
-                        <button 
-                          onClick={handleCalculateFee}
-                          className="px-6 bg-black text-white rounded-xl font-black uppercase text-[10px] active:scale-95 transition-all"
-                        >
-                          Calculate
-                        </button>
-                      </div>
-                      {calculatedFee !== null ? (
-                        <div className="p-4 bg-white rounded-2xl border border-blue-100 animate-in zoom-in-95">
-                          <p className="text-[8px] font-black uppercase text-stone-400 mb-1">Estimated Delivery Fee</p>
-                          <p className="text-xl font-black text-blue-600">${calculatedFee.toFixed(2)}</p>
-                        </div>
-                      ) : feeSearchZip && (
-                        <p className="text-[8px] font-black uppercase text-stone-300 italic">Zip code not in list. Standard rate: ${PER_MILE_RATE}/mile</p>
-                      )}
-                   </div>
-
-                   {/* Failed Delivery Report */}
-                   {failedDeliveries.length > 0 && (
-                     <div className="space-y-4">
-                        <div className="flex items-center gap-2">
-                           <AlertCircle className="text-red-500" size={20} />
-                           <h3 className="text-lg font-black uppercase tracking-tighter">Failed Delivery Report</h3>
-                        </div>
-                        <div className="space-y-3">
-                           {failedDeliveries.map(d => {
-                             const lastAttempt = d.attempts?.[d.attempts.length - 1];
-                             return (
-                               <div key={d.id} onClick={() => setSelectedOrder(d)} className="p-5 bg-red-50/50 border border-red-100 rounded-[32px] cursor-pointer hover:bg-red-50 transition-colors">
-                                  <div className="flex justify-between items-start mb-3">
-                                     <div>
-                                        <p className="text-[10px] font-black text-red-400 uppercase tracking-widest mb-1">{d.orderNumber}</p>
-                                        <h4 className="text-sm font-black text-stone-900">{d.customer.name}</h4>
-                                     </div>
-                                     <div className="px-2 py-0.5 bg-red-500 text-white rounded-full text-[8px] font-black uppercase">FAILED</div>
-                                  </div>
-                                  <div className="space-y-2">
-                                     <div className="flex items-center gap-2">
-                                        <AlertTriangle size={12} className="text-red-400" />
-                                        <p className="text-[10px] font-bold text-red-600 uppercase">Reason: {lastAttempt?.reason || 'OTHER'}</p>
-                                     </div>
-                                     { (d.driverNotes || lastAttempt?.notes) && (
-                                       <div className="p-3 bg-white/60 rounded-2xl border border-red-50">
-                                          <div className="flex items-center gap-1.5 mb-1">
-                                             <FileText size={10} className="text-stone-400" />
-                                              <span className="text-[8px] font-black text-stone-400 uppercase">Driver Notes</span>
-                                          </div>
-                                          <p className="text-[11px] text-stone-600 italic leading-relaxed">
-                                             "{d.driverNotes || lastAttempt?.notes}"
-                                          </p>
-                                       </div>
-                                     )}
-                                  </div>
-                               </div>
-                             );
-                           })}
-                        </div>
-                     </div>
-                   )}
-
-                   {/* Quick Info Cards */}
-                   <div className="grid grid-cols-2 gap-3">
-                      <div className="p-5 bg-white border border-stone-100 rounded-[28px] shadow-sm">
-                        <Key size={20} className="text-pink-500 mb-3" />
-                        <p className="text-[8px] font-black uppercase text-stone-400 mb-1">Access Passcode</p>
-                        <p className="text-sm font-black tracking-widest">{ACCESS_PASSCODE}</p>
-                      </div>
-                      <div className="p-5 bg-white border border-stone-100 rounded-[28px] shadow-sm">
-                        <Globe size={20} className="text-blue-500 mb-3" />
-                        <p className="text-[8px] font-black uppercase text-stone-400 mb-1">Shopify Hook</p>
-                        <p className="text-sm font-black text-green-600">Active</p>
-                      </div>
-                   </div>
-                </section>
-              )}
-
-              <section className="space-y-4">
-                 <div className="p-6 bg-stone-50 rounded-[32px] border border-stone-100">
-                    <div className="flex items-center gap-4 mb-4">
-                      <div className="p-3 bg-white rounded-2xl shadow-sm"><Smartphone size={24} className="text-stone-900" /></div>
-                      <div>
-                        <h4 className="text-sm font-black uppercase">Mobile Experience</h4>
-                        <p className="text-[10px] text-stone-400 font-bold uppercase tracking-tight">Optimized for iOS & Android</p>
-                      </div>
-                    </div>
-                    <p className="text-[11px] text-stone-500 font-medium leading-relaxed mb-4">
-                      This app is a <span className="font-black text-black">Progressive Web App (PWA)</span>. 
-                      Once you visit the URL on a phone, tap your browser's menu and select <strong>"Add to Home Screen"</strong>. 
-                      This removes the browser bars and provides an app-like experience for your drivers.
-                    </p>
-                    <div className="flex gap-2">
-                       <span className="px-3 py-1 bg-white border border-stone-100 rounded-full text-[8px] font-black text-stone-400 uppercase">Offline Ready</span>
-                       <span className="px-3 py-1 bg-white border border-stone-100 rounded-full text-[8px] font-black text-stone-400 uppercase">Native Navigation</span>
-                    </div>
-                 </div>
-
-                 <div className="p-6 bg-white border border-stone-100 rounded-[32px] shadow-sm flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className="p-3 bg-blue-50 text-blue-500 rounded-2xl"><Zap size={20} /></div>
-                      <div>
-                        <p className="text-[10px] font-black uppercase text-stone-400">Current Build</p>
-                        <p className="text-xs font-black">v1.1.0 (STABLE)</p>
-                      </div>
-                    </div>
-                    <p className="text-[8px] font-black text-stone-300 uppercase">Sweet Tooth</p>
-                 </div>
-              </section>
-
-              <div className="pt-4 text-center">
-                 <button onClick={logout} className="text-[10px] font-black uppercase tracking-widest text-red-400 hover:text-red-500">
-                    Disconnect Session
-                 </button>
-              </div>
-            </div>
-          )}
-        </main>
-
-        <nav className="fixed bottom-0 left-0 right-0 h-24 bg-white border-t border-stone-50 flex items-center justify-around z-[110] max-w-md mx-auto px-6 shadow-lg">
-          <button onClick={() => setTab('DELIVERIES')} className={`flex flex-col items-center gap-1 transition-all ${tab === 'DELIVERIES' ? 'text-black scale-110' : 'text-stone-300'}`}>
-            <Package size={22} strokeWidth={tab === 'DELIVERIES' ? 3 : 2} />
-            <span className="text-[8px] font-black uppercase">Routes</span>
-          </button>
-          <button onClick={() => setTab('CHAT')} className={`flex flex-col items-center gap-1 transition-all ${tab === 'CHAT' ? 'text-black scale-110' : 'text-stone-300'}`}>
-            <MessageSquare size={22} strokeWidth={tab === 'CHAT' ? 3 : 2} />
-            <span className="text-[8px] font-black uppercase">Chat</span>
-          </button>
-          <button onClick={() => setTab('ADMIN')} className={`flex flex-col items-center gap-1 transition-all ${tab === 'ADMIN' ? 'text-black scale-110' : 'text-stone-300'}`}>
-            <Truck size={22} strokeWidth={tab === 'ADMIN' ? 3 : 2} />
-            <span className="text-[8px] font-black uppercase">Admin</span>
-          </button>
-        </nav>
-
-        {selectedOrder && (
-          <div className="fixed inset-0 bg-white z-[200] flex flex-col animate-in slide-in-from-right">
-            <div className="p-6 border-b border-stone-100 flex items-center justify-between">
-              <button onClick={() => {setSelectedOrder(null); setActiveOrderId(null);}} className="p-2 -ml-2 hover:bg-stone-50 rounded-full"><X size={24} /></button>
-              <h2 className="font-black uppercase tracking-widest text-[10px] text-stone-400">{selectedOrder.orderNumber}</h2>
-              <div className="w-10"></div>
-            </div>
-            
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
-               <section className="space-y-4">
-                 <div className="flex justify-between items-start">
-                   <div>
-                     <p className="text-[10px] font-black text-stone-400 uppercase tracking-widest mb-1">Recipient</p>
-                     <h3 className="text-3xl font-black text-stone-900 tracking-tighter">{selectedOrder.customer.name}</h3>
-                   </div>
-                   {selectedOrder.status === DeliveryStatus.DELIVERED && (
-                     <span className="bg-black text-white px-3 py-1 rounded-full text-[9px] font-black uppercase">Completed</span>
-                   )}
-                   {selectedOrder.status === DeliveryStatus.FAILED && (
-                     <span className="bg-red-500 text-white px-3 py-1 rounded-full text-[9px] font-black uppercase">Failed</span>
-                   )}
-                 </div>
-
-                 {selectedOrder.deliveryInstructions && (
-                   <div className="p-4 bg-amber-50 border border-amber-100 rounded-2xl">
-                     <div className="flex items-center gap-2 mb-1">
-                       <Info size={14} className="text-amber-600" />
-                       <span className="text-[10px] font-black uppercase text-amber-600">Delivery Instructions</span>
-                     </div>
-                     <p className="text-xs font-bold text-amber-900 leading-relaxed">{selectedOrder.deliveryInstructions}</p>
-                   </div>
-                 )}
-                 
-                 <div className="flex gap-2">
-                    <a href={`tel:${selectedOrder.customer.phone}`} className="flex-1 py-3 bg-stone-100 rounded-2xl flex items-center justify-center gap-2 text-[10px] font-black uppercase hover:bg-stone-200 transition-all">
-                      <Phone size={14} /> Call Recipient
-                    </a>
-                    <button 
-                      onClick={async () => {
-                        const msg = await generateCustomerSMS(selectedOrder.customer.name, selectedOrder.orderNumber);
-                        window.location.href = `sms:${selectedOrder.customer.phone}?body=${encodeURIComponent(msg)}`;
-                      }}
-                      className="flex-1 py-3 bg-stone-100 rounded-2xl flex items-center justify-center gap-2 text-[10px] font-black uppercase hover:bg-stone-200 transition-all"
-                    >
-                      <Sparkles size={14} className="text-indigo-500" /> AI SMS
-                    </button>
-                    <a href={`sms:${selectedOrder.customer.phone}`} className="flex-1 py-3 bg-stone-100 rounded-2xl flex items-center justify-center gap-2 text-[10px] font-black uppercase hover:bg-stone-200 transition-all">
-                      <MessageSquare size={14} /> Text Recipient
-                    </a>
-                 </div>
-               </section>
-
-               {selectedOrder.giftSenderName && (
-                 <section className="p-5 bg-pink-50/30 rounded-[32px] border border-pink-100/50 space-y-3">
-                    <div>
-                      <p className="text-[10px] font-black text-pink-400 uppercase tracking-widest mb-1">Gift Giver (Buyer)</p>
-                      <h4 className="text-lg font-black text-stone-900">{selectedOrder.giftSenderName}</h4>
-                    </div>
-                    {selectedOrder.giftMessage && (
-                      <div className="p-3 bg-white/60 rounded-2xl border border-pink-50 relative group">
-                        <p className="text-[11px] text-stone-600 italic">"{selectedOrder.giftMessage}"</p>
-                        <button 
-                          onClick={() => generateSpeech(selectedOrder.giftMessage!).then(data => data && playRawAudio(data))}
-                          className="absolute right-2 top-2 p-1.5 bg-pink-100 text-pink-600 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                        >
-                          <Volume2 size={12} />
-                        </button>
-                      </div>
-                    )}
-                    <div className="flex gap-2">
-                      <a href={`tel:${selectedOrder.giftSenderPhone || selectedOrder.customer.phone}`} className="flex-1 py-3 bg-white rounded-xl flex items-center justify-center gap-2 text-[9px] font-black uppercase border border-pink-100">
-                        <Phone size={12} /> Call Giver
-                      </a>
-                      <a href={`sms:${selectedOrder.giftSenderPhone || selectedOrder.customer.phone}`} className="flex-1 py-3 bg-white rounded-xl flex items-center justify-center gap-2 text-[9px] font-black uppercase border border-pink-100">
-                        <MessageSquare size={12} /> Text Giver
-                      </a>
-                    </div>
-                 </section>
-               )}
-
-               <section className="p-5 bg-stone-50 rounded-[32px] border border-stone-100">
-                 <p className="text-[10px] font-black text-stone-400 uppercase tracking-widest mb-2">Location</p>
-                 <p className="text-sm font-black text-stone-900">{selectedOrder.address.street}, {selectedOrder.address.city}</p>
-                 {selectedOrder.status !== DeliveryStatus.DELIVERED && selectedOrder.status !== DeliveryStatus.FAILED && (
-                   <button 
-                    onClick={() => {
-                      handleUpdateOrder(selectedOrder.id, { status: DeliveryStatus.IN_TRANSIT });
-                      window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(selectedOrder.address.street)}`);
-                    }}
-                    className="mt-4 w-full py-4 bg-black text-white rounded-2xl flex items-center justify-center gap-3 font-black uppercase text-[10px] active:scale-95 transition-all shadow-md"
-                   >
-                     <Navigation size={16} /> Start Navigation
-                   </button>
-                 )}
-               </section>
-
-               {selectedOrder.status !== DeliveryStatus.DELIVERED && selectedOrder.status !== DeliveryStatus.FAILED && (
-                 <section className="space-y-4">
-                   <p className="text-[10px] font-black text-stone-400 uppercase tracking-widest">Proof of Delivery</p>
-                   
-                   <div className="grid grid-cols-2 gap-3">
-                     <button 
-                        onClick={() => fileInputRef.current?.click()}
-                        className={`aspect-square rounded-[32px] border-2 border-dashed flex flex-col items-center justify-center gap-2 transition-all ${selectedOrder.confirmationPhoto ? 'border-black bg-stone-50' : 'border-stone-200 hover:border-black'}`}
-                      >
-                       <input type="file" hidden ref={fileInputRef} accept="image/*" capture="environment" onChange={handlePhotoUpload} />
-                       {selectedOrder.confirmationPhoto ? (
-                         <img src={selectedOrder.confirmationPhoto} className="w-full h-full object-cover rounded-[28px]" />
-                       ) : (
-                         <>
-                           <Camera size={24} className="text-stone-400" />
-                           <span className="text-[8px] font-black uppercase">Take Photo</span>
-                         </>
-                       )}
-                     </button>
-
-                     <button 
-                        onClick={() => setIsSigning(true)}
-                        className={`aspect-square rounded-[32px] border-2 border-dashed flex flex-col items-center justify-center gap-2 transition-all ${selectedOrder.confirmationSignature ? 'border-black bg-stone-50' : 'border-stone-200 hover:border-black'}`}
-                      >
-                       {selectedOrder.confirmationSignature ? (
-                         <img src={selectedOrder.confirmationSignature} className="w-full h-full object-contain p-4" />
-                       ) : (
-                         <>
-                           <PenTool size={24} className="text-stone-400" />
-                           <span className="text-[8px] font-black uppercase">Get Signature</span>
-                         </>
-                       )}
-                     </button>
-                   </div>
-
-                   {selectedOrder.confirmationPhoto && selectedOrder.confirmationSignature && (
-                     <button 
-                        onClick={finalizeDelivery}
-                        className="w-full py-6 bg-[#FDF0F6] text-black border-2 border-black rounded-[32px] font-black uppercase tracking-widest shadow-xl flex items-center justify-center gap-3 animate-in zoom-in-95"
-                      >
-                       <CheckCircle2 size={20} /> Complete Delivery
-                     </button>
-                   )}
-                 </section>
-               )}
-
-               {selectedOrder.status === DeliveryStatus.DELIVERED && (
-                 <div className="space-y-6">
-                    <section className="p-6 bg-stone-50 rounded-[32px] border border-stone-100 space-y-4 animate-in fade-in">
-                        <p className="text-[10px] font-black text-stone-400 uppercase tracking-widest">Completion Records</p>
-                        <div className="flex gap-4">
-                        {selectedOrder.confirmationPhoto && (
-                            <div className="flex-1">
-                            <p className="text-[8px] font-black uppercase text-stone-300 mb-2">Photo</p>
-                            <img src={selectedOrder.confirmationPhoto} className="w-full aspect-square object-cover rounded-xl" />
-                            </div>
-                        )}
-                        {selectedOrder.confirmationSignature && (
-                            <div className="flex-1">
-                            <p className="text-[8px] font-black uppercase text-stone-300 mb-2">Signature</p>
-                            <img src={selectedOrder.confirmationSignature} className="w-full aspect-square object-contain bg-white rounded-xl p-2 border border-stone-100" />
-                            </div>
-                        )}
-                        </div>
-                        <div className="pt-2 border-t border-stone-100">
-                        <p className="text-[10px] font-black text-stone-900">Delivered at {selectedOrder.completedAt}</p>
-                        </div>
-                    </section>
-
-                    <section className="p-6 bg-black text-white rounded-[32px] shadow-lg space-y-4">
-                        <div className="flex items-center gap-3 mb-2">
-                            <Share2 size={18} className="text-pink-400" />
-                            <h4 className="text-sm font-black uppercase tracking-tighter">Share Proof of Delivery</h4>
-                        </div>
-                        <p className="text-[10px] text-white/50 font-bold leading-relaxed mb-4">
-                            Send delivery details, photos, and signatures directly to the customer or business recipient.
-                        </p>
-                        <button 
-                          onClick={() => setIsSharingPod(true)}
-                          className="w-full py-5 bg-white text-black rounded-2xl font-black uppercase text-[10px] flex items-center justify-center gap-2 active:scale-95 transition-all"
-                        >
-                            <Send size={14} /> Send Confirmation
-                        </button>
-                    </section>
-                 </div>
-               )}
-
-               {selectedOrder.status === DeliveryStatus.FAILED && (
-                 <section className="p-6 bg-red-50 rounded-[32px] border border-red-100 space-y-4 animate-in fade-in">
-                    <p className="text-[10px] font-black text-red-400 uppercase tracking-widest">Failure Incident Report</p>
-                    <div className="space-y-3">
-                       <div>
-                          <p className="text-[8px] font-black uppercase text-stone-400 mb-1">Reason Code</p>
-                          <p className="text-sm font-black text-red-600">{selectedOrder.attempts?.[selectedOrder.attempts.length - 1]?.reason || 'OTHER'}</p>
-                       </div>
-                       {selectedOrder.driverNotes && (
-                         <div>
-                            <p className="text-[8px] font-black uppercase text-stone-400 mb-1">Driver Explanation</p>
-                            <p className="text-[11px] text-stone-600 italic leading-relaxed">"{selectedOrder.driverNotes}"</p>
-                         </div>
-                       )}
-                    </div>
-                 </section>
-               )}
-
-               <section className="grid grid-cols-2 gap-2">
-                  <a href={`tel:${selectedOrder.customer.phone}`} className="py-4 bg-stone-100 text-black rounded-2xl flex items-center justify-center gap-2 font-black uppercase text-[10px] active:bg-stone-200 transition-colors">
-                    <Phone size={14} /> Call
-                  </a>
-                  <a href={`sms:${selectedOrder.customer.phone}`} className="py-4 bg-stone-100 text-black rounded-2xl flex items-center justify-center gap-2 font-black uppercase text-[10px] active:bg-stone-200 transition-colors">
-                    <MessageCircle size={14} /> Text
-                  </a>
-               </section>
-            </div>
-
-            {isSigning && (
-              <SignaturePad 
-                onSave={(sig) => {
-                  handleUpdateOrder(selectedOrder.id, { confirmationSignature: sig });
-                  setIsSigning(false);
-                }} 
-                onCancel={() => setIsSigning(false)} 
-              />
-            )}
-
-            {isSharingPod && (
-              <SharePodModal 
-                order={selectedOrder} 
-                onClose={() => setIsSharingPod(false)} 
-              />
-            )}
-
-            {isFailedMenuOpen && (
-              <div className="fixed inset-0 bg-black/60 z-[300] flex items-end animate-in fade-in">
-                <div className="w-full bg-white rounded-t-[40px] p-8 space-y-6 animate-in slide-in-from-bottom">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-xl font-black uppercase tracking-tighter">Delivery Failed</h3>
-                    <button onClick={() => setIsFailedMenuOpen(false)} className="p-2 text-stone-300"><X size={24} /></button>
-                  </div>
-                  <p className="text-xs text-stone-500 font-medium">Select an action to resolve this delivery issue:</p>
-                  <div className="space-y-3">
-                    <button 
-                      onClick={() => handleFailedDeliveryAction('TOMORROW')}
-                      className="w-full py-5 bg-stone-100 text-black rounded-2xl font-black uppercase text-xs flex items-center justify-center gap-3 active:scale-95 transition-all"
-                    >
-                      <Calendar size={18} /> Reschedule for Tomorrow
-                    </button>
-                    <button 
-                      onClick={() => {
-                        const date = prompt("Enter custom date (e.g. MM/DD/YYYY):");
-                        if (date) handleFailedDeliveryAction('CUSTOM', date);
-                      }}
-                      className="w-full py-5 bg-stone-100 text-black rounded-2xl font-black uppercase text-xs flex items-center justify-center gap-3 active:scale-95 transition-all"
-                    >
-                      <Calendar size={18} /> Input Custom Date
-                    </button>
-                    <button 
-                      onClick={() => {
-                        setIsFailedMenuOpen(false);
-                        window.location.href = `tel:${selectedOrder.customer.phone}`;
-                      }}
-                      className="w-full py-5 bg-black text-white rounded-2xl font-black uppercase text-xs flex items-center justify-center gap-3 active:scale-95 transition-all"
-                    >
-                      <Phone size={18} /> Contact Customer
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
+    <div className="max-w-md mx-auto min-h-screen bg-white flex flex-col relative border-x border-stone-50">
+      {/* Top bar */}
+      <div className="bg-white border-b border-stone-100 py-3 px-5 flex items-center justify-between shadow-sm sticky top-0 z-50">
+        <div className="flex items-center gap-3">
+          <img src={BRAND_LOGO} alt="Sweet Tooth" className="h-10 w-auto object-contain" />
+          <div>
+            <p className="text-[9px] font-black uppercase text-stone-400 leading-none">{currentUser.role.replace('_', ' ')}</p>
+            <p className="text-sm font-black text-stone-900 leading-tight">{currentUser.name}</p>
           </div>
-        )}
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5">
+            <span className={`w-1.5 h-1.5 rounded-full ${isLoading ? 'bg-amber-400 animate-pulse' : dataSource === 'LIVE' ? 'bg-green-500' : 'bg-red-400'}`} />
+            <span className="text-[8px] font-black uppercase text-stone-400">{lastSync || 'syncing'}</span>
+          </div>
+          <button onClick={fetchOrders} className={`p-2 text-stone-400 ${isLoading ? 'animate-spin' : ''}`}><RefreshCw size={16} /></button>
+          <button onClick={logout} className="p-2 text-stone-400 hover:text-red-500 transition-colors"><LogOut size={18} /></button>
+        </div>
       </div>
-    </HashRouter>
+
+      {/* Tab nav */}
+      {isAdmin && (
+        <div className="flex border-b border-stone-100 bg-white sticky top-[57px] z-40">
+          <button
+            onClick={() => setTab('SCHEDULE')}
+            className={`flex-1 py-3 font-black uppercase text-[11px] flex items-center justify-center gap-1.5 transition-all ${tab === 'SCHEDULE' ? 'text-black border-b-2 border-black' : 'text-stone-400'}`}
+          ><Calendar size={14} /> Schedule</button>
+          <button
+            onClick={() => setTab('ADMIN')}
+            className={`flex-1 py-3 font-black uppercase text-[11px] flex items-center justify-center gap-1.5 transition-all ${tab === 'ADMIN' ? 'text-black border-b-2 border-black' : 'text-stone-400'}`}
+          ><Settings size={14} /> Admin</button>
+        </div>
+      )}
+
+      {/* Content */}
+      <main className="flex-1 overflow-hidden flex flex-col">
+        {(tab === 'SCHEDULE' || !isAdmin) && (
+          <ScheduleView
+            deliveries={deliveries}
+            role={currentUser.role}
+            currentUserId={currentUser.id}
+            onSelectOrder={setSelectedOrder}
+          />
+        )}
+        {tab === 'ADMIN' && isAdmin && (
+          <AdminPanel
+            role={currentUser.role}
+            deliveries={deliveries}
+            onRefresh={fetchOrders}
+          />
+        )}
+      </main>
+    </div>
   );
 }
