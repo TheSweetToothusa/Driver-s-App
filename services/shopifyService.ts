@@ -122,7 +122,7 @@ const getCleanSamples = (): Delivery[] => {
       priority: 'Standard',
       driverId: 'smith',
       driverName: 'Smith',
-      attempts: [{ id: 'fail-1', timestamp: new Date().toISOString(), driverId: 'smith', driverName: 'Smith', type: 'FIRST', reason: 'GATE_CODE_MISSING', notes: 'Gate code provided was incorrect. Recipient did not answer phone.' }],
+      attempts: [{ id: 'fail-1', timestamp: new Date().toISOString(), driverId: 'smith', driverName: 'Smith', attemptNumber: 1 as 1 | 2, reason: 'ACCESS_ISSUE', notes: 'Gate code provided was incorrect. Recipient did not answer phone.' }],
       internalNotes: ['Requires redelivery tomorrow'],
       driverNotes: 'Security guard refused entry as the code #9988 didn\'t work. Customer phone went to voicemail.',
       giftMessage: 'Congratulations on the new place!',

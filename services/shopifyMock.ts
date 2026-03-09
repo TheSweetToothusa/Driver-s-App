@@ -1,13 +1,9 @@
-
 import { Delivery, DeliveryStatus, Driver } from '../types';
 
 export const MOCK_DRIVERS: Driver[] = [
-  // Fix: Removed 'feesCollected' as it is not part of the Driver interface
-  { id: 'driver_john', name: 'John Doe', vehicle: 'Sprinter Van #1', activeOrders: 2, totalCompleted: 142, successRate: 98 },
-  // Fix: Removed 'feesCollected' as it is not part of the Driver interface
-  { id: 'driver_sarah', name: 'Sarah Miller', vehicle: 'Tesla Model Y', activeOrders: 5, totalCompleted: 89, successRate: 94 },
-  // Fix: Removed 'feesCollected' as it is not part of the Driver interface
-  { id: 'driver_adam', name: 'Adam K.', vehicle: 'Refrigerated Truck', activeOrders: 0, totalCompleted: 12, successRate: 100 }
+  { id: 'driver_john', name: 'John Doe', vehicle: 'Sprinter Van #1' },
+  { id: 'driver_sarah', name: 'Sarah Miller', vehicle: 'Tesla Model Y' },
+  { id: 'driver_adam', name: 'Adam K.', vehicle: 'Refrigerated Truck' }
 ];
 
 export const MOCK_DELIVERIES: Delivery[] = [
@@ -16,7 +12,6 @@ export const MOCK_DELIVERIES: Delivery[] = [
     orderNumber: '#33889',
     customer: { name: 'Adam Kaplan', phone: '954-465-5645', email: 'adam@example.com' },
     giftReceiverName: 'The Hagen Family',
-    // Fix: Using 'giftSenderName' instead of 'giftSender' to match Delivery interface in types.ts
     giftSenderName: 'Adam and Caryn',
     giftMessage: 'Please accept our deepest condolences.',
     address: { street: '456 Sympathy Lane', city: 'Hollywood', zip: '33021', lat: 26.01, lng: -80.14 },
@@ -37,7 +32,6 @@ export const MOCK_DELIVERIES: Delivery[] = [
     orderNumber: '#33890',
     customer: { name: 'Jessica Chen', phone: '305-555-0101', email: 'jess@me.com' },
     giftReceiverName: 'Grand Oaks Hospital',
-    // Fix: Using 'giftSenderName' instead of 'giftSender' to match Delivery interface in types.ts
     giftSenderName: 'Corporate Team',
     giftMessage: 'Happy Birthday!',
     address: { street: '1200 Hospital Blvd', city: 'Davie', zip: '33314', lat: 26.06, lng: -80.24 },
@@ -50,8 +44,11 @@ export const MOCK_DELIVERIES: Delivery[] = [
     priority: 'Urgent',
     driverId: 'driver_sarah',
     driverName: 'Sarah Miller',
-    // Fix: Changed 'First Attempt' to 'FIRST' to satisfy Attempt type union and added missing required 'driverName' property
-    attempts: [{ id: 'a1', timestamp: '2025-05-10T09:30:00Z', driverId: 'driver_sarah', driverName: 'Sarah Miller', type: 'FIRST', reason: 'NOT_HOME', notes: 'No one answered the door.' }],
+    attempts: [{
+      id: 'a1', timestamp: '2025-05-10T09:30:00Z',
+      driverId: 'driver_sarah', driverName: 'Sarah Miller',
+      attemptNumber: 1, reason: 'NO_ANSWER', notes: 'No one answered the door.'
+    }],
     internalNotes: []
   }
 ];

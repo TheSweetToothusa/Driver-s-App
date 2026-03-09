@@ -1,6 +1,5 @@
 
 export type AppRole = 'SUPER_ADMIN' | 'MANAGER' | 'DRIVER';
-
 export type Priority = 'Standard' | 'Urgent' | 'Sympathy';
 
 export enum DeliveryStatus {
@@ -9,20 +8,26 @@ export enum DeliveryStatus {
   IN_TRANSIT = 'IN_TRANSIT',
   DELIVERED = 'DELIVERED',
   FAILED = 'FAILED',
-  ATTEMPTED = 'ATTEMPTED',
+  SECOND_ATTEMPT = 'SECOND_ATTEMPT',  // rescheduled after failure
+  PENDING_RESCHEDULE = 'PENDING_RESCHEDULE', // waiting on Katie
   CLOSED = 'CLOSED'
 }
 
+// The 5 standard failure reasons
 export type FailureReason =
-  | 'NOT_HOME'
-  | 'BAD_ADDRESS'
-  | 'UNSAFE'
-  | 'REFUSED'
-  | 'CONCIERGE_REJECTED'
-  | 'GATE_CODE_MISSING'
-  | 'RECIPIENT_UNAVAILABLE'
-  | 'LEFT_WITH_NEIGHBOR'
-  | 'OTHER';
+  | 'NO_ANSWER'          // No Answer / Recipient Unavailable
+  | 'BAD_ADDRESS'        // Inaccurate or Incomplete Address
+  | 'ACCESS_ISSUE'       // Gate / Lobby access problem
+  | 'NO_SECURE_LOCATION' // No safe place to leave
+  | 'REFUSED';           // Delivery refused at door
+
+export const FAILURE_REASON_LABELS: Record<FailureReason, string> = {
+  NO_ANSWER: 'No Answer / Recipient Unavailable',
+  BAD_ADDRESS: 'Inaccurate or Incomplete Address',
+  ACCESS_ISSUE: 'Access Issues (Gate/Lobby)',
+  NO_SECURE_LOCATION: 'No Secure Location to Leave',
+  REFUSED: 'Delivery Refused'
+};
 
 export interface UserAccount {
   id: string;
@@ -43,8 +48,8 @@ export interface Attempt {
   timestamp: string;
   driverId: string;
   driverName: string;
-  type: 'FIRST' | 'SECOND';
-  reason?: FailureReason;
+  attemptNumber: 1 | 2;
+  reason: FailureReason;
   notes: string;
   photo?: string;
   signature?: string;
@@ -87,7 +92,6 @@ export interface Delivery {
   isConfirmed?: boolean;
   driverNotes?: string;
   adminNotes?: string;
-  isPodMandatory?: boolean;
 
   confirmationPhoto?: string;
   confirmationSignature?: string;
@@ -95,10 +99,7 @@ export interface Delivery {
   submittedAt?: string;
 
   safeDropAllowed?: boolean;
-  returnToStoreRequired?: boolean;
   neighborName?: string;
-  mileageEstimate?: number;
-  timeSpentMinutes?: number;
 
   attempts: Attempt[];
   internalNotes: string[];
@@ -108,6 +109,11 @@ export interface Delivery {
   giftSenderEmail?: string;
   giftReceiverName?: string;
   giftReceiverPhone?: string;
+
+  // Which attempt number this delivery is (1 = first, 2 = rescheduled)
+  attemptNumber?: 1 | 2;
+  // If this is a 2nd attempt, link back to original
+  originalDeliveryId?: string;
 
   successNotificationSent?: boolean;
   failureNotificationSent?: boolean;
@@ -125,11 +131,7 @@ export interface Driver {
   vehicle: string;
   phone?: string;
   email?: string;
-  accessCode?: string;
   status?: 'ACTIVE' | 'INACTIVE';
-  activeOrders?: number;
-  totalCompleted?: number;
-  successRate?: number;
 }
 
 export interface ManualStop {
@@ -139,7 +141,5 @@ export interface ManualStop {
   address?: string;
   timestamp: string;
 }
-
-export type RouteStop = (Delivery & { stopType: 'DELIVERY' }) | (ManualStop & { stopType: 'MANUAL' });
 
 export type ViewMode = 'DAY' | 'WEEK' | 'MONTH' | 'CUSTOM';
