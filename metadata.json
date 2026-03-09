@@ -1,0 +1,8 @@
+{
+  "name": "Remix: THE SWEET TOOTH Driver App",
+  "description": "Premium delivery management for THE SWEET TOOTH ",
+  "requestFramePermissions": [
+    "camera",
+    "geolocation"
+  ]
+}
