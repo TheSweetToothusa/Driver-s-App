@@ -898,6 +898,75 @@ const PendingRescheduleQueue: React.FC<{ allUsers: UserAccount[] }> = ({ allUser
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+// DRIVER PAY CARD — collapsible per-driver payroll row
+// ─────────────────────────────────────────────────────────────────────────────
+
+const DriverPayCard: React.FC<{
+  row: { id: string; name: string; count: number; total: number; stops: Delivery[] }
+}> = ({ row }) => {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="bg-white border border-stone-100 rounded-[28px] shadow-sm overflow-hidden">
+      {/* Summary row — always visible */}
+      <button onClick={() => setOpen(o => !o)}
+        className="w-full p-5 flex items-center justify-between active:bg-stone-50 transition-all">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-stone-100 rounded-full flex items-center justify-center shrink-0">
+            <User size={18} className="text-stone-500" />
+          </div>
+          <div className="text-left">
+            <p className="font-black text-stone-900">{row.name}</p>
+            <p className="text-[10px] font-black text-stone-400 uppercase">
+              {row.count} {row.count === 1 ? 'delivery' : 'deliveries'}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-2xl font-black text-stone-900">${row.total.toFixed(2)}</span>
+          <ChevronRight size={16} className={`text-stone-300 transition-transform ${open ? 'rotate-90' : ''}`} />
+        </div>
+      </button>
+
+      {/* Drill-down — each delivery */}
+      {open && (
+        <div className="border-t border-stone-50">
+          {row.stops.map((d, i) => (
+            <div key={d.id}
+              className={`flex items-center justify-between px-5 py-3.5 ${i % 2 === 0 ? 'bg-white' : 'bg-stone-50/50'}`}>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-black text-stone-800 truncate">
+                  {d.giftReceiverName || d.customer.name}
+                </p>
+                <p className="text-[10px] text-stone-400 font-medium">
+                  #{d.orderNumber} · {d.address.city} {d.address.zip}
+                </p>
+                {d.completedAt && (
+                  <p className="text-[9px] font-black text-stone-300 uppercase mt-0.5">
+                    {new Date(d.completedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} at {formatTime(d.completedAt)}
+                  </p>
+                )}
+              </div>
+              <span className="text-sm font-black text-green-700 ml-3 shrink-0">
+                ${(d.deliveryFee || 0).toFixed(2)}
+              </span>
+            </div>
+          ))}
+
+          {/* Driver subtotal footer */}
+          <div className="flex items-center justify-between px-5 py-4 bg-stone-900 rounded-b-[28px]">
+            <span className="text-[10px] font-black uppercase text-white/60">
+              Total owed to {row.name}
+            </span>
+            <span className="text-xl font-black text-white">${row.total.toFixed(2)}</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 // ADMIN PANEL
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -956,7 +1025,7 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
     setEditingTemplate(null);
   };
 
-  const totalFees = deliveries.filter(d => d.status === DeliveryStatus.DELIVERED && d.completedAt).filter(d => { const dt = d.completedAt!.split('T')[0]; return dt >= feeStart && dt <= feeEnd; }).reduce((s, d) => s + (d.deliveryFee || 0), 0);
+
 
   return (
     <div className="flex flex-col h-full bg-white">
@@ -1044,30 +1113,120 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
           </div>
         )}
 
-        {activeTab === 'FEES' && (
-          <div className="space-y-5">
-            <div className="p-5 bg-white border border-stone-100 rounded-[28px] shadow-sm space-y-4">
-              <p className="font-black uppercase text-sm text-stone-800 flex items-center gap-2"><FileText size={16} /> Revenue Summary</p>
-              <div className="grid grid-cols-2 gap-3">
-                <div><label className="text-[8px] font-black uppercase text-stone-400 mb-1 block">Start</label><input type="date" value={feeStart} onChange={e => setFeeStart(e.target.value)} className="w-full bg-stone-50 border border-stone-100 rounded-xl px-3 py-2 text-xs font-black outline-none" /></div>
-                <div><label className="text-[8px] font-black uppercase text-stone-400 mb-1 block">End</label><input type="date" value={feeEnd} onChange={e => setFeeEnd(e.target.value)} className="w-full bg-stone-50 border border-stone-100 rounded-xl px-3 py-2 text-xs font-black outline-none" /></div>
+        {activeTab === 'FEES' && (() => {
+          // ── compute per-driver payroll ──────────────────────────────────
+          const inRange = deliveries.filter(d =>
+            d.status === DeliveryStatus.DELIVERED &&
+            d.completedAt &&
+            d.completedAt.split('T')[0] >= feeStart &&
+            d.completedAt.split('T')[0] <= feeEnd
+          );
+
+          // group by driver
+          const byDriver: Record<string, { name: string; stops: Delivery[] }> = {};
+          inRange.forEach(d => {
+            const key = d.driverId || 'unassigned';
+            const name = d.driverName || 'Unassigned';
+            if (!byDriver[key]) byDriver[key] = { name, stops: [] };
+            byDriver[key].stops.push(d);
+          });
+
+          const driverRows = Object.entries(byDriver).map(([id, { name, stops }]) => ({
+            id, name,
+            count: stops.length,
+            total: stops.reduce((s, d) => s + (d.deliveryFee || 0), 0),
+            stops
+          })).sort((a, b) => b.total - a.total);
+
+          const grandTotal = driverRows.reduce((s, r) => s + r.total, 0);
+          const grandCount = driverRows.reduce((s, r) => s + r.count, 0);
+
+          return (
+            <div className="space-y-4">
+
+              {/* Date range picker */}
+              <div className="p-5 bg-white border border-stone-100 rounded-[28px] shadow-sm space-y-4">
+                <p className="font-black uppercase text-sm text-stone-800 flex items-center gap-2">
+                  <FileText size={16} /> Driver Payroll
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[8px] font-black uppercase text-stone-400 mb-1 block">From</label>
+                    <input type="date" value={feeStart} onChange={e => setFeeStart(e.target.value)}
+                      className="w-full bg-stone-50 border border-stone-100 rounded-xl px-3 py-2.5 text-xs font-black outline-none focus:border-black" />
+                  </div>
+                  <div>
+                    <label className="text-[8px] font-black uppercase text-stone-400 mb-1 block">To</label>
+                    <input type="date" value={feeEnd} onChange={e => setFeeEnd(e.target.value)}
+                      className="w-full bg-stone-50 border border-stone-100 rounded-xl px-3 py-2.5 text-xs font-black outline-none focus:border-black" />
+                  </div>
+                </div>
+
+                {/* Quick range buttons */}
+                <div className="flex gap-2 flex-wrap">
+                  {[
+                    { label: 'Today', days: 0 },
+                    { label: 'Last 7', days: 7 },
+                    { label: 'Last 14', days: 14 },
+                    { label: 'Last 30', days: 30 },
+                  ].map(({ label, days }) => (
+                    <button key={label} onClick={() => {
+                      const end = new Date();
+                      const start = new Date();
+                      start.setDate(end.getDate() - days);
+                      setFeeEnd(end.toISOString().split('T')[0]);
+                      setFeeStart(start.toISOString().split('T')[0]);
+                    }}
+                      className="px-3 py-2 bg-stone-100 text-stone-600 rounded-xl font-black uppercase text-[9px] active:scale-95 transition-all">
+                      {label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Grand total banner */}
+                <div className="flex items-center justify-between p-4 bg-black rounded-2xl">
+                  <div>
+                    <p className="text-[9px] font-black uppercase text-white/50 mb-0.5">Grand Total</p>
+                    <p className="text-[10px] font-black text-white/60">{grandCount} successful {grandCount === 1 ? 'delivery' : 'deliveries'}</p>
+                  </div>
+                  <span className="text-3xl font-black text-white">${grandTotal.toFixed(2)}</span>
+                </div>
               </div>
-              <div className="flex items-center justify-between pt-3 border-t border-stone-50">
-                <span className="text-sm font-black uppercase text-stone-400">Total Fees</span>
-                <span className="text-3xl font-black text-stone-900">${totalFees.toFixed(2)}</span>
+
+              {/* Per-driver cards */}
+              {driverRows.length === 0 ? (
+                <div className="text-center py-12">
+                  <FileText size={32} className="mx-auto text-stone-200 mb-2" />
+                  <p className="text-[11px] font-black uppercase text-stone-300">No completed deliveries in this range</p>
+                </div>
+              ) : driverRows.map(row => (
+                <DriverPayCard key={row.id} row={row} />
+              ))}
+
+              {/* ZIP rate calculator */}
+              <div className="p-5 bg-white border border-stone-100 rounded-[28px] shadow-sm space-y-4">
+                <p className="font-black uppercase text-sm text-stone-800 flex items-center gap-2">
+                  <MapPin size={16} /> Rate by ZIP
+                </p>
+                <div className="flex gap-2">
+                  <input type="text" placeholder="ZIP code" value={feeZip}
+                    onChange={e => setFeeZip(e.target.value.replace(/\D/g, '').slice(0, 5))}
+                    className="flex-1 bg-stone-50 border border-stone-100 rounded-2xl px-4 py-4 text-lg font-black outline-none focus:border-black text-center tracking-widest" />
+                  <button onClick={() => setFeeResult(DELIVERY_FEES[feeZip] ?? null)}
+                    className="px-5 py-4 bg-black text-white rounded-2xl font-black uppercase text-xs active:scale-95">Check</button>
+                </div>
+                {feeZip.length === 5 && feeResult !== null &&
+                  <div className="flex items-center justify-between p-4 bg-green-50 rounded-2xl border border-green-100">
+                    <span className="font-black text-stone-700 uppercase text-sm">ZIP {feeZip}</span>
+                    <span className="text-2xl font-black text-green-700">${feeResult}</span>
+                  </div>}
+                {feeZip.length === 5 && feeResult === null &&
+                  <p className="text-xs font-black text-red-400 text-center">ZIP not in rate table</p>}
               </div>
+
             </div>
-            <div className="p-5 bg-white border border-stone-100 rounded-[28px] shadow-sm space-y-4">
-              <p className="font-black uppercase text-sm text-stone-800 flex items-center gap-2"><MapPin size={16} /> Rate Calculator</p>
-              <div className="flex gap-2">
-                <input type="text" placeholder="ZIP code" value={feeZip} onChange={e => setFeeZip(e.target.value.replace(/\D/g, '').slice(0, 5))} className="flex-1 bg-stone-50 border border-stone-100 rounded-2xl px-4 py-4 text-lg font-black outline-none focus:border-black text-center tracking-widest" />
-                <button onClick={() => setFeeResult(DELIVERY_FEES[feeZip] ?? null)} className="px-5 py-4 bg-black text-white rounded-2xl font-black uppercase text-xs">Check</button>
-              </div>
-              {feeZip.length === 5 && feeResult !== null && <div className="flex items-center justify-between p-4 bg-green-50 rounded-2xl border border-green-100"><span className="font-black text-stone-700 uppercase text-sm">ZIP {feeZip}</span><span className="text-2xl font-black text-green-700">${feeResult}</span></div>}
-              {feeZip.length === 5 && feeResult === null && <p className="text-xs font-black text-red-400 text-center">ZIP not in rate table</p>}
-            </div>
-          </div>
-        )}
+          );
+        })()}
       </div>
     </div>
   );
