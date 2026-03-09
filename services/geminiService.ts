@@ -2,8 +2,8 @@
 import { GoogleGenAI, Modality } from "@google/genai";
 import { Delivery, ManualStop } from "../types";
 
-// Always use named parameter for apiKey and obtain it directly from process.env.API_KEY
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY || "";
+const ai = new GoogleGenAI({ apiKey });
 const STORE_ADDRESS = "18435 NE 19th Ave, North Miami Beach, FL 33179";
 
 /**
