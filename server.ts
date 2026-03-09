@@ -3,12 +3,15 @@ import { createServer as createViteServer } from "vite";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import { config } from "dotenv";
+
+config({ path: '.env.local' });
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const SHOPIFY_STORE_URL = 'thesweettoothfl.myshopify.com';
-const SHOPIFY_ACCESS_TOKEN = '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'; 
+const SHOPIFY_STORE_URL = process.env.SHOPIFY_STORE_URL || '';
+const SHOPIFY_ACCESS_TOKEN = process.env.SHOPIFY_ACCESS_TOKEN || '';
 
 const POD_STORAGE_PATH = path.join(__dirname, "pod_data.json");
 

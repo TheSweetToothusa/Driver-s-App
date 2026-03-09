@@ -1,13 +1,7 @@
 import { Delivery, DeliveryStatus } from '../types';
 
-/**
- * SECURITY NOTE: 
- * In a production app, SHOPIFY_ACCESS_TOKEN should NEVER be stored here.
- * It should be stored on a private server (Backend Proxy).
- * The client app would call your server, and your server would hold the token to talk to Shopify.
- */
-const SHOPIFY_STORE_URL = 'thesweettoothfl.myshopify.com';
-const SHOPIFY_ACCESS_TOKEN = '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'; 
+// Shopify credentials are stored server-side in .env.local.
+// The client calls /api/orders which proxies to Shopify via server.ts.
 
 export const getDeliveries = async (): Promise<Delivery[]> => {
   try {
