@@ -533,12 +533,12 @@ const OrderDetail: React.FC<{
   const [showGiftMsg, setShowGiftMsg] = useState(false);
   const [editingContact, setEditingContact] = useState(false);
   const [editFields, setEditFields] = useState({
-    recipientName: order.giftReceiverName || order.customer.name || '',
-    recipientPhone: order.customer.phone || '',
-    recipientEmail: order.customer.email || '',
-    street: order.address.street || '',
-    city: order.address.city || '',
-    zip: order.address.zip || '',
+    recipientName: order.giftReceiverName || order.customer?.name || '',
+    recipientPhone: order.customer?.phone || '',
+    recipientEmail: order.customer?.email || '',
+    street: order.address?.street || '',
+    city: order.address?.city || '',
+    zip: order.address?.zip || '',
     senderName: order.giftSenderName || '',
     senderPhone: order.giftSenderPhone || '',
     deliveryFee: String(order.deliveryFee ?? ''),
@@ -563,11 +563,11 @@ const OrderDetail: React.FC<{
     setEditingContact(false);
   };
 
-  const recipientPhone = editingContact ? editFields.recipientPhone : order.customer.phone;
-  const senderPhone = editingContact ? editFields.senderPhone : order.giftSenderPhone;
-  const recipientName = editingContact ? editFields.recipientName : (order.giftReceiverName || order.customer.name);
-  const senderName = editingContact ? editFields.senderName : order.giftSenderName;
-  const mapsUrl = `https://maps.google.com/?q=${encodeURIComponent(order.address.street + ' ' + order.address.city + ' FL ' + order.address.zip)}`;
+  const recipientPhone = editingContact ? editFields.recipientPhone : (order.customer?.phone || '');
+  const senderPhone = editingContact ? editFields.senderPhone : (order.giftSenderPhone || '');
+  const recipientName = editingContact ? editFields.recipientName : (order.giftReceiverName || order.customer?.name || '');
+  const senderName = editingContact ? editFields.senderName : (order.giftSenderName || '');
+  const mapsUrl = `https://maps.google.com/?q=${encodeURIComponent((order.address?.street || '') + ' ' + (order.address?.city || '') + ' FL ' + (order.address?.zip || ''))}`;
   const cleanOrderNum = order.orderNumber?.replace(/^#+/, '') || order.id;
 
 
@@ -970,13 +970,6 @@ const OrdersView: React.FC<OrdersViewProps> = ({
 
     return (
       <div className="flex flex-col h-full">
-        {/* Same-day banner */}
-        {isSameDayWindow && (
-          <div className="px-4 py-2 bg-amber-400 flex items-center gap-2">
-            <Clock size={13} className="text-amber-900 shrink-0" />
-            <p className="text-[11px] font-black text-amber-900 uppercase">Same-day window open — closes at 2:00 PM</p>
-          </div>
-        )}
         {/* Stats */}
         <div className="grid grid-cols-4 border-b border-stone-200">
           {[
@@ -1342,7 +1335,7 @@ const ScheduleView: React.FC<{
               <p className="text-[11px] font-black uppercase text-stone-500 tracking-widest">
                 {new Date(date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
               </p>
-              <span className="text-[10px] font-black text-stone-400">{orders.length} {orders.length === 1 ? 'stop' : 'stops'}</span>
+              <span className="text-[10px] font-black text-stone-400">{orders.length} {orders.length === 1 ? 'order' : 'orders'}</span>
             </div>
             {orders.map(order => <OrderCard key={order.id} order={order} role={role} onTap={() => onSelectOrder(order)} />)}
           </div>
@@ -2065,7 +2058,7 @@ export default function App() {
           {isAdmin && (
             <button onClick={() => { setShowZipBar(s => !s); setZipQuery(''); setZipRate(undefined); }}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-black text-[10px] uppercase transition-all border ${showZipBar ? 'bg-black text-white border-black' : 'bg-stone-50 text-stone-700 border-stone-200'}`}>
-              <MapPin size={11} /> ZIP Rate
+              <MapPin size={11} /> Delivery Fee
             </button>
           )}
           <span className={`w-2 h-2 rounded-full ${isLoading ? 'bg-amber-400 animate-pulse' : dataSource === 'LIVE' ? 'bg-green-500' : 'bg-red-400'}`} />
