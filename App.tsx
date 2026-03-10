@@ -22,27 +22,30 @@ const BRAND_LOGO = "https://cdn.shopify.com/s/files/1/0559/8498/0141/files/The_S
 
 const isWithinSendingHours = () => { const h = new Date().getHours(); return h >= 9 && h < 20; };
 const STATUSES_FOR_DROPDOWN = [
-  { value: 'PENDING',            label: 'Not Assigned',     color: '#6b7280' },
-  { value: 'ASSIGNED',           label: 'Driver Assigned',  color: '#2563eb' },
-  { value: 'IN_TRANSIT',         label: 'Out for Delivery', color: '#000000' },
-  { value: 'DELIVERED',          label: 'Delivered',        color: '#16a34a' },
-  { value: 'FAILED',             label: 'Failed Delivery',  color: '#dc2626' },
-  { value: 'SECOND_ATTEMPT',     label: '2nd Attempt',      color: '#374151' },
-  { value: 'PENDING_RESCHEDULE', label: 'Needs Reschedule', color: '#d97706' },
+  { value: 'PENDING',            label: 'Not Assigned',       color: '#6b7280' },
+  { value: 'SCHEDULED',          label: 'Scheduled',          color: '#7c3aed' },
+  { value: 'ASSIGNED',           label: 'Driver Assigned',    color: '#2563eb' },
+  { value: 'IN_TRANSIT',         label: 'Out for Delivery',   color: '#000000' },
+  { value: 'DELIVERED',          label: 'Delivered',          color: '#16a34a' },
+  { value: 'FAILED',             label: '1st Attempt Failed', color: '#dc2626' },
+  { value: 'SECOND_ATTEMPT',     label: '2nd Attempt',        color: '#374151' },
+  { value: 'PENDING_RESCHEDULE', label: 'Needs Reschedule',   color: '#d97706' },
+  { value: 'CLOSED',             label: 'Closed',             color: '#9ca3af' },
 ];
 const formatTime = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 const formatDate = (iso: string) => new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
 // Status badge config
 const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string }> = {
-  PENDING:             { label: 'Not Assigned',      bg: 'bg-stone-800',   text: 'text-white' },
-  ASSIGNED:            { label: 'Driver Assigned',   bg: 'bg-blue-600',    text: 'text-white' },
-  IN_TRANSIT:          { label: 'Out for Delivery',  bg: 'bg-black',       text: 'text-white' },
-  DELIVERED:           { label: 'Delivered ✓',       bg: 'bg-green-600',   text: 'text-white' },
-  FAILED:              { label: 'Failed Delivery',   bg: 'bg-red-600',     text: 'text-white' },
-  SECOND_ATTEMPT:      { label: '2nd Attempt',       bg: 'bg-stone-700',   text: 'text-white' },
-  PENDING_RESCHEDULE:  { label: 'Needs Reschedule',  bg: 'bg-amber-500',   text: 'text-white' },
-  CLOSED:              { label: 'Closed',            bg: 'bg-stone-300',   text: 'text-stone-600' },
+  PENDING:             { label: 'Not Assigned',       bg: 'bg-stone-800',   text: 'text-white' },
+  SCHEDULED:           { label: 'Scheduled',          bg: 'bg-violet-600',  text: 'text-white' },
+  ASSIGNED:            { label: 'Driver Assigned',    bg: 'bg-blue-600',    text: 'text-white' },
+  IN_TRANSIT:          { label: 'Out for Delivery',   bg: 'bg-black',       text: 'text-white' },
+  DELIVERED:           { label: 'Delivered ✓',        bg: 'bg-green-600',   text: 'text-white' },
+  FAILED:              { label: '1st Attempt Failed', bg: 'bg-red-600',     text: 'text-white' },
+  SECOND_ATTEMPT:      { label: '2nd Attempt',        bg: 'bg-stone-700',   text: 'text-white' },
+  PENDING_RESCHEDULE:  { label: 'Needs Reschedule',   bg: 'bg-amber-500',   text: 'text-white' },
+  CLOSED:              { label: 'Closed',             bg: 'bg-stone-300',   text: 'text-stone-600' },
 };
 
 function StatusBadge({ status }: { status: string }) {
@@ -482,8 +485,9 @@ const OrderDetail: React.FC<{
   const handleAutoReschedule = async () => {
     const res = await fetch('/api/reschedule/auto', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ order: { ...order, ...pendingFailure } }) });
     const data = await res.json();
-    if (data.rescheduledOrder) onAddDelivery(data.rescheduledOrder);
-    onUpdate(order.id, { status: DeliveryStatus.FAILED });
+    if (data.rescheduledOrder) onAddDelivery({ ...data.rescheduledOrder, attemptNumber: 2, originalDeliveryId: order.id });
+    // Mark original as FAILED (1st attempt) with attemptNumber=1
+    onUpdate(order.id, { status: DeliveryStatus.FAILED, attemptNumber: 1 });
     setShowReschedule(false);
   };
 
@@ -507,7 +511,7 @@ const OrderDetail: React.FC<{
     const data = await res.json();
     setIsSending(false);
     if (data.sent) { setNotifySent(true); onUpdate(order.id, showNotifyPreview === 'SUCCESS' ? { successNotificationSent: true } : { failureNotificationSent: true }); }
-    else alert(data.error || 'Failed to send. Check Twilio/SendGrid setup.');
+    else alert(data.error || 'Failed to send. Check SendGrid setup (SENDGRID_API_KEY env var).');
   };
 
   const handleAddNote = async () => {
@@ -527,10 +531,42 @@ const OrderDetail: React.FC<{
   };
 
   const [showGiftMsg, setShowGiftMsg] = useState(false);
-  const recipientPhone = order.customer.phone;
-  const senderPhone = order.giftSenderPhone;
-  const recipientName = order.giftReceiverName || order.customer.name;
-  const senderName = order.giftSenderName;
+  const [editingContact, setEditingContact] = useState(false);
+  const [editFields, setEditFields] = useState({
+    recipientName: order.giftReceiverName || order.customer.name || '',
+    recipientPhone: order.customer.phone || '',
+    recipientEmail: order.customer.email || '',
+    street: order.address.street || '',
+    city: order.address.city || '',
+    zip: order.address.zip || '',
+    senderName: order.giftSenderName || '',
+    senderPhone: order.giftSenderPhone || '',
+    deliveryFee: String(order.deliveryFee ?? ''),
+  });
+
+  const handleSaveContact = async () => {
+    const updates: Partial<Delivery> = {
+      customer: { name: editFields.recipientName, phone: editFields.recipientPhone, email: editFields.recipientEmail },
+      address: { ...order.address, street: editFields.street, city: editFields.city, zip: editFields.zip },
+      giftReceiverName: editFields.recipientName,
+      giftSenderName: editFields.senderName,
+      giftSenderPhone: editFields.senderPhone,
+    };
+    if (role === 'SUPER_ADMIN') {
+      updates.deliveryFee = parseFloat(editFields.deliveryFee) || order.deliveryFee;
+    }
+    onUpdate(order.id, updates);
+    await fetch(`/api/orders/${order.id}/edit`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates)
+    }).catch(() => {});
+    setEditingContact(false);
+  };
+
+  const recipientPhone = editingContact ? editFields.recipientPhone : order.customer.phone;
+  const senderPhone = editingContact ? editFields.senderPhone : order.giftSenderPhone;
+  const recipientName = editingContact ? editFields.recipientName : (order.giftReceiverName || order.customer.name);
+  const senderName = editingContact ? editFields.senderName : order.giftSenderName;
   const mapsUrl = `https://maps.google.com/?q=${encodeURIComponent(order.address.street + ' ' + order.address.city + ' FL ' + order.address.zip)}`;
   const cleanOrderNum = order.orderNumber?.replace(/^#+/, '') || order.id;
 
@@ -668,9 +704,53 @@ const OrderDetail: React.FC<{
         {/* ── ADMIN SECTION: assign driver + note (ONE place, not two) ── */}
         {isAdmin && (
           <div className="mx-3 mt-3 bg-white rounded-xl border border-stone-200 overflow-hidden">
-            <div className="px-4 py-2 bg-stone-50 border-b border-stone-100">
+            <div className="px-4 py-2 bg-stone-50 border-b border-stone-100 flex items-center justify-between">
               <p className="text-[10px] font-black uppercase text-stone-500 tracking-widest">Admin</p>
+              <button onClick={() => setEditingContact(e => !e)}
+                className={`text-[10px] font-black uppercase px-3 py-1 rounded-full transition-all ${editingContact ? 'bg-black text-white' : 'bg-stone-100 text-stone-600'}`}>
+                <Edit3 size={10} className="inline mr-1" />{editingContact ? 'Editing' : 'Edit Info'}
+              </button>
             </div>
+
+            {/* Edit contact/address form */}
+            {editingContact && (
+              <div className="px-4 py-3 border-b border-stone-100 space-y-2">
+                <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest mb-2">Recipient</p>
+                <input value={editFields.recipientName} onChange={e => setEditFields(p => ({ ...p, recipientName: e.target.value }))}
+                  placeholder="Recipient name" className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-black" />
+                <input value={editFields.recipientPhone} onChange={e => setEditFields(p => ({ ...p, recipientPhone: e.target.value }))}
+                  placeholder="Recipient phone" className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-black" />
+                <input value={editFields.recipientEmail} onChange={e => setEditFields(p => ({ ...p, recipientEmail: e.target.value }))}
+                  placeholder="Recipient email" className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-black" />
+                <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest mt-2 mb-2">Sender</p>
+                <input value={editFields.senderName} onChange={e => setEditFields(p => ({ ...p, senderName: e.target.value }))}
+                  placeholder="Sender name" className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-black" />
+                <input value={editFields.senderPhone} onChange={e => setEditFields(p => ({ ...p, senderPhone: e.target.value }))}
+                  placeholder="Sender phone" className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-black" />
+                <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest mt-2 mb-2">Address</p>
+                <input value={editFields.street} onChange={e => setEditFields(p => ({ ...p, street: e.target.value }))}
+                  placeholder="Street address" className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-black" />
+                <div className="grid grid-cols-2 gap-2">
+                  <input value={editFields.city} onChange={e => setEditFields(p => ({ ...p, city: e.target.value }))}
+                    placeholder="City" className="bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-black" />
+                  <input value={editFields.zip} onChange={e => setEditFields(p => ({ ...p, zip: e.target.value.replace(/\D/g,'').slice(0,5) }))}
+                    placeholder="ZIP" className="bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-black" />
+                </div>
+                {/* Rate — SUPER_ADMIN only */}
+                {role === 'SUPER_ADMIN' && (
+                  <div>
+                    <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest mt-2 mb-2">Delivery Rate (Super Admin only)</p>
+                    <input value={editFields.deliveryFee} onChange={e => setEditFields(p => ({ ...p, deliveryFee: e.target.value }))}
+                      placeholder="Rate ($)" inputMode="decimal" className="w-full bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-sm font-black outline-none focus:border-amber-400" />
+                  </div>
+                )}
+                <div className="flex gap-2 pt-1">
+                  <button onClick={handleSaveContact} className="flex-1 py-3 bg-black text-white rounded-xl font-black uppercase text-xs">Save Changes</button>
+                  <button onClick={() => setEditingContact(false)} className="flex-1 py-3 bg-stone-100 text-stone-600 rounded-xl font-black uppercase text-xs">Cancel</button>
+                </div>
+              </div>
+            )}
+
             {/* Driver assignment */}
             <div className="px-4 py-3 border-b border-stone-100">
               <p className="text-xs font-black text-stone-500 mb-2">
@@ -861,18 +941,30 @@ const OrdersView: React.FC<OrdersViewProps> = ({
 
     const adminToday = new Date().toISOString().split('T')[0];
     const [dateFilter, setDateFilter] = React.useState<'TODAY'|'ALL'>('TODAY');
+    const [statusFilter, setStatusFilter] = React.useState<'ALL'|'OPEN'|'SCHEDULED'|'COMPLETED'>('ALL');
+
+    const COMPLETED_STATUSES = [DeliveryStatus.DELIVERED, DeliveryStatus.FAILED, DeliveryStatus.PENDING_RESCHEDULE, DeliveryStatus.SECOND_ATTEMPT, DeliveryStatus.CLOSED];
+    const OPEN_STATUSES = [DeliveryStatus.PENDING, DeliveryStatus.SCHEDULED, DeliveryStatus.ASSIGNED, DeliveryStatus.IN_TRANSIT];
+
     const todayFiltered = dateFilter === 'TODAY'
       ? sorted.filter(d => (d.deliveryDate || '').split('T')[0] === adminToday)
       : sorted;
+
     const filtered = todayFiltered.filter(d => {
+      // Status filter
+      if (statusFilter === 'OPEN' && !OPEN_STATUSES.includes(d.status)) return false;
+      if (statusFilter === 'COMPLETED' && !COMPLETED_STATUSES.includes(d.status)) return false;
+      // Text search
       if (!search) return true;
       const q = search.toLowerCase();
+      const statusLabel = STATUSES_FOR_DROPDOWN.find(s => s.value === d.status)?.label?.toLowerCase() || '';
       return (
         d.orderNumber?.toLowerCase().includes(q) ||
         d.customer?.name?.toLowerCase().includes(q) ||
         d.address?.street?.toLowerCase().includes(q) ||
         d.address?.city?.toLowerCase().includes(q) ||
-        d.giftReceiverName?.toLowerCase().includes(q)
+        d.giftReceiverName?.toLowerCase().includes(q) ||
+        statusLabel.includes(q)
       );
     });
 
@@ -900,8 +992,9 @@ const OrdersView: React.FC<OrdersViewProps> = ({
           ))}
         </div>
 
-        {/* Date filter + Search */}
+        {/* Filters + Search */}
         <div className="px-3 pt-2 pb-2 border-b border-stone-200 space-y-2">
+          {/* Date: Today / All */}
           <div className="flex gap-2">
             <button onClick={() => setDateFilter('TODAY')}
               className={`flex-1 py-2 rounded-xl font-black text-xs uppercase transition-all ${dateFilter === 'TODAY' ? 'bg-black text-white' : 'bg-stone-100 text-stone-500'}`}>
@@ -909,12 +1002,27 @@ const OrdersView: React.FC<OrdersViewProps> = ({
             </button>
             <button onClick={() => setDateFilter('ALL')}
               className={`flex-1 py-2 rounded-xl font-black text-xs uppercase transition-all ${dateFilter === 'ALL' ? 'bg-black text-white' : 'bg-stone-100 text-stone-500'}`}>
-              All Orders ({sorted.length})
+              All ({sorted.length})
             </button>
           </div>
+          {/* Status: All / Open / Scheduled / Completed */}
+          <div className="flex gap-1.5">
+            {(['ALL','OPEN','SCHEDULED','COMPLETED'] as const).map(f => (
+              <button key={f} onClick={() => setStatusFilter(f as any)}
+                className={`flex-1 py-1.5 rounded-lg font-black text-[9px] uppercase transition-all ${(statusFilter as string) === f
+                  ? (f === 'OPEN' ? 'bg-blue-600 text-white' : f === 'COMPLETED' ? 'bg-green-600 text-white' : f === 'SCHEDULED' ? 'bg-violet-600 text-white' : 'bg-stone-800 text-white')
+                  : 'bg-stone-100 text-stone-500'}`}>
+                {f === 'ALL' ? `All (${todayFiltered.length})`
+                  : f === 'OPEN' ? `Open (${todayFiltered.filter(d => OPEN_STATUSES.includes(d.status)).length})`
+                  : f === 'SCHEDULED' ? `Sched (${todayFiltered.filter(d => d.status === DeliveryStatus.SCHEDULED).length})`
+                  : `Done (${todayFiltered.filter(d => COMPLETED_STATUSES.includes(d.status)).length})`}
+              </button>
+            ))}
+          </div>
+          {/* Text search */}
           <input
             value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Search name, order #, address..."
+            placeholder="Search name, order #, address, status..."
             className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-black"
           />
         </div>
@@ -936,7 +1044,7 @@ const OrdersView: React.FC<OrdersViewProps> = ({
             </div>
           ) : filtered.map((order, idx) => {
             const statusDot: Record<string, string> = {
-              PENDING: 'bg-stone-400', ASSIGNED: 'bg-blue-500', IN_TRANSIT: 'bg-black',
+              PENDING: 'bg-stone-400', SCHEDULED: 'bg-violet-500', ASSIGNED: 'bg-blue-500', IN_TRANSIT: 'bg-black',
               DELIVERED: 'bg-green-500', FAILED: 'bg-red-500',
               SECOND_ATTEMPT: 'bg-stone-700', PENDING_RESCHEDULE: 'bg-amber-500',
             };
@@ -1723,11 +1831,15 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
         {activeTab === 'FEES' && (() => {
           // ── compute per-driver payroll ──────────────────────────────────
           // Use completedAt if available, fall back to deliveryDate
-          const inRange = deliveries.filter(d => {
+          const [feeCalculated, setFeeCalculated] = React.useState(false);
+          const [calcStart, setCalcStart] = React.useState(feeStart);
+          const [calcEnd, setCalcEnd] = React.useState(feeEnd);
+
+          const inRange = feeCalculated ? deliveries.filter(d => {
             if (d.status !== DeliveryStatus.DELIVERED) return false;
             const dateToCheck = (d.completedAt || d.deliveryDate || '').split('T')[0];
-            return dateToCheck >= feeStart && dateToCheck <= feeEnd;
-          });
+            return dateToCheck >= calcStart && dateToCheck <= calcEnd;
+          }) : [];
 
           // group by driver
           const byDriver: Record<string, { name: string; stops: Delivery[] }> = {};
@@ -1759,56 +1871,43 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="text-[8px] font-black uppercase text-stone-400 mb-1 block">From</label>
-                    <input type="date" value={feeStart} onChange={e => setFeeStart(e.target.value)}
+                    <input type="date" value={feeStart} onChange={e => { setFeeStart(e.target.value); setFeeCalculated(false); }}
                       className="w-full bg-stone-50 border border-stone-100 rounded-xl px-3 py-2.5 text-xs font-black outline-none focus:border-black" />
                   </div>
                   <div>
                     <label className="text-[8px] font-black uppercase text-stone-400 mb-1 block">To</label>
-                    <input type="date" value={feeEnd} onChange={e => setFeeEnd(e.target.value)}
+                    <input type="date" value={feeEnd} onChange={e => { setFeeEnd(e.target.value); setFeeCalculated(false); }}
                       className="w-full bg-stone-50 border border-stone-100 rounded-xl px-3 py-2.5 text-xs font-black outline-none focus:border-black" />
                   </div>
                 </div>
 
-                {/* Quick range buttons */}
-                <div className="flex gap-2 flex-wrap">
-                  {[
-                    { label: 'Today', days: 0 },
-                    { label: 'Last 7', days: 7 },
-                    { label: 'Last 14', days: 14 },
-                    { label: 'Last 30', days: 30 },
-                  ].map(({ label, days }) => (
-                    <button key={label} onClick={() => {
-                      const end = new Date();
-                      const start = new Date();
-                      start.setDate(end.getDate() - days);
-                      setFeeEnd(end.toISOString().split('T')[0]);
-                      setFeeStart(start.toISOString().split('T')[0]);
-                    }}
-                      className="px-3 py-2 bg-stone-100 text-stone-600 rounded-xl font-black uppercase text-[9px] active:scale-95 transition-all">
-                      {label}
-                    </button>
-                  ))}
-                </div>
+                <button onClick={() => { setCalcStart(feeStart); setCalcEnd(feeEnd); setFeeCalculated(true); }}
+                  className="w-full py-4 bg-black text-white rounded-2xl font-black uppercase tracking-widest text-sm active:scale-95 transition-all">
+                  Calculate Payroll
+                </button>
 
-                {/* Grand total banner */}
-                <div className="flex items-center justify-between p-4 bg-black rounded-2xl">
-                  <div>
-                    <p className="text-[9px] font-black uppercase text-white/50 mb-0.5">Grand Total</p>
-                    <p className="text-[10px] font-black text-white/60">{grandCount} successful {grandCount === 1 ? 'delivery' : 'deliveries'}</p>
+                {/* Grand total banner — only shown after Calculate */}
+                {feeCalculated && (
+                  <div className="flex items-center justify-between p-4 bg-black rounded-2xl">
+                    <div>
+                      <p className="text-[9px] font-black uppercase text-white/50 mb-0.5">Grand Total</p>
+                      <p className="text-[10px] font-black text-white/60">{grandCount} successful {grandCount === 1 ? 'delivery' : 'deliveries'}</p>
+                      <p className="text-[9px] text-white/40">{calcStart} → {calcEnd}</p>
+                    </div>
+                    <span className="text-3xl font-black text-white">${grandTotal.toFixed(2)}</span>
                   </div>
-                  <span className="text-3xl font-black text-white">${grandTotal.toFixed(2)}</span>
-                </div>
+                )}
               </div>
 
-              {/* Per-driver cards */}
-              {driverRows.length === 0 ? (
+              {/* Per-driver cards — only after Calculate */}
+              {feeCalculated && (driverRows.length === 0 ? (
                 <div className="text-center py-12">
                   <FileText size={32} className="mx-auto text-stone-200 mb-2" />
                   <p className="text-[11px] font-black uppercase text-stone-300">No completed deliveries in this range</p>
                 </div>
               ) : driverRows.map(row => (
                 <DriverPayCard key={row.id} row={row} />
-              ))}
+              )))}
 
               {/* ZIP rate calculator */}
               <div className="p-5 bg-white border border-stone-100 rounded-[28px] shadow-sm space-y-4">
@@ -1946,6 +2045,10 @@ export default function App() {
   const now = new Date();
   const isSameDayWindow = now.getHours() < 14; // before 2pm
 
+  const [zipQuery, setZipQuery] = useState('');
+  const [zipRate, setZipRate] = useState<number | null | undefined>(undefined);
+  const [showZipBar, setShowZipBar] = useState(false);
+
   return (
     <div className="max-w-md mx-auto min-h-screen bg-white flex flex-col">
       {/* Top bar */}
@@ -1958,6 +2061,13 @@ export default function App() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {/* Rate by ZIP pill — admin only */}
+          {isAdmin && (
+            <button onClick={() => { setShowZipBar(s => !s); setZipQuery(''); setZipRate(undefined); }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-black text-[10px] uppercase transition-all border ${showZipBar ? 'bg-black text-white border-black' : 'bg-stone-50 text-stone-700 border-stone-200'}`}>
+              <MapPin size={11} /> ZIP Rate
+            </button>
+          )}
           <span className={`w-2 h-2 rounded-full ${isLoading ? 'bg-amber-400 animate-pulse' : dataSource === 'LIVE' ? 'bg-green-500' : 'bg-red-400'}`} />
           <button onClick={fetchOrders} className={`p-1.5 text-stone-400 ${isLoading ? 'animate-spin' : ''}`}><RefreshCw size={15} /></button>
           <button onClick={logout} className="flex items-center gap-1 px-3 py-2 bg-red-50 text-red-500 rounded-xl font-black uppercase text-[10px] active:scale-95 border border-red-100">
@@ -1965,6 +2075,30 @@ export default function App() {
           </button>
         </div>
       </div>
+
+      {/* Rate by ZIP dropdown bar */}
+      {isAdmin && showZipBar && (
+        <div className="sticky top-[60px] z-40 bg-white border-b border-stone-100 px-4 py-3 shadow-sm">
+          <div className="flex gap-2 items-center">
+            <input
+              type="text" value={zipQuery} inputMode="numeric"
+              onChange={e => { const v = e.target.value.replace(/\D/g,'').slice(0,5); setZipQuery(v); if (v.length === 5) setZipRate(DELIVERY_FEES[v] ?? null); else setZipRate(undefined); }}
+              placeholder="Enter ZIP code..."
+              className="flex-1 bg-stone-50 border border-stone-200 rounded-xl px-4 py-2.5 text-lg font-black text-center tracking-widest outline-none focus:border-black"
+              autoFocus
+            />
+            <button onClick={() => setShowZipBar(false)} className="w-9 h-9 flex items-center justify-center bg-stone-100 rounded-xl text-stone-500 font-black"><X size={14} /></button>
+          </div>
+          {zipQuery.length === 5 && zipRate !== undefined && (
+            zipRate !== null
+              ? <div className="flex items-center justify-between mt-2 px-4 py-2.5 bg-green-50 border border-green-100 rounded-xl">
+                  <span className="font-black text-stone-700 text-sm">ZIP {zipQuery}</span>
+                  <span className="text-2xl font-black text-green-700">${zipRate}</span>
+                </div>
+              : <p className="mt-2 text-xs font-black text-red-500 text-center">ZIP {zipQuery} not in rate table</p>
+          )}
+        </div>
+      )}
 
       {/* Bottom nav */}
       <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-white border-t border-stone-100 z-50 flex">

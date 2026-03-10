@@ -4,12 +4,13 @@ export type Priority = 'Standard' | 'Urgent' | 'Sympathy';
 
 export enum DeliveryStatus {
   PENDING = 'PENDING',
+  SCHEDULED = 'SCHEDULED',          // confirmed, date set, not yet assigned to driver
   ASSIGNED = 'ASSIGNED',
   IN_TRANSIT = 'IN_TRANSIT',
   DELIVERED = 'DELIVERED',
-  FAILED = 'FAILED',
-  SECOND_ATTEMPT = 'SECOND_ATTEMPT',  // rescheduled after failure
-  PENDING_RESCHEDULE = 'PENDING_RESCHEDULE', // waiting on Katie
+  FAILED = 'FAILED',                // 1st attempt failed — auto-reschedule creates 2nd
+  SECOND_ATTEMPT = 'SECOND_ATTEMPT', // rescheduled after 1st failure
+  PENDING_RESCHEDULE = 'PENDING_RESCHEDULE', // waiting on Katie to reschedule manually
   CLOSED = 'CLOSED'
 }
 

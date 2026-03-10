@@ -12,9 +12,6 @@ const __dirname = path.dirname(__filename);
 
 const SHOPIFY_STORE_URL = process.env.SHOPIFY_STORE_URL || '';
 const SHOPIFY_ACCESS_TOKEN = process.env.SHOPIFY_ACCESS_TOKEN || '';
-const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || '';
-const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN || '';
-const TWILIO_FROM_NUMBER = process.env.TWILIO_FROM_NUMBER || '';
 const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY || '';
 const SENDGRID_FROM_EMAIL = process.env.SENDGRID_FROM_EMAIL || 'noreply@thesweettooth.com';
 const KATIE_PHONE = '305-994-4070';
@@ -76,22 +73,6 @@ function nextBusinessDay(from: Date): string {
   d.setDate(d.getDate() + 1);
   while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1);
   return d.toISOString().split('T')[0];
-}
-
-async function sendSMS(to: string, body: string): Promise<boolean> {
-  if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN || !TWILIO_FROM_NUMBER) return false;
-  const clean = to.replace(/\D/g, '');
-  const e164 = clean.startsWith('1') ? `+${clean}` : `+1${clean}`;
-  try {
-    const url = `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`;
-    const auth = Buffer.from(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`).toString('base64');
-    const resp = await fetch(url, {
-      method: 'POST',
-      headers: { 'Authorization': `Basic ${auth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ To: e164, From: TWILIO_FROM_NUMBER, Body: body }).toString()
-    });
-    return resp.ok;
-  } catch { return false; }
 }
 
 async function sendEmail(to: string, subject: string, body: string): Promise<boolean> {
@@ -248,6 +229,21 @@ async function startServer() {
     res.json({ success: true });
   });
 
+  // Edit contact/address info (admin: all except rate; super_admin: everything)
+  app.patch("/api/orders/:id/edit", (req, res) => {
+    const { customer, address, giftReceiverName, giftSenderName, giftSenderPhone, deliveryFee } = req.body;
+    const pod = JSON.parse(fs.readFileSync(POD_STORAGE_PATH, 'utf-8'));
+    if (!pod[req.params.id]) pod[req.params.id] = {};
+    if (customer) pod[req.params.id].customer = customer;
+    if (address) pod[req.params.id].address = address;
+    if (giftReceiverName !== undefined) pod[req.params.id].giftReceiverName = giftReceiverName;
+    if (giftSenderName !== undefined) pod[req.params.id].giftSenderName = giftSenderName;
+    if (giftSenderPhone !== undefined) pod[req.params.id].giftSenderPhone = giftSenderPhone;
+    if (deliveryFee !== undefined) pod[req.params.id].deliveryFee = deliveryFee;
+    fs.writeFileSync(POD_STORAGE_PATH, JSON.stringify(pod, null, 2));
+    res.json({ success: true });
+  });
+
   // ── POD ─────────────────────────────────────────────────────────────────────
 
   app.post("/api/pod", (req, res) => {
@@ -360,7 +356,7 @@ async function startServer() {
       driver_notes: driverNotes || ''
     };
     const preview = interpolate(template.body, vars);
-    const channel = (order.customer?.phone?.replace(/\D/g, '').length >= 10) ? 'SMS' : 'Email';
+    const channel = 'Email';
     res.json({ preview, channel });
   });
 
@@ -382,19 +378,14 @@ async function startServer() {
       driver_notes: driverNotes || ''
     };
     const message = interpolate(template.body, vars);
-    const phone = order.customer?.phone;
     const email = order.customer?.email;
     let sent = false;
-    let channel = '';
-    if (phone && phone.replace(/\D/g, '').length >= 10) {
-      sent = await sendSMS(phone, message);
-      channel = 'SMS';
-    } else if (email) {
+    let channel = 'Email';
+    if (email) {
       const subject = type === 'SUCCESS'
         ? `Your Sweet Tooth Delivery is Complete! 🍫`
         : `Sweet Tooth Delivery Update — Order #${order.orderNumber}`;
       sent = await sendEmail(email, subject, message);
-      channel = 'Email';
     }
     if (sent) {
       const pod = JSON.parse(fs.readFileSync(POD_STORAGE_PATH, 'utf-8'));
@@ -427,24 +418,18 @@ async function startServer() {
   // ── CONFIG STATUS — shows which integrations are active ──────────────────
   app.get("/api/config/status", (_req, res) => {
     res.json({
-      twilio: !!(TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && TWILIO_FROM_NUMBER),
       sendgrid: !!SENDGRID_API_KEY,
-      twilioFrom: TWILIO_FROM_NUMBER ? `...${TWILIO_FROM_NUMBER.slice(-4)}` : null,
       sendgridFrom: SENDGRID_FROM_EMAIL || null,
+      notificationChannel: 'Email only (SendGrid)',
     });
   });
 
   // ── TEST NOTIFICATION ────────────────────────────────────────────────────
   app.post("/api/notify/test", async (req, res) => {
-    const { to, channel } = req.body; // to = phone or email, channel = SMS|Email
-    const message = "Test from The Sweet Tooth Driver App — notifications are working! 🍫";
-    let sent = false;
-    if (channel === 'SMS') {
-      sent = await sendSMS(to, message);
-    } else {
-      sent = await sendEmail(to, "Sweet Tooth App — Test Notification", message);
-    }
-    res.json({ sent, message });
+    const { to } = req.body;
+    const message = "Test from The Sweet Tooth Driver App — email notifications are working! 🍫";
+    const sent = await sendEmail(to, "Sweet Tooth App — Test Notification", message);
+    res.json({ sent, message, channel: 'Email' });
   });
 
   // ── STATIC / VITE ───────────────────────────────────────────────────────────
