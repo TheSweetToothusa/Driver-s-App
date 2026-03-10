@@ -1,0 +1,6 @@
+[
+  { "id": "super_admin", "name": "Mikey", "pin": "1979", "role": "SUPER_ADMIN", "phone": "3059944070", "isActive": true, "failedAttempts": 0, "createdAt": "2026-01-01T00:00:00Z" },
+  { "id": "manager_1", "name": "Katie", "pin": "4070", "role": "MANAGER", "phone": "3059944070", "isActive": true, "failedAttempts": 0, "createdAt": "2026-01-01T00:00:00Z" },
+  { "id": "driver_smith", "name": "Smith", "pin": "7777", "role": "DRIVER", "phone": "3055550001", "vehicle": "Van", "isActive": true, "failedAttempts": 0, "createdAt": "2026-01-01T00:00:00Z" },
+  { "id": "driver_mike", "name": "Mike", "pin": "6666", "role": "DRIVER", "phone": "3055550002", "vehicle": "Car", "isActive": true, "failedAttempts": 0, "createdAt": "2026-01-01T00:00:00Z" }
+]

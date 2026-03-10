@@ -189,45 +189,49 @@ const LoginGate: React.FC<{ onAuthorized: (user: UserAccount) => void }> = ({ on
 
 const OrderCard: React.FC<{ order: Delivery; role: AppRole; onTap: () => void; isSelected?: boolean }> = ({ order, role, onTap, isSelected }) => {
   const isAdmin = role === 'SUPER_ADMIN' || role === 'MANAGER';
+  const statusColors: Record<string, string> = {
+    PENDING: 'bg-stone-900 text-white',
+    ASSIGNED: 'bg-stone-700 text-white',
+    IN_TRANSIT: 'bg-black text-white',
+    DELIVERED: 'bg-stone-200 text-stone-500',
+    FAILED: 'bg-red-600 text-white',
+    SECOND_ATTEMPT: 'bg-stone-800 text-white',
+    PENDING_RESCHEDULE: 'bg-stone-400 text-white',
+  };
+  const sc = statusColors[order.status] || 'bg-stone-200 text-stone-600';
+  const product = order.items?.[0];
   return (
-    <div onClick={onTap} className={`p-5 border-b border-stone-50 cursor-pointer transition-all ${isSelected ? 'bg-pink-50 border-l-4 border-l-pink-400' : 'hover:bg-stone-50'}`}>
-      <div className="flex items-start justify-between mb-2">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-[10px] font-black text-stone-400 uppercase">#{order.orderNumber}</span>
-          <StatusBadge status={order.status} />
-          {order.attemptNumber === 2 && <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 uppercase">2nd Attempt</span>}
-          {order.priority === 'Urgent' && <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-orange-100 text-orange-600 uppercase">Urgent</span>}
+    <div onClick={onTap}
+      className={`mx-3 mb-2 rounded-2xl cursor-pointer active:scale-[0.98] transition-all overflow-hidden border ${isSelected ? 'border-black' : 'border-stone-100'} bg-white shadow-sm`}>
+      {/* Status bar */}
+      <div className={`px-4 py-2 flex items-center justify-between ${sc}`}>
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-black uppercase tracking-widest">{order.status.replace('_', ' ')}</span>
+          {order.priority === 'Urgent' && <span className="text-[9px] font-black uppercase bg-white/20 px-2 py-0.5 rounded-full">URGENT</span>}
+          {order.attemptNumber === 2 && <span className="text-[9px] font-black uppercase bg-white/20 px-2 py-0.5 rounded-full">2ND ATTEMPT</span>}
         </div>
-        <ChevronRight size={16} className="text-stone-300 mt-0.5 shrink-0" />
+        <span className="text-[10px] font-black opacity-60">{order.orderNumber}</span>
       </div>
-      <div className="flex items-center gap-2 mb-1">
-        <User size={12} className="text-stone-400 shrink-0" />
-        <p className="text-sm font-black text-stone-900">{order.giftReceiverName || order.customer.name}</p>
-      </div>
-      {order.giftSenderName && (
-        <div className="flex items-center gap-2 mb-1">
-          <Gift size={12} className="text-pink-400 shrink-0" />
-          <p className="text-xs font-bold text-stone-500">From: {order.giftSenderName}</p>
+      {/* Body */}
+      <div className="px-4 py-3">
+        {/* Address — biggest, most important */}
+        <p className="text-base font-black text-stone-900 leading-tight">{order.address.street}</p>
+        <p className="text-sm font-bold text-stone-400 mb-2">{order.address.city}, FL {order.address.zip}</p>
+        {/* Product */}
+        {product && (
+          <div className="flex items-center gap-2 mb-1">
+            <Package size={12} className="text-stone-400 shrink-0" />
+            <p className="text-xs font-black text-stone-700">{product.quantity > 1 ? `${product.quantity}× ` : ''}{product.name}</p>
+          </div>
+        )}
+        {/* Recipient */}
+        <div className="flex items-center justify-between mt-2">
+          <div className="flex items-center gap-1.5">
+            <User size={11} className="text-stone-300" />
+            <p className="text-[11px] font-bold text-stone-500">{order.giftReceiverName || order.customer.name}</p>
+          </div>
+          {isAdmin && <span className="text-[11px] font-black text-stone-400">${order.deliveryFee}</span>}
         </div>
-      )}
-      {order.items?.length > 0 && (
-        <div className="flex items-start gap-2 mb-1">
-          <Package size={12} className="text-stone-400 shrink-0 mt-0.5" />
-          <p className="text-xs font-bold text-stone-600">{order.items.map(i => `${i.quantity}x ${i.name}`).join(', ')}</p>
-        </div>
-      )}
-      {order.giftMessage && (
-        <div className="mt-2 p-2 bg-pink-50 rounded-xl border border-pink-100">
-          <p className="text-[9px] font-black text-pink-400 mb-0.5 uppercase">Gift Message</p>
-          <p className="text-xs text-stone-600 italic">"{order.giftMessage}"</p>
-        </div>
-      )}
-      <div className="flex items-center justify-between mt-2">
-        <div className="flex items-center gap-1.5">
-          <MapPin size={11} className="text-stone-300" />
-          <p className="text-[10px] font-bold text-stone-400">{order.address.city}, {order.address.zip}</p>
-        </div>
-        {isAdmin && <span className="text-[10px] font-black text-stone-500">${order.deliveryFee}</span>}
       </div>
     </div>
   );
@@ -516,84 +520,180 @@ const OrderDetail: React.FC<{
     setReassignTo('');
   };
 
+  const [showGiftMsg, setShowGiftMsg] = useState(false);
+  const recipientPhone = order.customer.phone;
+  const senderPhone = order.giftSenderPhone;
+  const recipientName = order.giftReceiverName || order.customer.name;
+  const senderName = order.giftSenderName;
+  const mapsUrl = `https://maps.google.com/?q=${encodeURIComponent(order.address.street + ' ' + order.address.city + ' FL ' + order.address.zip)}`;
+
   return (
     <div className="flex flex-col min-h-screen bg-white">
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-white border-b border-stone-100 px-4 py-4 flex items-center gap-3 shadow-sm">
+      <div className="sticky top-0 z-10 bg-white border-b border-stone-100 px-4 py-3 flex items-center gap-3">
         <button onClick={onBack} className="p-2 bg-stone-100 rounded-full"><ChevronLeft size={20} /></button>
         <div className="flex-1">
-          <p className="text-[10px] font-black text-stone-400 uppercase">Order #{order.orderNumber}</p>
-          <div className="flex items-center gap-2 mt-0.5">
-            <StatusBadge status={order.status} />
-            {order.attemptNumber === 2 && <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 uppercase">2nd Attempt</span>}
-          </div>
+          <p className="text-[10px] font-black text-stone-400 uppercase tracking-widest">{order.orderNumber}</p>
+          <StatusBadge status={order.status} />
         </div>
-        {order.submittedAt && <span className="text-[9px] font-black text-stone-400 uppercase">Submitted {formatTime(order.submittedAt)}</span>}
+        {order.driverName && <span className="text-[10px] font-black bg-stone-100 px-3 py-1 rounded-full uppercase">{order.driverName}</span>}
       </div>
 
-      <div className="flex-1 overflow-y-auto p-5 space-y-5 pb-32">
+      <div className="flex-1 overflow-y-auto pb-10">
 
-        {/* Recipient */}
-        <section className="p-5 bg-white border border-stone-100 rounded-[28px] shadow-sm space-y-3">
-          <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest">Delivery Details</p>
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-stone-100 rounded-full flex items-center justify-center shrink-0"><User size={18} className="text-stone-500" /></div>
-            <div>
-              <p className="font-black text-stone-900">{order.giftReceiverName || order.customer.name}</p>
-              <p className="text-xs text-stone-400">{order.customer.phone || order.customer.email}</p>
+        {/* ── HERO: MAP TAP ── */}
+        <a href={mapsUrl} target="_blank" rel="noopener noreferrer"
+          className="block mx-4 mt-4 bg-black text-white rounded-2xl overflow-hidden active:scale-[0.98] transition-all">
+          <div className="px-5 pt-5 pb-4">
+            <p className="text-[9px] font-black uppercase tracking-widest text-stone-400 mb-1">Delivery Address</p>
+            <p className="text-xl font-black leading-tight">{order.address.street}</p>
+            <p className="text-sm font-bold text-stone-400 mt-0.5">{order.address.city}, FL {order.address.zip}</p>
+            {order.deliveryInstructions && (
+              <div className="mt-3 pt-3 border-t border-stone-700">
+                <p className="text-[9px] font-black uppercase text-stone-400 mb-1">⚠ Instructions</p>
+                <p className="text-sm font-bold text-white">{order.deliveryInstructions}</p>
+              </div>
+            )}
+          </div>
+          <div className="px-5 py-3 bg-white/10 flex items-center justify-center gap-2 border-t border-white/10">
+            <Navigation size={16} /><span className="text-sm font-black uppercase tracking-wider">Open in Maps</span>
+          </div>
+        </a>
+
+        {/* ── PRODUCT ── most important for driver to verify */}
+        <div className="mx-4 mt-3 bg-stone-950 text-white rounded-2xl px-5 py-4">
+          <p className="text-[9px] font-black uppercase tracking-widest text-stone-400 mb-2">What You're Delivering</p>
+          {order.items?.length > 0 ? order.items.map((item, i) => (
+            <div key={i} className="flex items-start justify-between py-1.5 border-b border-stone-800 last:border-0">
+              <p className="text-base font-black leading-tight pr-4">{item.name}</p>
+              <span className="text-lg font-black text-stone-300 shrink-0">×{item.quantity}</span>
+            </div>
+          )) : <p className="text-stone-400 text-sm">No items listed</p>}
+        </div>
+
+        {/* ── CONTACTS ── recipient + sender, labeled clearly ── */}
+        <div className="mx-4 mt-3 space-y-2">
+          {/* Recipient */}
+          <div className="bg-stone-50 rounded-2xl px-4 py-3">
+            <p className="text-[9px] font-black uppercase tracking-widest text-stone-400 mb-2">Recipient — Delivering To</p>
+            <p className="text-base font-black text-stone-900 mb-3">{recipientName}</p>
+            <div className="grid grid-cols-2 gap-2">
+              {recipientPhone
+                ? <>
+                    <a href={`tel:${recipientPhone}`} className="flex items-center justify-center gap-1.5 py-3 bg-black text-white rounded-xl font-black uppercase text-xs active:scale-95">
+                      <Phone size={14} /> Call
+                    </a>
+                    <a href={`sms:${recipientPhone}`} className="flex items-center justify-center gap-1.5 py-3 bg-stone-200 text-stone-900 rounded-xl font-black uppercase text-xs active:scale-95">
+                      <MessageCircle size={14} /> Text
+                    </a>
+                  </>
+                : <p className="text-xs text-stone-400 col-span-2">No phone on file</p>
+              }
             </div>
           </div>
-          {order.giftSenderName && (
-            <div className="flex items-center gap-2 pt-2 border-t border-stone-50">
-              <Gift size={14} className="text-pink-400" />
-              <p className="text-xs font-bold text-stone-500">Gift from: <span className="text-stone-800">{order.giftSenderName}</span></p>
+
+          {/* Sender */}
+          {senderName && (
+            <div className="bg-stone-50 rounded-2xl px-4 py-3">
+              <p className="text-[9px] font-black uppercase tracking-widest text-stone-400 mb-2">Gift Sender — Ordered By</p>
+              <p className="text-base font-black text-stone-900 mb-3">{senderName}</p>
+              <div className="grid grid-cols-2 gap-2">
+                {senderPhone
+                  ? <>
+                      <a href={`tel:${senderPhone}`} className="flex items-center justify-center gap-1.5 py-3 bg-black text-white rounded-xl font-black uppercase text-xs active:scale-95">
+                        <Phone size={14} /> Call
+                      </a>
+                      <a href={`sms:${senderPhone}`} className="flex items-center justify-center gap-1.5 py-3 bg-stone-200 text-stone-900 rounded-xl font-black uppercase text-xs active:scale-95">
+                        <MessageCircle size={14} /> Text
+                      </a>
+                    </>
+                  : <p className="text-xs text-stone-400 col-span-2">No phone on file</p>
+                }
+              </div>
             </div>
           )}
-        </section>
 
-        {/* Products */}
-        {order.items?.length > 0 && (
-          <section className="p-5 bg-white border border-stone-100 rounded-[28px] shadow-sm space-y-2">
-            <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest">Products</p>
-            {order.items.map((item, i) => (
-              <div key={i} className="flex items-center justify-between py-2 border-b border-stone-50 last:border-0">
-                <div><p className="text-sm font-black text-stone-900">{item.name}</p>{item.specialInstructions && <p className="text-xs text-stone-400 italic">{item.specialInstructions}</p>}</div>
-                <span className="text-sm font-black text-stone-500">×{item.quantity}</span>
+          {/* Gift message — collapsed by default */}
+          {order.giftMessage && (
+            <button onClick={() => setShowGiftMsg(g => !g)}
+              className="w-full bg-stone-50 rounded-2xl px-4 py-3 text-left active:scale-[0.98] transition-all">
+              <div className="flex items-center justify-between">
+                <p className="text-[9px] font-black uppercase tracking-widest text-stone-400">Gift Message</p>
+                <ChevronRight size={14} className={`text-stone-400 transition-transform ${showGiftMsg ? 'rotate-90' : ''}`} />
+              </div>
+              {showGiftMsg && <p className="text-sm text-stone-600 italic mt-2 leading-relaxed">"{order.giftMessage}"</p>}
+            </button>
+          )}
+        </div>
+
+        {/* Previous attempts */}
+        {order.attempts?.length > 0 && (
+          <div className="mx-4 mt-3 p-4 bg-stone-50 border border-stone-200 rounded-2xl space-y-2">
+            <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest">Previous Attempts ({order.attempts.length})</p>
+            {order.attempts.map((a, i) => (
+              <div key={i} className="border-t border-stone-200 pt-2 first:border-0 first:pt-0">
+                <p className="text-xs font-black text-stone-800">{FAILURE_REASON_LABELS[a.reason as FailureReason] || a.reason}</p>
+                {a.notes && <p className="text-xs text-stone-500 italic mt-0.5">"{a.notes}"</p>}
+                <p className="text-[10px] text-stone-400 mt-0.5">{a.driverName} · {formatDate(a.timestamp)}</p>
               </div>
             ))}
-          </section>
+          </div>
         )}
 
-        {/* Gift message */}
-        {order.giftMessage && (
-          <section className="p-5 bg-pink-50 border border-pink-100 rounded-[28px] space-y-2">
-            <p className="text-[9px] font-black uppercase text-pink-400 tracking-widest">Gift Message</p>
-            <p className="text-sm text-stone-700 italic leading-relaxed">"{order.giftMessage}"</p>
-          </section>
-        )}
-
-        {/* Address */}
-        <section className="p-5 bg-white border border-stone-100 rounded-[28px] shadow-sm space-y-3">
-          <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest">Delivery Address</p>
-          <p className="font-black text-stone-900">{order.address.street}</p>
-          <p className="text-sm text-stone-500">{order.address.city}, FL {order.address.zip}</p>
-          {order.deliveryInstructions && (
-            <div className="mt-2 p-3 bg-amber-50 rounded-xl border border-amber-100">
-              <p className="text-[9px] font-black uppercase text-amber-600 mb-1">Instructions</p>
-              <p className="text-xs text-stone-700 leading-relaxed">{order.deliveryInstructions}</p>
+        {/* Admin tools */}
+        {isAdmin && (
+          <div className="mx-4 mt-3 space-y-2">
+            <div className="bg-stone-50 rounded-2xl px-4 py-3 space-y-2">
+              <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest">Reassign Driver</p>
+              <p className="text-xs text-stone-500">Currently: <span className="font-black text-stone-800">{order.driverName || 'Unassigned'}</span></p>
+              <div className="flex gap-2">
+                <select value={reassignTo} onChange={e => setReassignTo(e.target.value)} className="flex-1 bg-white border border-stone-200 rounded-xl px-3 py-2.5 text-sm font-bold outline-none">
+                  <option value="">Select driver...</option>
+                  {allUsers.filter(u => u.role === 'DRIVER' && u.isActive).map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                </select>
+                <button onClick={handleReassign} disabled={!reassignTo} className="px-4 py-2.5 bg-black text-white rounded-xl font-black text-xs uppercase disabled:opacity-40">Assign</button>
+              </div>
             </div>
-          )}
-          <a href={`https://maps.google.com/?q=${encodeURIComponent(order.address.street + ' ' + order.address.city + ' FL')}`} target="_blank" rel="noopener noreferrer"
-            className="flex items-center justify-center gap-2 w-full py-4 bg-black text-white rounded-2xl font-black uppercase text-xs active:scale-95 transition-all mt-2">
-            <Navigation size={16} /> Open in Maps
-          </a>
-        </section>
+            <div className="bg-stone-50 rounded-2xl px-4 py-3 space-y-2">
+              <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest">Admin Notes</p>
+              {order.adminNotes && <p className="text-xs text-stone-600 whitespace-pre-line">{order.adminNotes}</p>}
+              <div className="flex gap-2">
+                <input value={adminNote} onChange={e => setAdminNote(e.target.value)} placeholder="Add note..." className="flex-1 bg-white border border-stone-200 rounded-xl px-3 py-2.5 text-sm outline-none" />
+                <button onClick={handleAddNote} className="px-4 py-2.5 bg-black text-white rounded-xl font-black text-xs uppercase">Add</button>
+              </div>
+            </div>
+            <div className="bg-stone-50 rounded-2xl px-4 py-3">
+              <p className="text-[9px] font-black uppercase text-stone-400">Delivery Fee</p>
+              <p className="text-2xl font-black text-stone-900 mt-0.5">${order.deliveryFee.toFixed(2)}</p>
+            </div>
+          </div>
+        )}
 
-        {/* Contact */}
-        <div className="grid grid-cols-2 gap-3">
-          {order.customer.phone && <a href={`tel:${order.customer.phone}`} className="flex items-center justify-center gap-2 py-5 bg-stone-100 text-black rounded-2xl font-black uppercase text-xs active:scale-95"><Phone size={16} /> Call</a>}
-          {order.customer.phone && <a href={`sms:${order.customer.phone}`} className="flex items-center justify-center gap-2 py-5 bg-stone-100 text-black rounded-2xl font-black uppercase text-xs active:scale-95"><MessageCircle size={16} /> Text</a>}
-        </div>
+        {/* ── DRIVER ACTIONS ── */}
+        {!isCompleted && (
+          <div className="mx-4 mt-4 space-y-3">
+            <input type="file" accept="image/*" capture="environment" ref={fileRef} onChange={handlePhoto} className="hidden" />
+            <button onClick={() => fileRef.current?.click()}
+              className={`w-full py-5 rounded-2xl font-black uppercase text-sm flex items-center justify-center gap-3 active:scale-95 transition-all ${photoData ? 'bg-green-600 text-white' : 'bg-stone-900 text-white'}`}>
+              <Camera size={20} />{photoData ? '✓ PHOTO TAKEN — RETAKE' : 'TAKE DELIVERY PHOTO'}
+            </button>
+            {photoData && <img src={photoData} className="w-full rounded-2xl max-h-48 object-cover" alt="POD" />}
+            <button onClick={() => setIsSigning(true)}
+              className={`w-full py-5 rounded-2xl font-black uppercase text-sm flex items-center justify-center gap-3 active:scale-95 transition-all ${sigData ? 'bg-green-600 text-white' : 'bg-stone-900 text-white'}`}>
+              <PenTool size={20} />{sigData ? '✓ SIGNED' : 'GET SIGNATURE'}
+            </button>
+            <textarea value={driverNote} onChange={e => setDriverNote(e.target.value)} placeholder="Delivery notes..." rows={2}
+              className="w-full bg-stone-50 border border-stone-200 rounded-2xl px-4 py-3 text-sm font-medium outline-none focus:border-black transition-all resize-none" style={{ minHeight: '100px' }} />
+            <button onClick={handleComplete}
+              className="w-full py-7 bg-black text-white rounded-2xl font-black uppercase tracking-widest text-lg shadow-xl flex items-center justify-center gap-3 active:scale-95 transition-all">
+              <CheckCircle2 size={24} /> COMPLETE DELIVERY
+            </button>
+            <button onClick={() => setShowFailFlow(true)}
+              className="w-full py-5 bg-white border-2 border-stone-900 text-stone-900 rounded-2xl font-black uppercase text-sm flex items-center justify-center gap-3 active:scale-95 transition-all">
+              <XCircle size={20} /> MARK AS FAILED
+            </button>
+          </div>
+        )}
 
         {/* Previous attempts */}
         {order.attempts?.length > 0 && (
