@@ -796,7 +796,7 @@ const ScheduleView: React.FC<{
   const filtered = useMemo(() => deliveries.filter(d => {
     const date = (d.deliveryDate || new Date().toISOString()).split('T')[0];
     const inRange = date >= rangeStart && date <= rangeEnd;
-    const myOrder = isAdmin ? true : d.driverId === currentUserId;
+    const myOrder = isAdmin ? true : (d.driverId === currentUserId || !d.driverId);
     const driverMatch = (isAdmin && filterDriver !== 'ALL') ? d.driverId === filterDriver : true;
     return inRange && myOrder && driverMatch;
   }), [deliveries, rangeStart, rangeEnd, currentUserId, isAdmin, filterDriver]);
