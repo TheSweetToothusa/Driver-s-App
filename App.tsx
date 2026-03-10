@@ -21,6 +21,15 @@ const BRAND_LOGO = "https://cdn.shopify.com/s/files/1/0559/8498/0141/files/The_S
 // ─────────────────────────────────────────────────────────────────────────────
 
 const isWithinSendingHours = () => { const h = new Date().getHours(); return h >= 9 && h < 20; };
+const STATUSES_FOR_DROPDOWN = [
+  { value: 'PENDING',            label: 'Not Assigned',     color: '#6b7280' },
+  { value: 'ASSIGNED',           label: 'Driver Assigned',  color: '#2563eb' },
+  { value: 'IN_TRANSIT',         label: 'Out for Delivery', color: '#000000' },
+  { value: 'DELIVERED',          label: 'Delivered',        color: '#16a34a' },
+  { value: 'FAILED',             label: 'Failed Delivery',  color: '#dc2626' },
+  { value: 'SECOND_ATTEMPT',     label: '2nd Attempt',      color: '#374151' },
+  { value: 'PENDING_RESCHEDULE', label: 'Needs Reschedule', color: '#d97706' },
+];
 const formatTime = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 const formatDate = (iso: string) => new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
@@ -537,345 +546,260 @@ const OrderDetail: React.FC<{
   const mapsUrl = `https://maps.google.com/?q=${encodeURIComponent(order.address.street + ' ' + order.address.city + ' FL ' + order.address.zip)}`;
   const cleanOrderNum = order.orderNumber?.replace(/^#+/, '') || order.id;
 
+
   return (
     <div className="flex flex-col min-h-screen bg-white">
-      {/* Header */}
+
+      {/* HEADER */}
       <div className="sticky top-0 z-10 bg-black text-white px-4 py-3 flex items-center gap-3">
-        <button onClick={onBack} className="p-2 bg-white/10 rounded-full"><ChevronLeft size={20} /></button>
-        <div className="flex-1">
+        <button onClick={onBack} className="p-2 bg-white/10 rounded-full active:bg-white/20">
+          <ChevronLeft size={20} />
+        </button>
+        <div className="flex-1 min-w-0">
           <p className="text-xl font-black">ORDER #{cleanOrderNum}</p>
           <StatusBadge status={order.status} />
         </div>
+        {/* Admin: status dropdown in header */}
+        {isAdmin && (
+          <select
+            value={order.status}
+            onChange={async e => {
+              const s = e.target.value as DeliveryStatus;
+              onUpdate(order.id, { status: s });
+              await fetch(`/api/orders/${order.id}/status`, {
+                method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: s })
+              }).catch(() => {});
+            }}
+            className="text-[10px] font-black bg-white/10 text-white border border-white/20 rounded-lg px-2 py-1.5 outline-none shrink-0"
+          >
+            {STATUSES_FOR_DROPDOWN.map(s => (
+              <option key={s.value} value={s.value} style={{ background: '#111', color: '#fff' }}>{s.label}</option>
+            ))}
+          </select>
+        )}
       </div>
 
-      <div className="flex-1 overflow-y-auto pb-10">
+      <div className="flex-1 overflow-y-auto pb-8">
 
-        {/* ── ADMIN: ASSIGN DRIVER — very top, most visible ── */}
-        {isAdmin && (
-          <div className="mx-4 mt-4 bg-stone-900 text-white rounded-2xl px-4 py-4">
-            <p className="text-[9px] font-black uppercase tracking-widest text-stone-400 mb-1">Assigned Driver</p>
-            <p className="text-lg font-black mb-3">{order.driverName || '⚠ UNASSIGNED'}</p>
-            <div className="flex gap-2">
-              <select value={reassignTo} onChange={e => setReassignTo(e.target.value)}
-                className="flex-1 bg-stone-800 border border-stone-600 text-white rounded-xl px-3 py-2.5 text-sm font-bold outline-none">
-                <option value="">Change driver...</option>
-                {allUsers.filter(u => u.role === 'DRIVER' && u.isActive).map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-              </select>
-              <button onClick={handleReassign} disabled={!reassignTo}
-                className="px-5 py-2.5 bg-white text-black rounded-xl font-black text-xs uppercase disabled:opacity-30">Assign</button>
-            </div>
-          </div>
-        )}
-
-        {/* ── SPECIAL INSTRUCTIONS — if present, always first thing driver sees ── */}
+        {/* 1. SPECIAL INSTRUCTIONS — amber, top, impossible to miss */}
         {order.deliveryInstructions && (
-          <div className="mx-4 mt-3 bg-amber-400 rounded-2xl px-4 py-4">
-            <p className="text-[9px] font-black uppercase tracking-widest text-amber-900 mb-1">⚠ Special Instructions</p>
+          <div className="mx-4 mt-4 bg-amber-400 rounded-2xl px-4 py-3 flex items-start gap-2">
+            <AlertTriangle size={18} className="text-amber-900 shrink-0 mt-0.5" />
             <p className="text-base font-black text-amber-950">{order.deliveryInstructions}</p>
           </div>
         )}
 
-        {/* ── PRODUCT — verify at pickup and at door ── */}
-        <div className="mx-4 mt-3 bg-stone-950 text-white rounded-2xl px-5 py-4">
-          <p className="text-[9px] font-black uppercase tracking-widest text-stone-400 mb-3">What You're Delivering</p>
+        {/* 2. PRODUCT */}
+        <div className="mx-4 mt-4 rounded-2xl border border-stone-200 overflow-hidden">
+          <div className="bg-stone-900 px-4 py-2">
+            <p className="text-[9px] font-black uppercase tracking-widest text-stone-400">What You're Delivering</p>
+          </div>
           {order.items?.length > 0 ? order.items.map((item, i) => (
-            <div key={i} className="flex items-start justify-between py-3 border-b border-stone-800 last:border-0">
-              <div className="flex-1 pr-4">
-                <p className="text-lg font-black leading-tight">{item.name}</p>
-                <p className="text-base font-black text-green-400 mt-0.5">${item.price.toFixed(2)}{item.quantity > 1 ? ` × ${item.quantity} = $${(item.price * item.quantity).toFixed(2)}` : ''}</p>
+            <div key={i} className="flex items-center justify-between px-4 py-3 border-b border-stone-100 last:border-0">
+              <div className="flex-1 pr-3">
+                <p className="text-base font-black text-stone-900">{item.name}</p>
+                <p className="text-sm font-bold text-stone-500">${item.price.toFixed(2)}{item.quantity > 1 ? ` × ${item.quantity} = $${(item.price * item.quantity).toFixed(2)}` : ''}</p>
               </div>
-              <span className="text-3xl font-black text-white shrink-0">×{item.quantity}</span>
+              <span className="text-2xl font-black text-stone-300">×{item.quantity}</span>
             </div>
-          )) : <p className="text-stone-400 text-sm">No items listed</p>}
-          <div className="mt-3 pt-3 border-t border-stone-800 space-y-1">
-            {order.items?.length > 1 && (
-              <div className="flex justify-between">
-                <p className="text-[9px] font-black uppercase text-stone-400">Product Subtotal</p>
-                <p className="text-sm font-black text-stone-300">${order.items.reduce((s,i) => s + i.price * i.quantity, 0).toFixed(2)}</p>
-              </div>
-            )}
-            <div className="flex justify-between items-center">
-              <p className="text-[9px] font-black uppercase text-stone-400">Delivery Fee</p>
-              <p className="text-sm font-black text-stone-300">${order.deliveryFee.toFixed(2)}</p>
-            </div>
-            <div className="flex justify-between items-center pt-1 border-t border-stone-700">
-              <p className="text-[10px] font-black uppercase text-white">Order Total</p>
-              <p className="text-lg font-black text-white">${(order.items.reduce((s,i) => s + i.price * i.quantity, 0) + order.deliveryFee).toFixed(2)}</p>
-            </div>
+          )) : <p className="px-4 py-3 text-sm text-stone-400">No items listed</p>}
+          <div className="px-4 py-2 bg-stone-50 border-t border-stone-100 flex justify-between items-center">
+            <span className="text-[9px] font-black uppercase text-stone-400">Delivery Fee</span>
+            <span className="text-xs font-black text-stone-600">${order.deliveryFee.toFixed(2)}</span>
           </div>
         </div>
 
-        {/* ── ADDRESS + MAP ── */}
-        <div className="mx-4 mt-3 bg-stone-50 border border-stone-200 rounded-2xl overflow-hidden">
+        {/* 3. ADDRESS + MAPS */}
+        <div className="mx-4 mt-3 rounded-2xl border border-stone-200 overflow-hidden">
           <div className="px-4 py-3">
             <p className="text-[9px] font-black uppercase tracking-widest text-stone-400 mb-1">Delivery Address</p>
-            <p className="text-lg font-black text-stone-900">{order.address.street}</p>
-            <p className="text-sm font-bold text-stone-500">{order.address.city}, FL {order.address.zip}</p>
+            <p className="text-lg font-black text-stone-900 leading-tight">{order.address.street}</p>
+            <p className="text-sm text-stone-500">{order.address.city}, FL {order.address.zip}</p>
           </div>
           <a href={mapsUrl} target="_blank" rel="noopener noreferrer"
-            className="flex items-center justify-center gap-2 py-3.5 bg-black text-white font-black uppercase text-sm active:bg-stone-800 transition-all">
-            <Navigation size={16} /> Open in Maps
+            className="flex items-center justify-center gap-2 py-3 bg-black text-white font-black uppercase text-sm active:bg-stone-800">
+            <Navigation size={15} /> Open in Maps
           </a>
         </div>
 
-        {/* ── CONTACTS ── recipient + sender, labeled clearly ── */}
-        <div className="mx-4 mt-3 space-y-2">
-          <div className="bg-stone-50 rounded-2xl px-4 py-3">
-            <p className="text-[9px] font-black uppercase tracking-widest text-stone-400 mb-1">Recipient — Delivering To</p>
-            <p className="text-lg font-black text-stone-900 mb-3">{recipientName}</p>
-            <div className="grid grid-cols-2 gap-2">
-              {recipientPhone
-                ? <>
-                    <a href={`tel:${recipientPhone}`} className="flex items-center justify-center gap-1.5 py-3.5 bg-black text-white rounded-xl font-black uppercase text-xs active:scale-95">
-                      <Phone size={14} /> Call Recipient
-                    </a>
-                    <a href={`sms:${recipientPhone}`} className="flex items-center justify-center gap-1.5 py-3.5 bg-stone-200 text-stone-900 rounded-xl font-black uppercase text-xs active:scale-95">
-                      <MessageCircle size={14} /> Text Recipient
-                    </a>
-                  </>
-                : <p className="text-xs text-stone-400 col-span-2">No phone on file</p>
-              }
-            </div>
+        {/* 4. CONTACTS */}
+        <div className="mx-4 mt-3 rounded-2xl border border-stone-200 overflow-hidden">
+          <div className="px-4 py-3 border-b border-stone-100">
+            <p className="text-[9px] font-black uppercase tracking-widest text-stone-400 mb-1">Recipient</p>
+            <p className="text-base font-black text-stone-900">{recipientName}</p>
+            {recipientPhone ? (
+              <div className="flex gap-2 mt-2">
+                <a href={`tel:${recipientPhone}`} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-black text-white rounded-xl font-black uppercase text-xs active:scale-95">
+                  <Phone size={13} /> Call
+                </a>
+                <a href={`sms:${recipientPhone}`} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-stone-100 text-stone-900 rounded-xl font-black uppercase text-xs active:scale-95">
+                  <MessageCircle size={13} /> Text
+                </a>
+              </div>
+            ) : <p className="text-xs text-stone-400 mt-1">No phone on file</p>}
           </div>
-
           {senderName && (
-            <div className="bg-stone-50 rounded-2xl px-4 py-3">
-              <p className="text-[9px] font-black uppercase tracking-widest text-stone-400 mb-1">Gift Sender — Ordered By</p>
-              <p className="text-lg font-black text-stone-900 mb-3">{senderName}</p>
-              <div className="grid grid-cols-2 gap-2">
-                {senderPhone
-                  ? <>
-                      <a href={`tel:${senderPhone}`} className="flex items-center justify-center gap-1.5 py-3.5 bg-black text-white rounded-xl font-black uppercase text-xs active:scale-95">
-                        <Phone size={14} /> Call Sender
-                      </a>
-                      <a href={`sms:${senderPhone}`} className="flex items-center justify-center gap-1.5 py-3.5 bg-stone-200 text-stone-900 rounded-xl font-black uppercase text-xs active:scale-95">
-                        <MessageCircle size={14} /> Text Sender
-                      </a>
-                    </>
-                  : <p className="text-xs text-stone-400 col-span-2">No phone on file</p>
-                }
-              </div>
+            <div className="px-4 py-3">
+              <p className="text-[9px] font-black uppercase tracking-widest text-stone-400 mb-1">Gift Sender</p>
+              <p className="text-base font-black text-stone-900">{senderName}</p>
+              {senderPhone ? (
+                <div className="flex gap-2 mt-2">
+                  <a href={`tel:${senderPhone}`} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-black text-white rounded-xl font-black uppercase text-xs active:scale-95">
+                    <Phone size={13} /> Call
+                  </a>
+                  <a href={`sms:${senderPhone}`} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-stone-100 text-stone-900 rounded-xl font-black uppercase text-xs active:scale-95">
+                    <MessageCircle size={13} /> Text
+                  </a>
+                </div>
+              ) : <p className="text-xs text-stone-400 mt-1">No phone on file</p>}
             </div>
-          )}
-
-          {order.giftMessage && (
-            <button onClick={() => setShowGiftMsg(g => !g)}
-              className="w-full bg-stone-50 rounded-2xl px-4 py-3 text-left active:scale-[0.98] transition-all border border-stone-100">
-              <div className="flex items-center justify-between">
-                <p className="text-[9px] font-black uppercase tracking-widest text-stone-400">Gift Message</p>
-                <ChevronRight size={14} className={`text-stone-400 transition-transform ${showGiftMsg ? 'rotate-90' : ''}`} />
-              </div>
-              {showGiftMsg && <p className="text-sm text-stone-600 italic mt-2 leading-relaxed">"{order.giftMessage}"</p>}
-            </button>
           )}
         </div>
 
-        {/* Previous attempts */}
+        {/* 5. GIFT MESSAGE — collapsed tap to expand */}
+        {order.giftMessage && (
+          <button onClick={() => setShowGiftMsg(g => !g)}
+            className="mx-4 mt-3 w-[calc(100%-2rem)] border border-stone-200 rounded-2xl px-4 py-3 text-left active:bg-stone-50">
+            <div className="flex items-center justify-between">
+              <p className="text-[9px] font-black uppercase tracking-widest text-stone-400">Gift Message</p>
+              <ChevronRight size={14} className={`text-stone-400 transition-transform ${showGiftMsg ? 'rotate-90' : ''}`} />
+            </div>
+            {showGiftMsg && <p className="text-sm text-stone-600 italic mt-2">"{order.giftMessage}"</p>}
+          </button>
+        )}
+
+        {/* 6. PREVIOUS FAILED ATTEMPTS */}
         {order.attempts?.length > 0 && (
-          <div className="mx-4 mt-3 p-4 bg-red-50 border border-red-100 rounded-2xl space-y-2">
-            <p className="text-[9px] font-black uppercase text-red-500 tracking-widest">Previous Attempts ({order.attempts.length})</p>
+          <div className="mx-4 mt-3 rounded-2xl border border-stone-200 px-4 py-3 space-y-2">
+            <p className="text-[9px] font-black uppercase tracking-widest text-stone-500">Previous Attempts ({order.attempts.length})</p>
             {order.attempts.map((a, i) => (
-              <div key={i} className="border-t border-red-100 pt-2 first:border-0 first:pt-0">
-                <p className="text-xs font-black text-stone-800">{FAILURE_REASON_LABELS[a.reason as FailureReason] || a.reason}</p>
+              <div key={i} className="pt-2 border-t border-stone-100 first:border-0 first:pt-0">
+                <p className="text-sm font-black text-stone-800">{FAILURE_REASON_LABELS[a.reason as FailureReason] || a.reason}</p>
                 {a.notes && <p className="text-xs text-stone-500 italic mt-0.5">"{a.notes}"</p>}
-                <p className="text-[10px] text-stone-400 mt-0.5">{a.driverName} · {formatDate(a.timestamp)}</p>
+                <p className="text-[10px] text-stone-400 mt-0.5">{a.driverName || 'Driver'} · {formatDate(a.timestamp)}</p>
               </div>
             ))}
           </div>
         )}
 
-        {/* Admin notes */}
+        {/* 7. ADMIN: ASSIGN DRIVER + NOTES */}
         {isAdmin && (
-          <div className="mx-4 mt-3 bg-stone-50 rounded-2xl px-4 py-3 space-y-2">
-            <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest">Admin Notes</p>
-            {order.adminNotes && <p className="text-xs text-stone-600 whitespace-pre-line">{order.adminNotes}</p>}
-            <div className="flex gap-2">
-              <input value={adminNote} onChange={e => setAdminNote(e.target.value)} placeholder="Add note..." className="flex-1 bg-white border border-stone-200 rounded-xl px-3 py-2.5 text-sm outline-none" />
-              <button onClick={handleAddNote} className="px-4 py-2.5 bg-black text-white rounded-xl font-black text-xs uppercase">Add</button>
-            </div>
-          </div>
-        )}
-
-        {/* ── DRIVER ACTIONS ── */}
-        {!isCompleted && (
-          <div className="mx-4 mt-4 space-y-3">
-            <input type="file" accept="image/*" capture="environment" ref={fileRef} onChange={handlePhoto} className="hidden" />
-            <button onClick={() => fileRef.current?.click()}
-              className={`w-full py-5 rounded-2xl font-black uppercase text-sm flex items-center justify-center gap-3 active:scale-95 transition-all ${photoData ? 'bg-green-600 text-white' : 'bg-stone-900 text-white'}`}>
-              <Camera size={20} />{photoData ? '✓ PHOTO TAKEN — RETAKE' : 'TAKE DELIVERY PHOTO'}
-            </button>
-            {photoData && <img src={photoData} className="w-full rounded-2xl max-h-48 object-cover" alt="POD" />}
-            <button onClick={() => setIsSigning(true)}
-              className={`w-full py-5 rounded-2xl font-black uppercase text-sm flex items-center justify-center gap-3 active:scale-95 transition-all ${sigData ? 'bg-green-600 text-white' : 'bg-stone-900 text-white'}`}>
-              <PenTool size={20} />{sigData ? '✓ SIGNED' : 'GET SIGNATURE'}
-            </button>
-            <textarea value={driverNote} onChange={e => setDriverNote(e.target.value)} placeholder="Delivery notes..." rows={2}
-              className="w-full bg-stone-50 border border-stone-200 rounded-2xl px-4 py-3 text-sm font-medium outline-none focus:border-black transition-all resize-none" style={{ minHeight: '100px' }} />
-            <button onClick={handleComplete}
-              className="w-full py-7 bg-black text-white rounded-2xl font-black uppercase tracking-widest text-lg shadow-xl flex items-center justify-center gap-3 active:scale-95 transition-all">
-              <CheckCircle2 size={24} /> COMPLETE DELIVERY
-            </button>
-            <button onClick={() => setShowFailFlow(true)}
-              className="w-full py-5 bg-white border-2 border-stone-900 text-stone-900 rounded-2xl font-black uppercase text-sm flex items-center justify-center gap-3 active:scale-95 transition-all">
-              <XCircle size={20} /> MARK AS FAILED
-            </button>
-          </div>
-        )}
-
-        {/* Previous attempts */}
-        {order.attempts?.length > 0 && (
-          <section className="p-5 bg-red-50 border border-red-100 rounded-[28px] space-y-3">
-            <p className="text-[9px] font-black uppercase text-red-400 tracking-widest">Previous Attempts ({order.attempts.length})</p>
-            {order.attempts.map((a, i) => (
-              <div key={i} className="border-t border-red-100 pt-3 first:border-0 first:pt-0">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-[10px] font-black uppercase text-red-600">Attempt #{a.attemptNumber || i + 1}</span>
-                  <span className="text-[10px] font-black text-stone-400">{formatDate(a.timestamp)} {formatTime(a.timestamp)}</span>
-                </div>
-                <p className="text-xs font-black text-stone-700">{FAILURE_REASON_LABELS[a.reason as FailureReason] || a.reason}</p>
-                {a.notes && <p className="text-xs text-stone-500 italic mt-1">"{a.notes}"</p>}
-                <p className="text-[10px] text-stone-400 mt-1">Driver: {a.driverName}</p>
-              </div>
-            ))}
-          </section>
-        )}
-
-        {/* Admin notes + reassign */}
-        {isAdmin && (
-          <>
-            <section className="p-5 bg-white border border-stone-100 rounded-[28px] shadow-sm space-y-3">
-              <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest">Admin Notes</p>
-              {order.adminNotes && <div className="bg-stone-50 rounded-xl p-3"><p className="text-xs text-stone-600 leading-relaxed whitespace-pre-line">{order.adminNotes}</p></div>}
+          <div className="mx-4 mt-3 rounded-2xl border border-stone-200 overflow-hidden">
+            <div className="px-4 py-3 border-b border-stone-100">
+              <p className="text-[9px] font-black uppercase tracking-widest text-stone-400 mb-2">Assign Driver</p>
               <div className="flex gap-2">
-                <input type="text" value={adminNote} onChange={e => setAdminNote(e.target.value)} placeholder="Add note..." className="flex-1 bg-stone-50 border border-stone-100 rounded-xl px-4 py-3 text-sm font-medium outline-none focus:border-black transition-all" />
-                <button onClick={handleAddNote} className="px-4 py-3 bg-black text-white rounded-xl font-black text-xs uppercase">Add</button>
-              </div>
-            </section>
-            <section className="p-5 bg-white border border-stone-100 rounded-[28px] shadow-sm space-y-3">
-              <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest">Reassign Driver</p>
-              <p className="text-xs text-stone-500">Currently: <span className="font-black text-stone-800">{order.driverName || 'Unassigned'}</span></p>
-              <div className="flex gap-2">
-                <select value={reassignTo} onChange={e => setReassignTo(e.target.value)} className="flex-1 bg-stone-50 border border-stone-100 rounded-xl px-4 py-3 text-sm font-medium outline-none">
-                  <option value="">Select driver...</option>
-                  {allUsers.filter(u => u.role === 'DRIVER' && u.isActive).map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                <select value={reassignTo} onChange={e => setReassignTo(e.target.value)}
+                  className="flex-1 bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-sm font-bold outline-none">
+                  <option value="">{order.driverName ? `Currently: ${order.driverName}` : 'Select driver...'}</option>
+                  {allUsers.filter(u => (u.role === 'DRIVER' || u.role === 'MANAGER') && u.isActive).map(u => (
+                    <option key={u.id} value={u.id}>{u.name}</option>
+                  ))}
                 </select>
-                <button onClick={handleReassign} disabled={!reassignTo} className="px-4 py-3 bg-black text-white rounded-xl font-black text-xs uppercase disabled:opacity-40">Assign</button>
+                <button onClick={handleReassign} disabled={!reassignTo}
+                  className="px-4 py-2 bg-black text-white rounded-xl font-black text-xs uppercase disabled:opacity-30">Assign</button>
               </div>
-            </section>
-            <section className="p-5 bg-stone-50 border border-stone-100 rounded-[28px] space-y-1">
-              <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest">Delivery Fee</p>
-              <p className="text-2xl font-black text-stone-900">${order.deliveryFee.toFixed(2)}</p>
-              <p className="text-xs text-stone-400">ZIP {order.address.zip}</p>
-            </section>
-          </>
+            </div>
+            <div className="px-4 py-3">
+              <p className="text-[9px] font-black uppercase tracking-widest text-stone-400 mb-2">Admin Notes</p>
+              {order.adminNotes && <p className="text-xs text-stone-600 mb-2 whitespace-pre-line">{order.adminNotes}</p>}
+              <div className="flex gap-2">
+                <input value={adminNote} onChange={e => setAdminNote(e.target.value)} placeholder="Add note..."
+                  className="flex-1 bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-sm outline-none" />
+                <button onClick={handleAddNote} className="px-4 py-2 bg-black text-white rounded-xl font-black text-xs uppercase">Add</button>
+              </div>
+            </div>
+          </div>
         )}
 
-        {/* ── DRIVER ACTIONS ── */}
+        {/* 8. DRIVER ACTIONS — photo, signature, complete, fail */}
         {!isCompleted && (
-          <section className="space-y-3">
-            <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest px-1">Proof of Delivery</p>
+          <div className="mx-4 mt-3 space-y-2">
             <input type="file" accept="image/*" capture="environment" ref={fileRef} onChange={handlePhoto} className="hidden" />
-            <button onClick={() => fileRef.current?.click()}
-              className={`w-full py-6 rounded-[28px] font-black uppercase tracking-wider text-sm flex items-center justify-center gap-3 active:scale-95 transition-all shadow-sm ${photoData ? 'bg-green-50 text-green-700 border-2 border-green-200' : 'bg-stone-100 text-stone-700'}`}
-            ><Camera size={22} />{photoData ? '✓ PHOTO TAKEN — RETAKE' : 'TAKE PHOTO'}</button>
-            {photoData && <img src={photoData} className="w-full rounded-[20px] max-h-48 object-cover border border-stone-100" alt="POD" />}
-            <button onClick={() => setIsSigning(true)}
-              className={`w-full py-6 rounded-[28px] font-black uppercase tracking-wider text-sm flex items-center justify-center gap-3 active:scale-95 transition-all shadow-sm ${sigData ? 'bg-green-50 text-green-700 border-2 border-green-200' : 'bg-stone-100 text-stone-700'}`}
-            ><PenTool size={22} />{sigData ? '✓ SIGNED — REDO' : 'GET SIGNATURE (OPTIONAL)'}</button>
-            <textarea value={driverNote} onChange={e => setDriverNote(e.target.value)} placeholder="Delivery notes (optional)..." rows={2}
-              className="w-full bg-stone-50 border border-stone-100 rounded-[20px] px-5 py-4 text-sm font-medium outline-none focus:border-black transition-all resize-none" style={{ minHeight: '100px' }} />
+            <textarea value={driverNote} onChange={e => setDriverNote(e.target.value)}
+              placeholder="Notes (e.g. left at door, gave to security...)"
+              className="w-full bg-stone-50 border border-stone-200 rounded-2xl px-4 py-3 text-sm outline-none resize-none"
+              style={{ minHeight: '80px' }} />
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={() => fileRef.current?.click()}
+                className={`py-4 rounded-xl font-black uppercase text-xs flex items-center justify-center gap-2 active:scale-95 ${photoData ? 'bg-green-600 text-white' : 'bg-stone-900 text-white'}`}>
+                <Camera size={16} />{photoData ? '✓ Photo' : 'Take Photo'}
+              </button>
+              <button onClick={() => setIsSigning(true)}
+                className={`py-4 rounded-xl font-black uppercase text-xs flex items-center justify-center gap-2 active:scale-95 ${sigData ? 'bg-green-600 text-white' : 'bg-stone-900 text-white'}`}>
+                <PenTool size={16} />{sigData ? '✓ Signed' : 'Signature'}
+              </button>
+            </div>
+            {photoData && <img src={photoData} className="w-full rounded-2xl max-h-40 object-cover" alt="POD" />}
             <button onClick={handleComplete}
-              className="w-full py-7 bg-green-500 text-white rounded-[32px] font-black uppercase tracking-widest text-base shadow-xl flex items-center justify-center gap-3 active:scale-95 transition-all">
-              <CheckCircle2 size={24} /> COMPLETE DELIVERY
+              className="w-full py-5 bg-green-600 text-white rounded-2xl font-black uppercase text-base tracking-wider flex items-center justify-center gap-2 active:scale-95">
+              <CheckCircle2 size={22} /> DELIVERED
             </button>
             <button onClick={() => setShowFailFlow(true)}
-              className="w-full py-6 bg-white border-2 border-red-300 text-red-500 rounded-[28px] font-black uppercase tracking-widest text-sm flex items-center justify-center gap-3 active:scale-95 transition-all">
-              <XCircle size={20} /> MARK AS FAILED
+              className="w-full py-4 border-2 border-stone-800 text-stone-800 rounded-2xl font-black uppercase text-sm flex items-center justify-center gap-2 active:scale-95">
+              <XCircle size={18} /> MARK AS FAILED
             </button>
-          </section>
+          </div>
         )}
 
-        {/* ── COMPLETED STATE ── */}
+        {/* 9. COMPLETED SUMMARY */}
         {isCompleted && (
-          <section className="space-y-4">
-            <div className={`p-5 rounded-[28px] border space-y-2 ${order.status === DeliveryStatus.DELIVERED ? 'bg-green-50 border-green-200' : order.status === DeliveryStatus.PENDING_RESCHEDULE ? 'bg-amber-50 border-amber-200' : 'bg-red-50 border-red-200'}`}>
-              <StatusBadge status={order.status} />
-              {order.completedAt && <p className="text-xs font-bold text-stone-600">Completed: {formatDate(order.completedAt)} at {formatTime(order.completedAt)}</p>}
-              {order.submittedAt && <p className="text-xs font-bold text-stone-500">Submitted: {formatTime(order.submittedAt)}</p>}
-              {order.driverNotes && <p className="text-xs italic text-stone-600 mt-1">"{order.driverNotes}"</p>}
-            </div>
-            {order.confirmationPhoto && <img src={order.confirmationPhoto} className="w-full rounded-[20px] max-h-48 object-cover border border-stone-100" alt="Delivery photo" />}
+          <div className="mx-4 mt-3 rounded-2xl border border-stone-200 px-4 py-3 space-y-2">
+            <p className="text-xs text-stone-500">
+              {order.completedAt ? `Completed: ${formatDate(order.completedAt)} at ${formatTime(order.completedAt)}` : 'Completed'}
+            </p>
+            {order.driverNotes && <p className="text-sm italic text-stone-600">"{order.driverNotes}"</p>}
+            {order.confirmationPhoto && <img src={order.confirmationPhoto} className="w-full rounded-xl max-h-40 object-cover" alt="POD" />}
             {order.confirmationSignature && (
-              <div className="bg-white border border-stone-100 rounded-[20px] p-3">
-                <p className="text-[9px] font-black uppercase text-stone-400 mb-2">Signature</p>
-                <img src={order.confirmationSignature} className="w-full max-h-24 object-contain" alt="Signature" />
+              <div className="border border-stone-100 rounded-xl p-2">
+                <p className="text-[9px] font-black uppercase text-stone-400 mb-1">Signature</p>
+                <img src={order.confirmationSignature} className="w-full max-h-20 object-contain" alt="Sig" />
               </div>
             )}
-
-            {/* Notification */}
-            <div className="p-5 bg-white border border-stone-100 rounded-[28px] shadow-sm space-y-3">
-              <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest">Customer Notification</p>
-              {!isWithinSendingHours() && (
-                <div className="flex items-center gap-2 p-3 bg-amber-50 rounded-xl border border-amber-100">
-                  <Clock size={14} className="text-amber-500" />
-                  <p className="text-xs font-black text-amber-700">Sending only allowed 9 AM – 8 PM</p>
-                </div>
-              )}
-              {order.status === DeliveryStatus.DELIVERED && !order.successNotificationSent && (
-                <button onClick={() => loadPreview('SUCCESS')}
-                  className="w-full py-5 bg-black text-white rounded-[24px] font-black uppercase text-sm flex items-center justify-center gap-2 active:scale-95 transition-all">
-                  <Bell size={18} /> Preview & Send Success Message
-                </button>
-              )}
-              {order.status === DeliveryStatus.DELIVERED && order.successNotificationSent && (
-                <div className="flex items-center gap-2 p-3 bg-green-50 rounded-xl"><Check size={14} className="text-green-600" /><p className="text-xs font-black text-green-700">Success message sent ✓</p></div>
-              )}
-              {(order.status === DeliveryStatus.FAILED || order.status === DeliveryStatus.PENDING_RESCHEDULE) && !order.failureNotificationSent && (
-                <button onClick={() => loadPreview('FAILURE')}
-                  className="w-full py-5 bg-black text-white rounded-[24px] font-black uppercase text-sm flex items-center justify-center gap-2 active:scale-95 transition-all">
-                  <Bell size={18} /> Preview & Send Reschedule Message
-                </button>
-              )}
-              {(order.status === DeliveryStatus.FAILED || order.status === DeliveryStatus.PENDING_RESCHEDULE) && order.failureNotificationSent && (
-                <div className="flex items-center gap-2 p-3 bg-green-50 rounded-xl"><Check size={14} className="text-green-600" /><p className="text-xs font-black text-green-700">Reschedule message sent with Katie's number ✓</p></div>
-              )}
-            </div>
-          </section>
+            {order.status === DeliveryStatus.DELIVERED && !order.successNotificationSent && (
+              <button onClick={() => loadPreview('SUCCESS')}
+                className="w-full py-3 bg-black text-white rounded-xl font-black uppercase text-sm flex items-center justify-center gap-2 active:scale-95">
+                <Bell size={16} /> Send Delivery Confirmation
+              </button>
+            )}
+            {order.status === DeliveryStatus.DELIVERED && order.successNotificationSent && (
+              <p className="text-xs font-black text-green-600">✓ Confirmation sent</p>
+            )}
+            {(order.status === DeliveryStatus.FAILED || order.status === DeliveryStatus.PENDING_RESCHEDULE) && !order.failureNotificationSent && (
+              <button onClick={() => loadPreview('FAILURE')}
+                className="w-full py-3 bg-black text-white rounded-xl font-black uppercase text-sm flex items-center justify-center gap-2 active:scale-95">
+                <Bell size={16} /> Send Reschedule Message
+              </button>
+            )}
+            {(order.status === DeliveryStatus.FAILED || order.status === DeliveryStatus.PENDING_RESCHEDULE) && order.failureNotificationSent && (
+              <p className="text-xs font-black text-green-600">✓ Reschedule message sent</p>
+            )}
+          </div>
         )}
+
       </div>
 
       {/* Modals */}
-      {showFailFlow && (
-        <FailedDeliveryFlow order={order} currentUser={currentUser} onSubmit={handleFailSubmit} onCancel={() => setShowFailFlow(false)} />
-      )}
-
-      {showReschedule && pendingFailure && (
-        <RescheduleModal order={order} failureReason={pendingFailure.reason} driverNotes={pendingFailure.notes} photo={pendingFailure.photo} onAutoReschedule={handleAutoReschedule} onManualReschedule={handleManualReschedule} />
-      )}
+      {showFailFlow && <FailedDeliveryFlow order={order} currentUser={currentUser} onSubmit={handleFailSubmit} onCancel={() => setShowFailFlow(false)} />}
+      {showReschedule && pendingFailure && <RescheduleModal order={order} failureReason={pendingFailure.reason} driverNotes={pendingFailure.notes} photo={pendingFailure.photo} onAutoReschedule={handleAutoReschedule} onManualReschedule={handleManualReschedule} />}
 
       {showNotifyPreview && (
-        <div className="fixed inset-0 bg-black/70 z-[200] flex items-end p-4">
-          <div className="w-full bg-white rounded-[36px] p-6 space-y-4 animate-in slide-in-from-bottom">
+        <div className="fixed inset-0 bg-black/80 z-[200] flex items-end p-4">
+          <div className="w-full bg-white rounded-3xl p-5 space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-lg font-black uppercase">Preview Message</h3>
-              <button onClick={() => setShowNotifyPreview(null)}><X size={22} className="text-stone-400" /></button>
+              <p className="font-black uppercase text-sm">Preview Message</p>
+              <button onClick={() => setShowNotifyPreview(null)}><X size={20} /></button>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-black uppercase bg-stone-100 px-3 py-1 rounded-full text-stone-600">via {notifyChannel}</span>
-            </div>
-            <div className="bg-stone-50 rounded-2xl p-4">
+            <div className="bg-stone-50 rounded-xl p-4">
               <p className="text-sm text-stone-700 leading-relaxed">{notifyPreviewText}</p>
             </div>
-            {notifySent ? (
-              <div className="flex items-center justify-center gap-2 py-5 bg-green-50 rounded-[24px]">
-                <Check size={20} className="text-green-600" /><span className="font-black text-green-700 uppercase">Message Sent!</span>
-              </div>
-            ) : (
-              <button onClick={handleSend} disabled={isSending || !isWithinSendingHours()}
-                className="w-full py-7 bg-green-500 text-white rounded-[32px] font-black uppercase tracking-widest text-xl flex items-center justify-center gap-3 active:scale-95 transition-all disabled:opacity-50 shadow-xl">
-                {isSending ? <RefreshCw size={24} className="animate-spin" /> : <Send size={24} />} SEND
-              </button>
-            )}
+            {notifySent
+              ? <p className="text-center font-black text-green-600 py-3">✓ Sent!</p>
+              : <button onClick={handleSend} disabled={isSending}
+                  className="w-full py-5 bg-black text-white rounded-xl font-black uppercase tracking-wider text-lg flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50">
+                  {isSending ? <RefreshCw size={20} className="animate-spin" /> : <Send size={20} />} SEND
+                </button>
+            }
           </div>
         </div>
       )}
@@ -900,16 +824,6 @@ interface OrdersViewProps {
   onSelectOrder: (o: Delivery) => void;
   onUpdateOrder: (id: string, updates: Partial<Delivery>) => void;
 }
-
-const STATUSES_FOR_DROPDOWN = [
-  { value: 'PENDING',            label: 'Not Assigned',     color: '#6b7280' },
-  { value: 'ASSIGNED',           label: 'Driver Assigned',  color: '#2563eb' },
-  { value: 'IN_TRANSIT',         label: 'Out for Delivery', color: '#000000' },
-  { value: 'DELIVERED',          label: 'Delivered',        color: '#16a34a' },
-  { value: 'FAILED',             label: 'Failed Delivery',  color: '#dc2626' },
-  { value: 'SECOND_ATTEMPT',     label: '2nd Attempt',      color: '#374151' },
-  { value: 'PENDING_RESCHEDULE', label: 'Needs Reschedule', color: '#d97706' },
-];
 
 const OrdersView: React.FC<OrdersViewProps> = ({
   deliveries, isAdmin, currentUser, isSameDayWindow,
