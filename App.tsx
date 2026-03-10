@@ -1414,7 +1414,7 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [dataSource, setDataSource] = useState<'LIVE' | 'MOCK' | 'ERROR'>('MOCK');
-  const [tab, setTab] = useState<'SCHEDULE' | 'ADMIN'>('SCHEDULE');
+  const [tab, setTab] = useState<'ORDERS' | 'SCHEDULE' | 'ADMIN'>('ORDERS');
   const isAdmin = currentUser?.role === 'SUPER_ADMIN' || currentUser?.role === 'MANAGER';
 
   useEffect(() => {
@@ -1472,48 +1472,151 @@ export default function App() {
     );
   }
 
+  // Stats for orders tab header
+  const todayStr = new Date().toISOString().split('T')[0];
+  const activeOrders = deliveries.filter(d =>
+    d.status !== DeliveryStatus.DELIVERED &&
+    d.status !== DeliveryStatus.CLOSED
+  );
+  const todayOrders = deliveries.filter(d => {
+    const dd = (d.deliveryDate || '').split('T')[0];
+    return dd === todayStr;
+  });
+  const pendingCount = deliveries.filter(d => d.status === DeliveryStatus.PENDING || d.status === DeliveryStatus.ASSIGNED).length;
+  const inTransitCount = deliveries.filter(d => d.status === DeliveryStatus.IN_TRANSIT).length;
+  const deliveredTodayCount = deliveries.filter(d => d.status === DeliveryStatus.DELIVERED && (d.completedAt || '').startsWith(todayStr)).length;
+
+  const now = new Date();
+  const isSameDayWindow = now.getHours() < 14; // before 2pm
+
   return (
-    <div className="max-w-md mx-auto min-h-screen bg-white flex flex-col border-x border-stone-50">
+    <div className="max-w-md mx-auto min-h-screen bg-white flex flex-col">
       {/* Top bar */}
-      <div className="bg-white border-b border-stone-100 py-3 px-5 flex items-center justify-between shadow-sm sticky top-0 z-50">
-        <div className="flex items-center gap-3">
-          <img src={BRAND_LOGO} alt="Sweet Tooth" className="h-10 w-auto object-contain" />
+      <div className="bg-white border-b border-stone-100 py-3 px-4 flex items-center justify-between shadow-sm sticky top-0 z-50">
+        <div className="flex items-center gap-2.5">
+          <img src={BRAND_LOGO} alt="Sweet Tooth" className="h-9 w-auto object-contain" />
           <div>
-            <p className="text-[9px] font-black uppercase text-stone-400 leading-none">{currentUser.role.replace('_', ' ')}</p>
+            <p className="text-[8px] font-black uppercase text-stone-400 leading-none">{currentUser.role.replace('_', ' ')}</p>
             <p className="text-sm font-black text-stone-900 leading-tight">{currentUser.name}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5">
-            <span className={`w-1.5 h-1.5 rounded-full ${isLoading ? 'bg-amber-400 animate-pulse' : dataSource === 'LIVE' ? 'bg-green-500' : 'bg-red-400'}`} />
-            <span className="text-[8px] font-black uppercase text-stone-400">{lastSync || '...'}</span>
-          </div>
-          <button onClick={fetchOrders} className={`p-2 text-stone-400 ${isLoading ? 'animate-spin' : ''}`}><RefreshCw size={16} /></button>
-          <button onClick={logout} className="flex items-center gap-1.5 px-3 py-2 bg-red-50 text-red-500 rounded-xl font-black uppercase text-[10px] active:scale-95 transition-all border border-red-100">
-            <LogOut size={14} /> Log Out
+          <span className={`w-2 h-2 rounded-full ${isLoading ? 'bg-amber-400 animate-pulse' : dataSource === 'LIVE' ? 'bg-green-500' : 'bg-red-400'}`} />
+          <button onClick={fetchOrders} className={`p-1.5 text-stone-400 ${isLoading ? 'animate-spin' : ''}`}><RefreshCw size={15} /></button>
+          <button onClick={logout} className="flex items-center gap-1 px-3 py-2 bg-red-50 text-red-500 rounded-xl font-black uppercase text-[10px] active:scale-95 border border-red-100">
+            <LogOut size={13} /> Out
           </button>
         </div>
       </div>
 
-      {/* Tabs */}
-      {isAdmin && (
-        <div className="flex border-b border-stone-100 bg-white sticky top-[57px] z-40">
-          <button onClick={() => setTab('SCHEDULE')} className={`flex-1 py-3 font-black uppercase text-[11px] flex items-center justify-center gap-1.5 ${tab === 'SCHEDULE' ? 'text-black border-b-2 border-black' : 'text-stone-400'}`}>
-            <Calendar size={14} /> Schedule
+      {/* Bottom nav */}
+      <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-white border-t border-stone-100 z-50 flex">
+        <button onClick={() => setTab('ORDERS')}
+          className={`flex-1 py-3 flex flex-col items-center gap-0.5 transition-all ${tab === 'ORDERS' ? 'text-black' : 'text-stone-300'}`}>
+          <Package size={20} />
+          <span className="text-[9px] font-black uppercase">Orders</span>
+          {activeOrders.length > 0 && <span className="absolute top-1 right-1 w-4 h-4 bg-black text-white text-[8px] font-black rounded-full flex items-center justify-center">{activeOrders.length > 99 ? '99+' : activeOrders.length}</span>}
+        </button>
+        <button onClick={() => setTab('SCHEDULE')}
+          className={`flex-1 py-3 flex flex-col items-center gap-0.5 transition-all ${tab === 'SCHEDULE' ? 'text-black' : 'text-stone-300'}`}>
+          <Calendar size={20} />
+          <span className="text-[9px] font-black uppercase">Schedule</span>
+        </button>
+        {isAdmin && (
+          <button onClick={() => setTab('ADMIN')}
+            className={`flex-1 py-3 flex flex-col items-center gap-0.5 transition-all ${tab === 'ADMIN' ? 'text-black' : 'text-stone-300'}`}>
+            <Settings size={20} />
+            <span className="text-[9px] font-black uppercase">Admin</span>
           </button>
-          <button onClick={() => setTab('ADMIN')} className={`flex-1 py-3 font-black uppercase text-[11px] flex items-center justify-center gap-1.5 ${tab === 'ADMIN' ? 'text-black border-b-2 border-black' : 'text-stone-400'}`}>
-            <Settings size={14} /> Admin
-          </button>
-        </div>
-      )}
-
-      <main className="flex-1 overflow-hidden flex flex-col">
-        {(tab === 'SCHEDULE' || !isAdmin) && (
-          <ScheduleView deliveries={deliveries} role={currentUser.role} currentUserId={currentUser.id} onSelectOrder={setSelectedOrder} />
         )}
+      </div>
+
+      <main className="flex-1 overflow-y-auto pb-20">
+
+        {/* ── ORDERS TAB ── */}
+        {tab === 'ORDERS' && (
+          <div>
+            {/* Same-day banner */}
+            {isSameDayWindow && (
+              <div className="mx-4 mt-4 p-3 bg-amber-400 rounded-2xl flex items-center gap-2">
+                <Clock size={16} className="text-black shrink-0" />
+                <p className="text-[11px] font-black text-black uppercase">Same-day window open — cutoff at 2:00 PM</p>
+              </div>
+            )}
+
+            {/* Quick stats */}
+            <div className="grid grid-cols-3 gap-3 px-4 mt-4">
+              <div className="bg-stone-50 rounded-2xl p-3 text-center">
+                <p className="text-2xl font-black text-stone-900">{pendingCount}</p>
+                <p className="text-[9px] font-black uppercase text-stone-400">Pending</p>
+              </div>
+              <div className="bg-blue-50 rounded-2xl p-3 text-center">
+                <p className="text-2xl font-black text-blue-700">{inTransitCount}</p>
+                <p className="text-[9px] font-black uppercase text-blue-400">In Transit</p>
+              </div>
+              <div className="bg-green-50 rounded-2xl p-3 text-center">
+                <p className="text-2xl font-black text-green-700">{deliveredTodayCount}</p>
+                <p className="text-[9px] font-black uppercase text-green-400">Done Today</p>
+              </div>
+            </div>
+
+            {/* All orders — newest/most urgent first */}
+            <div className="mt-4">
+              {(() => {
+                const sorted = [...deliveries].sort((a, b) => {
+                  // Priority: IN_TRANSIT > PENDING/ASSIGNED > SECOND_ATTEMPT > FAILED > PENDING_RESCHEDULE > DELIVERED
+                  const rank: Record<string,number> = {
+                    IN_TRANSIT: 0, PENDING: 1, ASSIGNED: 1,
+                    SECOND_ATTEMPT: 2, FAILED: 3,
+                    PENDING_RESCHEDULE: 4, DELIVERED: 5, CLOSED: 6
+                  };
+                  const ra = rank[a.status] ?? 5;
+                  const rb = rank[b.status] ?? 5;
+                  if (ra !== rb) return ra - rb;
+                  // Within same status, urgent first
+                  if (a.priority === 'Urgent' && b.priority !== 'Urgent') return -1;
+                  if (b.priority === 'Urgent' && a.priority !== 'Urgent') return 1;
+                  return 0;
+                });
+
+                // Drivers only see their orders + unassigned
+                const visible = isAdmin
+                  ? sorted
+                  : sorted.filter(d => !d.driverId || d.driverId === currentUser.id);
+
+                if (visible.length === 0) {
+                  return (
+                    <div className="flex flex-col items-center justify-center py-24">
+                      <Package size={40} className="text-stone-200 mb-3" />
+                      <p className="text-[11px] font-black uppercase text-stone-300">No orders yet</p>
+                      <p className="text-[10px] text-stone-300 mt-1">Pull down to refresh</p>
+                    </div>
+                  );
+                }
+
+                return visible.map(order => (
+                  <OrderCard key={order.id} order={order} role={currentUser.role} onTap={() => setSelectedOrder(order)} />
+                ));
+              })()}
+            </div>
+          </div>
+        )}
+
+        {/* ── SCHEDULE TAB ── */}
+        {tab === 'SCHEDULE' && (
+          <ScheduleView
+            deliveries={deliveries}
+            role={currentUser.role}
+            currentUserId={currentUser.id}
+            onSelectOrder={setSelectedOrder}
+          />
+        )}
+
+        {/* ── ADMIN TAB ── */}
         {tab === 'ADMIN' && isAdmin && (
           <AdminPanel role={currentUser.role} deliveries={deliveries} allUsers={allUsers} setAllUsers={setAllUsers} />
         )}
+
       </main>
     </div>
   );
