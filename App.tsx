@@ -4,7 +4,7 @@ import {
   LogOut, Calendar, MapPin, Phone,
   Navigation, CheckCircle2, Send,
   Eye, Camera, PenTool,
-  Settings, EyeOff, FileText,
+  Settings, FileText,
   UserPlus, Users,
   MessageCircle, ChevronLeft, Edit3,
   Bell, Clock, XCircle, Gift, User,
@@ -100,49 +100,85 @@ const SignaturePad: React.FC<{ onSave: (d: string) => void; onCancel: () => void
 // ─────────────────────────────────────────────────────────────────────────────
 
 const LoginGate: React.FC<{ onAuthorized: (user: UserAccount) => void }> = ({ onAuthorized }) => {
-  const [name, setName] = useState('');
   const [pin, setPin] = useState('');
-  const [showPin, setShowPin] = useState(false);
-  const [step, setStep] = useState<'NAME' | 'PIN'>('NAME');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [shake, setShake] = useState(false);
 
-  const submitPin = async () => {
-    if (pin.length !== 4) { setError('Enter your 4-digit PIN'); return; }
+  const submit = async (value: string) => {
+    if (value.length !== 4) return;
     setLoading(true); setError('');
     try {
-      const res = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name.trim(), pin }) });
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin: value })
+      });
       const data = await res.json();
-      if (!res.ok) { setError(data.error || 'Invalid PIN'); setPin(''); }
-      else onAuthorized(data.user);
-    } catch { setError('Connection error. Try again.'); }
+      if (!res.ok) {
+        setError(data.error || 'Incorrect PIN');
+        setPin('');
+        setShake(true);
+        setTimeout(() => setShake(false), 500);
+      } else {
+        onAuthorized(data.user);
+      }
+    } catch { setError('Connection error. Try again.'); setPin(''); }
     finally { setLoading(false); }
   };
 
+  const handleDigit = (d: string) => {
+    if (loading) return;
+    const next = (pin + d).slice(0, 4);
+    setPin(next);
+    setError('');
+    if (next.length === 4) submit(next);
+  };
+
+  const handleDelete = () => { setPin(p => p.slice(0, -1)); setError(''); };
+
   return (
-    <div className="min-h-screen bg-white flex flex-col items-center justify-center p-10">
-      <img src={BRAND_LOGO} className="h-40 mb-10 object-contain" alt="Logo" />
-      {step === 'NAME' ? (
-        <div className="w-full max-w-xs space-y-4">
-          <h2 className="text-xl font-black text-black uppercase text-center mb-6">Who are you?</h2>
-          <input autoFocus type="text" value={name} onChange={e => setName(e.target.value)} onKeyDown={e => e.key === 'Enter' && name.trim() && (setError(''), setStep('PIN'))} placeholder="Your name" className="w-full bg-stone-50 border-2 border-stone-100 rounded-[24px] px-6 py-5 text-center text-lg font-black outline-none focus:border-black transition-all" />
-          {error && <p className="text-xs font-black text-red-500 text-center">{error}</p>}
-          <button onClick={() => { if (!name.trim()) { setError('Enter your name'); return; } setError(''); setStep('PIN'); }} className="w-full py-5 bg-black text-white rounded-[24px] font-black uppercase tracking-widest active:scale-95 transition-all">Continue</button>
-        </div>
-      ) : (
-        <div className="w-full max-w-xs space-y-4">
-          <button onClick={() => { setStep('NAME'); setPin(''); setError(''); }} className="flex items-center gap-1 text-stone-400 text-xs font-black uppercase mb-2"><ChevronLeft size={14} /> Back</button>
-          <h2 className="text-xl font-black text-black uppercase text-center mb-1">Hi, {name}!</h2>
-          <p className="text-[10px] font-black text-stone-400 uppercase tracking-widest text-center mb-6">Enter your 4-digit PIN</p>
-          <div className="relative">
-            <input autoFocus type={showPin ? 'text' : 'password'} inputMode="numeric" pattern="[0-9]*" value={pin} onChange={e => setPin(e.target.value.slice(0, 4))} onKeyDown={e => e.key === 'Enter' && submitPin()} placeholder="0000" maxLength={4} className={`w-full bg-stone-50 border-2 rounded-[24px] px-6 py-5 text-center text-4xl font-black tracking-[0.5em] outline-none transition-all ${error ? 'border-red-500' : 'border-stone-100 focus:border-black'}`} />
-            <button type="button" onClick={() => setShowPin(!showPin)} className="absolute right-6 top-1/2 -translate-y-1/2 text-stone-300">{showPin ? <EyeOff size={18} /> : <Eye size={18} />}</button>
-          </div>
-          {error && <p className="text-xs font-black text-red-500 text-center">{error}</p>}
-          <button onClick={submitPin} disabled={loading} className="w-full py-5 bg-black text-white rounded-[24px] font-black uppercase tracking-widest active:scale-95 transition-all disabled:opacity-50">{loading ? 'Checking...' : 'Unlock'}</button>
+    <div className="min-h-screen bg-white flex flex-col items-center justify-center p-8 select-none">
+      <img src={BRAND_LOGO} className="h-36 mb-10 object-contain" alt="Logo" />
+
+      <p className="text-[11px] font-black uppercase tracking-widest text-stone-400 mb-8">Enter your PIN</p>
+
+      {/* Dot indicators */}
+      <div className={`flex gap-5 mb-10 ${shake ? 'animate-bounce' : ''}`}>
+        {[0, 1, 2, 3].map(i => (
+          <div key={i} className={`w-4 h-4 rounded-full transition-all duration-150 ${i < pin.length ? 'bg-black scale-110' : 'bg-stone-200'}`} />
+        ))}
+      </div>
+
+      {error && <p className="text-xs font-black text-red-500 mb-6 text-center">{error}</p>}
+
+      {/* Keypad */}
+      <div className="grid grid-cols-3 gap-4 w-72">
+        {['1','2','3','4','5','6','7','8','9','','0','⌫'].map((key, i) => {
+          if (key === '') return <div key={i} />;
+          return (
+            <button key={i}
+              onClick={() => key === '⌫' ? handleDelete() : handleDigit(key)}
+              disabled={loading}
+              className={`h-20 rounded-[22px] font-black text-2xl flex items-center justify-center active:scale-95 transition-all
+                ${key === '⌫' ? 'bg-stone-100 text-stone-500 text-xl' : 'bg-stone-100 text-stone-900 hover:bg-stone-200'}
+                ${loading ? 'opacity-40' : ''}
+              `}
+            >
+              {loading && pin.length === 4 && key !== '⌫' ? '' : key}
+            </button>
+          );
+        })}
+      </div>
+
+      {loading && (
+        <div className="mt-8 flex items-center gap-2 text-stone-400">
+          <RefreshCw size={14} className="animate-spin" />
+          <span className="text-[11px] font-black uppercase">Checking...</span>
         </div>
       )}
-      <p className="mt-12 text-[10px] font-black text-stone-300 uppercase tracking-widest">The Sweet Tooth • Internal Use Only</p>
+
+      <p className="mt-12 text-[9px] font-black text-stone-300 uppercase tracking-widest">The Sweet Tooth • Internal Use Only</p>
     </div>
   );
 };

@@ -115,23 +115,14 @@ async function startServer() {
   // ── AUTH ────────────────────────────────────────────────────────────────────
 
   app.post("/api/auth/login", (req, res) => {
-    const { pin, name } = req.body;
+    const { pin } = req.body;
+    if (!pin || pin.length !== 4) return res.status(400).json({ error: "Enter a 4-digit PIN" });
     const users = readUsers();
-    const user = users.find((u: any) => u.name.toLowerCase() === (name || '').toLowerCase());
-    if (!user) return res.status(401).json({ error: "User not found" });
-    if (!user.isActive) return res.status(403).json({ error: "Account is inactive" });
+    const user = users.find((u: any) => u.pin === pin);
+    if (!user) return res.status(401).json({ error: "Incorrect PIN. Try again." });
+    if (!user.isActive) return res.status(403).json({ error: "Account is inactive. Contact Katie." });
     if (user.lockedUntil && new Date(user.lockedUntil) > new Date()) {
       return res.status(403).json({ error: "Account locked — try again in 15 minutes." });
-    }
-    if (user.pin !== pin) {
-      user.failedAttempts = (user.failedAttempts || 0) + 1;
-      if (user.failedAttempts >= 3) {
-        user.lockedUntil = new Date(Date.now() + 15 * 60 * 1000).toISOString();
-        user.failedAttempts = 0;
-      }
-      writeUsers(users);
-      const remaining = Math.max(0, 3 - user.failedAttempts);
-      return res.status(401).json({ error: `Incorrect PIN. ${remaining} attempt${remaining !== 1 ? 's' : ''} remaining.` });
     }
     user.failedAttempts = 0;
     user.lockedUntil = undefined;
