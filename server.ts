@@ -424,6 +424,29 @@ async function startServer() {
     res.json({ messages: readMessageLog() });
   });
 
+  // ── CONFIG STATUS — shows which integrations are active ──────────────────
+  app.get("/api/config/status", (_req, res) => {
+    res.json({
+      twilio: !!(TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && TWILIO_FROM_NUMBER),
+      sendgrid: !!SENDGRID_API_KEY,
+      twilioFrom: TWILIO_FROM_NUMBER ? `...${TWILIO_FROM_NUMBER.slice(-4)}` : null,
+      sendgridFrom: SENDGRID_FROM_EMAIL || null,
+    });
+  });
+
+  // ── TEST NOTIFICATION ────────────────────────────────────────────────────
+  app.post("/api/notify/test", async (req, res) => {
+    const { to, channel } = req.body; // to = phone or email, channel = SMS|Email
+    const message = "Test from The Sweet Tooth Driver App — notifications are working! 🍫";
+    let sent = false;
+    if (channel === 'SMS') {
+      sent = await sendSMS(to, message);
+    } else {
+      sent = await sendEmail(to, "Sweet Tooth App — Test Notification", message);
+    }
+    res.json({ sent, message });
+  });
+
   // ── STATIC / VITE ───────────────────────────────────────────────────────────
 
   if (process.env.NODE_ENV !== "production") {

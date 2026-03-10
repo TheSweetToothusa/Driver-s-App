@@ -1100,8 +1100,9 @@ const ScheduleView: React.FC<{
   deliveries: Delivery[];
   role: AppRole;
   currentUserId: string;
+  allUsers: UserAccount[];
   onSelectOrder: (order: Delivery) => void;
-}> = ({ deliveries, role, currentUserId, onSelectOrder }) => {
+}> = ({ deliveries, role, currentUserId, allUsers, onSelectOrder }) => {
   const [viewMode, setViewMode] = useState<ViewMode>('DAY');
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [customStart, setCustomStart] = useState(new Date().toISOString().split('T')[0]);
@@ -1145,11 +1146,12 @@ const ScheduleView: React.FC<{
     return Object.entries(map).sort(([a], [b]) => a.localeCompare(b));
   }, [filtered]);
 
+  // Use allUsers so ALL drivers show regardless of current assignments
   const uniqueDrivers = useMemo(() => {
-    const seen = new Set<string>(); const list: { id: string; name: string }[] = [];
-    deliveries.forEach(d => { if (d.driverId && !seen.has(d.driverId)) { seen.add(d.driverId); list.push({ id: d.driverId, name: d.driverName || d.driverId }); } });
-    return list;
-  }, [deliveries]);
+    return allUsers
+      .filter(u => (u.role === 'DRIVER' || u.role === 'MANAGER') && u.isActive)
+      .map(u => ({ id: u.id, name: u.name }));
+  }, [allUsers]);
 
   const shiftDay = (n: number) => {
     const d = new Date(selectedDate + 'T12:00:00');
@@ -1391,11 +1393,29 @@ const MessagesPanel: React.FC = () => {
   const [loadingMsgs, setLoadingMsgs] = useState(true);
   const [editingTemplate, setEditingTemplate] = useState<string | null>(null);
   const [templateEdits, setTemplateEdits] = useState<Record<string, string>>({});
+  const [configStatus, setConfigStatus] = useState<any>(null);
+  const [testTo, setTestTo] = useState('');
+  const [testChannel, setTestChannel] = useState<'SMS'|'Email'>('SMS');
+  const [testResult, setTestResult] = useState<string | null>(null);
+  const [testLoading, setTestLoading] = useState(false);
 
   useEffect(() => {
     fetch('/api/messages').then(r => r.json()).then(d => { setMessages(d.messages || []); setLoadingMsgs(false); });
     fetch('/api/templates').then(r => r.json()).then(d => setTemplates(d.templates || []));
+    fetch('/api/config/status').then(r => r.json()).then(d => setConfigStatus(d));
   }, []);
+
+  const handleTestSend = async () => {
+    if (!testTo) return;
+    setTestLoading(true); setTestResult(null);
+    const res = await fetch('/api/notify/test', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to: testTo, channel: testChannel })
+    });
+    const data = await res.json();
+    setTestResult(data.sent ? '✅ Sent successfully!' : '❌ Failed to send — check env vars on Render');
+    setTestLoading(false);
+  };
 
   const handleSaveTemplate = async (id: string) => {
     const body = templateEdits[id]; if (!body) return;
@@ -1407,6 +1427,48 @@ const MessagesPanel: React.FC = () => {
 
   return (
     <div className="space-y-4 p-5">
+
+      {/* ── INTEGRATION STATUS BANNER ── */}
+      {configStatus && (
+        <div className="bg-white border border-stone-200 rounded-2xl p-4 space-y-2">
+          <p className="text-[10px] font-black uppercase text-stone-500 tracking-widest mb-2">Notification Services</p>
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-bold text-stone-700">SMS (Twilio)</span>
+            <span className={`text-xs font-black px-3 py-1 rounded-full ${configStatus.twilio ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
+              {configStatus.twilio ? `✓ Active (from ...${configStatus.twilioFrom})` : '✗ NOT CONFIGURED'}
+            </span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-bold text-stone-700">Email (SendGrid)</span>
+            <span className={`text-xs font-black px-3 py-1 rounded-full ${configStatus.sendgrid ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
+              {configStatus.sendgrid ? `✓ Active` : '✗ NOT CONFIGURED'}
+            </span>
+          </div>
+          {!configStatus.twilio && !configStatus.sendgrid && (
+            <p className="text-xs text-red-600 font-bold mt-1">⚠ No notification service configured. Set TWILIO_* or SENDGRID_API_KEY env vars on Render.</p>
+          )}
+        </div>
+      )}
+
+      {/* ── TEST SEND ── */}
+      <div className="bg-white border border-stone-200 rounded-2xl p-4 space-y-3">
+        <p className="text-[10px] font-black uppercase text-stone-500 tracking-widest">Send Test Notification</p>
+        <div className="flex gap-2">
+          <button onClick={() => setTestChannel('SMS')}
+            className={`flex-1 py-2 rounded-xl font-black text-xs uppercase ${testChannel==='SMS' ? 'bg-black text-white' : 'bg-stone-100 text-stone-500'}`}>SMS</button>
+          <button onClick={() => setTestChannel('Email')}
+            className={`flex-1 py-2 rounded-xl font-black text-xs uppercase ${testChannel==='Email' ? 'bg-black text-white' : 'bg-stone-100 text-stone-500'}`}>Email</button>
+        </div>
+        <input value={testTo} onChange={e => setTestTo(e.target.value)}
+          placeholder={testChannel === 'SMS' ? 'Phone number (e.g. 3051234567)' : 'Email address'}
+          className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-black" />
+        <button onClick={handleTestSend} disabled={testLoading || !testTo}
+          className="w-full py-3 bg-black text-white rounded-xl font-black uppercase text-sm disabled:opacity-40">
+          {testLoading ? 'Sending...' : 'Send Test'}
+        </button>
+        {testResult && <p className="text-sm font-bold text-center">{testResult}</p>}
+      </div>
+
       {/* Sub-tab toggle */}
       <div className="flex gap-2 bg-stone-100 rounded-2xl p-1">
         <button onClick={() => setSubTab('HISTORY')}
@@ -1660,12 +1722,12 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
 
         {activeTab === 'FEES' && (() => {
           // ── compute per-driver payroll ──────────────────────────────────
-          const inRange = deliveries.filter(d =>
-            d.status === DeliveryStatus.DELIVERED &&
-            d.completedAt &&
-            d.completedAt.split('T')[0] >= feeStart &&
-            d.completedAt.split('T')[0] <= feeEnd
-          );
+          // Use completedAt if available, fall back to deliveryDate
+          const inRange = deliveries.filter(d => {
+            if (d.status !== DeliveryStatus.DELIVERED) return false;
+            const dateToCheck = (d.completedAt || d.deliveryDate || '').split('T')[0];
+            return dateToCheck >= feeStart && dateToCheck <= feeEnd;
+          });
 
           // group by driver
           const byDriver: Record<string, { name: string; stops: Delivery[] }> = {};
@@ -1949,6 +2011,7 @@ export default function App() {
             deliveries={deliveries}
             role={currentUser.role}
             currentUserId={currentUser.id}
+            allUsers={allUsers}
             onSelectOrder={setSelectedOrder}
           />
         )}
