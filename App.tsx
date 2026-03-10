@@ -201,45 +201,44 @@ const LoginGate: React.FC<{ onAuthorized: (user: UserAccount) => void }> = ({ on
 
 const OrderCard: React.FC<{ order: Delivery; role: AppRole; onTap: () => void; isSelected?: boolean }> = ({ order, role, onTap }) => {
   const product = order.items?.[0];
-  const recipientName = order.giftReceiverName || order.customer.name;
-  const statusBg: Record<string, string> = {
-    PENDING: 'bg-stone-800', ASSIGNED: 'bg-stone-700', IN_TRANSIT: 'bg-black',
-    DELIVERED: 'bg-stone-300', FAILED: 'bg-red-600', SECOND_ATTEMPT: 'bg-stone-600',
-    PENDING_RESCHEDULE: 'bg-amber-500',
-  };
-  const bg = statusBg[order.status] || 'bg-stone-700';
-  const labelText = STATUS_CONFIG[order.status]?.label || order.status;
-  const textColor = order.status === 'DELIVERED' ? 'text-stone-600' : 'text-white';
+  const recipientName = order.giftReceiverName || order.customer?.name || '—';
+  const statusCfg = STATUS_CONFIG[order.status] || STATUS_CONFIG.PENDING;
+  const attemptBadge = order.attemptNumber === 2 ? '2nd' : order.attemptNumber === 1 && order.status === 'FAILED' ? '1st' : null;
   return (
-    <div onClick={onTap} className="mx-3 mb-2 bg-white rounded-xl border border-stone-200 overflow-hidden active:scale-[0.99] transition-all cursor-pointer">
-      {/* Top bar: status color + order# */}
-      <div className={`${bg} px-3 py-2 flex items-center justify-between`}>
-        <span className={`text-[10px] font-black uppercase tracking-widest ${textColor}`}>{labelText}</span>
-        <span className={`text-sm font-black ${textColor}`}>#{order.orderNumber?.replace(/^#+/, '') || order.id}</span>
-      </div>
-      {/* Main content */}
-      <div className="px-3 py-2.5 space-y-1.5">
-        {/* Recipient name — big */}
-        <p className="text-lg font-black text-stone-900 leading-tight">{recipientName}</p>
-        {/* Address */}
-        <p className="text-sm text-stone-500 leading-tight">{order.address.street}, {order.address.city} {order.address.zip}</p>
-        {/* Instructions — full amber bar, impossible to miss */}
-        {order.deliveryInstructions && (
-          <div className="flex items-center gap-2 bg-amber-400 rounded-lg px-3 py-2 -mx-0.5">
-            <AlertTriangle size={14} className="text-amber-900 shrink-0" />
-            <p className="text-sm font-black text-amber-950 leading-snug">{order.deliveryInstructions}</p>
+    <div onClick={onTap}
+      className="flex items-stretch border-b border-stone-100 bg-white active:bg-stone-50 cursor-pointer transition-all">
+      {/* Status stripe */}
+      <div className={`w-1 shrink-0 ${statusCfg.bg}`} />
+      {/* Main row */}
+      <div className="flex-1 px-3 py-2.5 min-w-0">
+        <div className="flex items-start justify-between gap-2">
+          {/* Left: name + address */}
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <p className="text-sm font-black text-stone-900 leading-tight">{recipientName}</p>
+              {attemptBadge && (
+                <span className="text-[9px] font-black bg-red-100 text-red-700 px-1.5 py-0.5 rounded uppercase">{attemptBadge} attempt</span>
+              )}
+            </div>
+            <p className="text-xs text-stone-400 leading-tight mt-0.5 truncate">{order.address?.street}, {order.address?.city} {order.address?.zip}</p>
+            {product && <p className="text-[11px] text-stone-500 truncate mt-0.5">{product.name}{product.quantity > 1 ? ` ×${product.quantity}` : ''}</p>}
+            {order.deliveryInstructions && (
+              <div className="flex items-center gap-1 mt-1 bg-amber-100 rounded px-2 py-1">
+                <AlertTriangle size={10} className="text-amber-700 shrink-0" />
+                <p className="text-[10px] font-black text-amber-800 leading-tight truncate">{order.deliveryInstructions}</p>
+              </div>
+            )}
           </div>
-        )}
-        {/* Product + price */}
-        {product && (
-          <div className="flex items-center justify-between pt-1 border-t border-stone-100">
-            <p className="text-sm text-stone-600 truncate flex-1 pr-2">{product.name}{product.quantity > 1 ? ` ×${product.quantity}` : ''}</p>
-            <p className="text-sm font-black text-stone-900 shrink-0">${(product.price * product.quantity).toFixed(2)}</p>
+          {/* Right: order# + status + price */}
+          <div className="shrink-0 text-right flex flex-col items-end gap-1">
+            <p className="text-[11px] font-black text-stone-500">#{order.orderNumber?.replace(/^#+/, '') || order.id}</p>
+            <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${statusCfg.bg} ${statusCfg.text}`}>{statusCfg.label}</span>
+            {product && <p className="text-sm font-black text-stone-900">${(product.price * product.quantity).toFixed(2)}</p>}
           </div>
-        )}
-        {/* Driver badge (admin only) */}
+        </div>
+        {/* Driver row — admin only */}
         {(role === 'SUPER_ADMIN' || role === 'MANAGER') && (
-          <p className="text-[10px] text-stone-400">{order.driverName ? `Driver: ${order.driverName}` : '⚠ No driver assigned'}</p>
+          <p className="text-[10px] text-stone-400 mt-1">{order.driverName ? `Driver: ${order.driverName}` : '⚠ No driver'}</p>
         )}
       </div>
     </div>
@@ -1270,6 +1269,29 @@ const ScheduleView: React.FC<{
   };
   const fmt = fmtSelectedDate(selectedDate);
 
+  const [schedStatusFilter, setSchedStatusFilter] = useState<'ALL'|'OPEN'|'SCHEDULED'|'CLOSED'>('ALL');
+
+  const SCHED_OPEN = ['PENDING','ASSIGNED','IN_TRANSIT'] as string[];
+  const SCHED_SCHEDULED = ['SCHEDULED'] as string[];
+  const SCHED_CLOSED = ['DELIVERED','FAILED','SECOND_ATTEMPT','PENDING_RESCHEDULE','CLOSED'] as string[];
+
+  const filteredForStatus = useMemo(() => filtered.filter(d => {
+    if (schedStatusFilter === 'OPEN') return SCHED_OPEN.includes(d.status);
+    if (schedStatusFilter === 'SCHEDULED') return SCHED_SCHEDULED.includes(d.status);
+    if (schedStatusFilter === 'CLOSED') return SCHED_CLOSED.includes(d.status);
+    return true;
+  }), [filtered, schedStatusFilter]);
+
+  const groupedForStatus = useMemo(() => {
+    const map: Record<string, Delivery[]> = {};
+    filteredForStatus.forEach(d => {
+      const date = (d.deliveryDate || new Date().toISOString()).split('T')[0];
+      if (!map[date]) map[date] = [];
+      map[date].push(d);
+    });
+    return Object.entries(map).sort(([a], [b]) => a.localeCompare(b));
+  }, [filteredForStatus]);
+
   return (
     <div className="flex flex-col h-full bg-white">
       <div className="sticky top-0 bg-white z-10 border-b border-stone-200 px-4 pt-3 pb-3 space-y-3">
@@ -1322,20 +1344,42 @@ const ScheduleView: React.FC<{
             {uniqueDrivers.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
           </select>
         )}
+        {/* Status filter */}
+        <div className="flex gap-1.5">
+          {(['ALL','OPEN','SCHEDULED','CLOSED'] as const).map(f => (
+            <button key={f} onClick={() => setSchedStatusFilter(f)}
+              className={`flex-1 py-1.5 rounded-lg font-black text-[9px] uppercase transition-all ${schedStatusFilter === f
+                ? (f==='OPEN' ? 'bg-blue-600 text-white' : f==='SCHEDULED' ? 'bg-violet-600 text-white' : f==='CLOSED' ? 'bg-stone-500 text-white' : 'bg-stone-800 text-white')
+                : 'bg-stone-100 text-stone-500'}`}>
+              {f === 'ALL' ? `All (${filtered.length})`
+                : f === 'OPEN' ? `Open (${filtered.filter(d => SCHED_OPEN.includes(d.status)).length})`
+                : f === 'SCHEDULED' ? `Sched (${filtered.filter(d => SCHED_SCHEDULED.includes(d.status)).length})`
+                : `Closed (${filtered.filter(d => SCHED_CLOSED.includes(d.status)).length})`}
+            </button>
+          ))}
+        </div>
       </div>
+
+      {/* Column header */}
+      <div className="grid grid-cols-[1fr_80px] px-4 py-1.5 bg-stone-100 border-b border-stone-200">
+        <p className="text-[9px] font-black uppercase text-stone-500 tracking-widest">Order / Address</p>
+        <p className="text-[9px] font-black uppercase text-stone-500 tracking-widest text-right">Status</p>
+      </div>
+
       <div className="flex-1 overflow-y-auto pb-24">
-        {grouped.length === 0 ? (
+        {groupedForStatus.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-24">
             <Calendar size={36} className="text-stone-200 mb-3" />
             <p className="text-[11px] font-black uppercase text-stone-300">No deliveries in this range</p>
           </div>
-        ) : grouped.map(([date, orders]) => (
+        ) : groupedForStatus.map(([date, orders]) => (
           <div key={date}>
-            <div className="px-5 py-3 bg-stone-50 border-b border-stone-100 flex items-center justify-between">
-              <p className="text-[11px] font-black uppercase text-stone-500 tracking-widest">
-                {new Date(date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+            {/* Bold dark date header — easy to scan */}
+            <div className="px-4 py-2.5 bg-stone-900 flex items-center justify-between sticky top-0 z-[5]">
+              <p className="text-sm font-black text-white">
+                {new Date(date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
               </p>
-              <span className="text-[10px] font-black text-stone-400">{orders.length} {orders.length === 1 ? 'order' : 'orders'}</span>
+              <span className="text-[10px] font-black text-stone-400 bg-stone-800 px-2 py-0.5 rounded-full">{orders.length}</span>
             </div>
             {orders.map(order => <OrderCard key={order.id} order={order} role={role} onTap={() => onSelectOrder(order)} />)}
           </div>
