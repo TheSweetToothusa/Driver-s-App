@@ -545,7 +545,7 @@ const OrderDetail: React.FC<{
         </button>
         <div className="flex-1 min-w-0">
           <p className="text-xl font-black tracking-tight">#{cleanOrderNum}</p>
-          <p className="text-xs text-stone-400">{order.deliveryDate || 'Today'}</p>
+          <p className="text-xs text-stone-400">{order.deliveryDate ? new Date(order.deliveryDate + 'T12:00:00').toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric', year:'numeric' }) : 'Today'}</p>
         </div>
         {/* Admin only: status change dropdown in header */}
         {isAdmin && (
@@ -579,14 +579,12 @@ const OrderDetail: React.FC<{
           </div>
         )}
 
-        {/* ── 2. RECIPIENT NAME — biggest thing on screen, driver knows immediately ── */}
+        {/* ── 2. RECIPIENT — who it's going TO ── */}
         <div className="mx-3 mt-3 bg-white rounded-xl border border-stone-200 overflow-hidden">
-          <div className="px-4 pt-3 pb-3">
-            <p className="text-[10px] font-black uppercase text-stone-400 tracking-widest mb-1">Delivering To</p>
+          <div className="px-4 pt-3 pb-2">
+            <p className="text-[10px] font-black uppercase text-stone-400 tracking-widest mb-0.5">Recipient</p>
             <p className="text-3xl font-black text-stone-900 leading-tight">{recipientName}</p>
-            {senderName && <p className="text-sm text-stone-500 mt-1">From: <span className="font-bold text-stone-700">{senderName}</span></p>}
           </div>
-          {/* Call / Text recipient */}
           <div className="grid grid-cols-2 divide-x divide-stone-100 border-t border-stone-100">
             {recipientPhone ? (
               <>
@@ -598,23 +596,35 @@ const OrderDetail: React.FC<{
                 </a>
               </>
             ) : (
-              <p className="col-span-2 text-center py-3 text-xs text-stone-400">No phone number on file</p>
+              <p className="col-span-2 text-center py-3 text-xs text-stone-400 italic">No recipient phone on file</p>
             )}
           </div>
-          {/* Sender phone row if present */}
-          {senderPhone && senderPhone !== recipientPhone && (
-            <div className="grid grid-cols-2 divide-x divide-stone-100 border-t border-stone-100 bg-stone-50">
-              <a href={`tel:${senderPhone}`} className="flex items-center justify-center gap-1.5 py-3 font-black text-xs active:bg-stone-100">
-                <Phone size={13} className="text-stone-500" /> <span className="text-stone-600">Call Sender</span>
-              </a>
-              <a href={`sms:${senderPhone}`} className="flex items-center justify-center gap-1.5 py-3 font-black text-xs active:bg-stone-100">
-                <MessageCircle size={13} className="text-stone-500" /> <span className="text-stone-600">Text Sender</span>
-              </a>
-            </div>
-          )}
         </div>
 
-        {/* ── 3. ADDRESS + NAVIGATE ── */}
+        {/* ── 3. GIFT SENDER — who PLACED the order, always has contact info ── */}
+        <div className="mx-3 mt-2 bg-white rounded-xl border border-stone-200 overflow-hidden">
+          <div className="px-4 pt-3 pb-2">
+            <p className="text-[10px] font-black uppercase text-stone-400 tracking-widest mb-0.5">Gift Sender</p>
+            <p className="text-xl font-black text-stone-900 leading-tight">{senderName || 'Unknown'}</p>
+            {order.giftSenderEmail && <p className="text-xs text-stone-400 mt-0.5">{order.giftSenderEmail}</p>}
+          </div>
+          <div className="grid grid-cols-2 divide-x divide-stone-100 border-t border-stone-100">
+            {senderPhone ? (
+              <>
+                <a href={`tel:${senderPhone}`} className="flex items-center justify-center gap-2 py-4 font-black text-sm active:bg-stone-50">
+                  <Phone size={16} className="text-stone-800" /> <span className="text-stone-900 font-black">Call</span>
+                </a>
+                <a href={`sms:${senderPhone}`} className="flex items-center justify-center gap-2 py-4 font-black text-sm active:bg-stone-50">
+                  <MessageCircle size={16} className="text-stone-800" /> <span className="text-stone-900 font-black">Text</span>
+                </a>
+              </>
+            ) : (
+              <p className="col-span-2 text-center py-3 text-xs text-stone-400 italic">No sender phone on file</p>
+            )}
+          </div>
+        </div>
+
+        {/* ── 4. ADDRESS + NAVIGATE ── */}
         <div className="mx-3 mt-3 bg-white rounded-xl border border-stone-200 overflow-hidden">
           <div className="px-4 py-3">
             <p className="text-base font-black text-stone-900 leading-tight">{order.address.street}</p>
@@ -626,7 +636,7 @@ const OrderDetail: React.FC<{
           </a>
         </div>
 
-        {/* ── 4. ORDER ITEMS + PRICE ── */}
+        {/* ── 5. ORDER ITEMS + PRICE ── */}
         <div className="mx-3 mt-3 bg-white rounded-xl border border-stone-200 overflow-hidden">
           <div className="px-4 py-2 border-b border-stone-100 bg-stone-50">
             <p className="text-[10px] font-black uppercase text-stone-500 tracking-widest">Order Items</p>
@@ -745,15 +755,15 @@ const OrderDetail: React.FC<{
               </button>
             </div>
             {photoData && <img src={photoData} className="w-full rounded-xl max-h-36 object-cover" alt="POD" />}
-            {/* DONE */}
+            {/* DELIVERED */}
             <button onClick={handleComplete}
-              className="w-full py-5 bg-green-600 text-white rounded-2xl font-black uppercase text-lg tracking-wide flex items-center justify-center gap-2 active:scale-95">
-              <CheckCircle2 size={22} /> DONE
+              className="w-full py-5 bg-green-600 text-white rounded-2xl font-black uppercase text-xl tracking-wide flex items-center justify-center gap-2 active:scale-95 shadow-lg">
+              <CheckCircle2 size={24} /> DELIVERED
             </button>
             {/* FAILED */}
             <button onClick={() => setShowFailFlow(true)}
               className="w-full py-4 border-2 border-stone-800 text-stone-900 rounded-2xl font-black uppercase text-sm flex items-center justify-center gap-2 active:scale-95">
-              <XCircle size={18} /> FAILED
+              <XCircle size={18} /> FAILED DELIVERY
             </button>
           </div>
         )}
@@ -873,7 +883,14 @@ const OrdersView: React.FC<OrdersViewProps> = ({
   // ── ADMIN VIEW ──
   if (isAdmin) {
     const sorted = [...deliveries].sort((a, b) => b.id.localeCompare(a.id)); // newest first
-    const filtered = sorted.filter(d => {
+    const unassignedCount = deliveries.filter(d => !d.driverId || d.status === DeliveryStatus.PENDING).length;
+
+    const adminToday = new Date().toISOString().split('T')[0];
+    const [dateFilter, setDateFilter] = React.useState<'TODAY'|'ALL'>('TODAY');
+    const todayFiltered = dateFilter === 'TODAY'
+      ? sorted.filter(d => (d.deliveryDate || '').split('T')[0] === adminToday)
+      : sorted;
+    const filtered = todayFiltered.filter(d => {
       if (!search) return true;
       const q = search.toLowerCase();
       return (
@@ -885,18 +902,17 @@ const OrdersView: React.FC<OrdersViewProps> = ({
       );
     });
 
-    const unassignedCount = deliveries.filter(d => !d.driverId || d.status === DeliveryStatus.PENDING).length;
-
     return (
       <div className="flex flex-col h-full">
-        {/* Stats bar */}
+        {/* Same-day banner */}
         {isSameDayWindow && (
-          <div className="mx-0 px-4 py-2 bg-amber-400 flex items-center gap-2">
+          <div className="px-4 py-2 bg-amber-400 flex items-center gap-2">
             <Clock size={13} className="text-amber-900 shrink-0" />
             <p className="text-[11px] font-black text-amber-900 uppercase">Same-day window open — closes at 2:00 PM</p>
           </div>
         )}
-        <div className="grid grid-cols-4 border-b border-stone-100">
+        {/* Stats */}
+        <div className="grid grid-cols-4 border-b border-stone-200">
           {[
             { label: 'Unassigned', val: unassignedCount, color: 'text-red-600' },
             { label: 'Assigned', val: deliveries.filter(d => d.status === DeliveryStatus.ASSIGNED).length, color: 'text-blue-600' },
@@ -910,21 +926,31 @@ const OrdersView: React.FC<OrdersViewProps> = ({
           ))}
         </div>
 
-        {/* Search */}
-        <div className="px-4 py-2 border-b border-stone-100">
+        {/* Date filter + Search */}
+        <div className="px-3 pt-2 pb-2 border-b border-stone-200 space-y-2">
+          <div className="flex gap-2">
+            <button onClick={() => setDateFilter('TODAY')}
+              className={`flex-1 py-2 rounded-xl font-black text-xs uppercase transition-all ${dateFilter === 'TODAY' ? 'bg-black text-white' : 'bg-stone-100 text-stone-500'}`}>
+              Today ({sorted.filter(d => (d.deliveryDate||'').split('T')[0] === adminToday).length})
+            </button>
+            <button onClick={() => setDateFilter('ALL')}
+              className={`flex-1 py-2 rounded-xl font-black text-xs uppercase transition-all ${dateFilter === 'ALL' ? 'bg-black text-white' : 'bg-stone-100 text-stone-500'}`}>
+              All Orders ({sorted.length})
+            </button>
+          </div>
           <input
             value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Search order #, customer, address..."
+            placeholder="Search name, order #, address..."
             className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-black"
           />
         </div>
 
         {/* Table header */}
-        <div className="grid grid-cols-[80px_1fr_100px_90px] bg-stone-50 border-b border-stone-200 px-4 py-2">
-          <p className="text-[9px] font-black uppercase text-stone-500">Order #</p>
-          <p className="text-[9px] font-black uppercase text-stone-500">Customer / Address</p>
-          <p className="text-[9px] font-black uppercase text-stone-500">Driver</p>
-          <p className="text-[9px] font-black uppercase text-stone-500 text-right">Status</p>
+        <div className="grid grid-cols-[80px_1fr_90px_130px] bg-stone-50 border-b border-stone-200 px-3 py-2">
+          <p className="text-[9px] font-black uppercase text-stone-600">Order # / Date</p>
+          <p className="text-[9px] font-black uppercase text-stone-600">Customer</p>
+          <p className="text-[9px] font-black uppercase text-stone-600">Driver</p>
+          <p className="text-[9px] font-black uppercase text-stone-600 text-right">Status</p>
         </div>
 
         {/* Rows */}
@@ -949,7 +975,7 @@ const OrdersView: React.FC<OrdersViewProps> = ({
                 {/* Order # — tap to open */}
                 <div className="cursor-pointer" onClick={() => onSelectOrder(order)}>
                   <p className="text-sm font-black text-black">#{order.orderNumber?.replace(/^#+/, '') || order.id}</p>
-                  <p className="text-[9px] text-stone-400">{order.deliveryDate ? fmtDate(order.deliveryDate) : '—'}</p>
+                  <p className="text-xs font-bold text-stone-700 mt-0.5">{order.deliveryDate ? fmtDate(order.deliveryDate) : '—'}</p>
                 </div>
                 {/* Customer + address — tap to open */}
                 <div className="pr-2 min-w-0 cursor-pointer" onClick={() => onSelectOrder(order)}>
