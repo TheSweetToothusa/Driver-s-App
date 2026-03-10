@@ -908,6 +908,7 @@ interface OrdersViewProps {
   deliveries: Delivery[];
   isAdmin: boolean;
   currentUser: UserAccount;
+  allUsers: UserAccount[];
   isSameDayWindow: boolean;
   pendingCount: number;
   inTransitCount: number;
@@ -917,13 +918,14 @@ interface OrdersViewProps {
 }
 
 const OrdersView: React.FC<OrdersViewProps> = ({
-  deliveries, isAdmin, currentUser, isSameDayWindow,
+  deliveries, isAdmin, currentUser, allUsers, isSameDayWindow,
   pendingCount, inTransitCount, deliveredTodayCount, onSelectOrder, onUpdateOrder
 }) => {
   const today = new Date().toISOString().split('T')[0];
   const [driverDate, setDriverDate] = useState(today);
   const [activeTab, setActiveTab] = useState<'active' | 'done'>('active');
   const [search, setSearch] = useState('');
+  const [ordersDriverFilter, setOrdersDriverFilter] = useState('ALL');
 
   const shiftDate = (days: number) => {
     const d = new Date(driverDate + 'T12:00:00');
@@ -945,11 +947,18 @@ const OrdersView: React.FC<OrdersViewProps> = ({
     const COMPLETED_STATUSES = [DeliveryStatus.DELIVERED, DeliveryStatus.FAILED, DeliveryStatus.PENDING_RESCHEDULE, DeliveryStatus.SECOND_ATTEMPT, DeliveryStatus.CLOSED];
     const OPEN_STATUSES = [DeliveryStatus.PENDING, DeliveryStatus.SCHEDULED, DeliveryStatus.ASSIGNED, DeliveryStatus.IN_TRANSIT];
 
+    const uniqueOrderDrivers = [
+      { id: 'ALL', name: 'All Drivers' },
+      ...allUsers.filter(u => (u.role === 'DRIVER' || u.role === 'MANAGER') && u.isActive).map(u => ({ id: u.id, name: u.name }))
+    ];
+
     const todayFiltered = dateFilter === 'TODAY'
       ? sorted.filter(d => (d.deliveryDate || '').split('T')[0] === adminToday)
       : sorted;
 
     const filtered = todayFiltered.filter(d => {
+      // Driver filter
+      if (ordersDriverFilter !== 'ALL' && d.driverId !== ordersDriverFilter) return false;
       // Status filter
       if (statusFilter === 'OPEN' && !OPEN_STATUSES.includes(d.status)) return false;
       if (statusFilter === 'COMPLETED' && !COMPLETED_STATUSES.includes(d.status)) return false;
@@ -986,6 +995,11 @@ const OrdersView: React.FC<OrdersViewProps> = ({
 
         {/* Filters + Search */}
         <div className="px-3 pt-2 pb-2 border-b border-stone-200 space-y-2">
+          {/* Driver filter dropdown */}
+          <select value={ordersDriverFilter} onChange={e => setOrdersDriverFilter(e.target.value)}
+            className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-2.5 text-sm font-bold outline-none focus:border-black">
+            {uniqueOrderDrivers.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+          </select>
           {/* Date: Today / All */}
           <div className="flex gap-2">
             <button onClick={() => setDateFilter('TODAY')}
@@ -1269,15 +1283,19 @@ const ScheduleView: React.FC<{
   };
   const fmt = fmtSelectedDate(selectedDate);
 
-  const [schedStatusFilter, setSchedStatusFilter] = useState<'ALL'|'OPEN'|'SCHEDULED'|'CLOSED'>('ALL');
+  const [schedStatusFilter, setSchedStatusFilter] = useState<'ALL'|'OPEN'|'SCHEDULED'|'FAILED'|'2ND'|'CLOSED'>('ALL');
 
   const SCHED_OPEN = ['PENDING','ASSIGNED','IN_TRANSIT'] as string[];
   const SCHED_SCHEDULED = ['SCHEDULED'] as string[];
+  const SCHED_FAILED = ['FAILED'] as string[];
+  const SCHED_2ND = ['SECOND_ATTEMPT'] as string[];
   const SCHED_CLOSED = ['DELIVERED','FAILED','SECOND_ATTEMPT','PENDING_RESCHEDULE','CLOSED'] as string[];
 
   const filteredForStatus = useMemo(() => filtered.filter(d => {
     if (schedStatusFilter === 'OPEN') return SCHED_OPEN.includes(d.status);
     if (schedStatusFilter === 'SCHEDULED') return SCHED_SCHEDULED.includes(d.status);
+    if (schedStatusFilter === 'FAILED') return SCHED_FAILED.includes(d.status);
+    if (schedStatusFilter === '2ND') return SCHED_2ND.includes(d.status);
     if (schedStatusFilter === 'CLOSED') return SCHED_CLOSED.includes(d.status);
     return true;
   }), [filtered, schedStatusFilter]);
@@ -1344,7 +1362,7 @@ const ScheduleView: React.FC<{
             {uniqueDrivers.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
           </select>
         )}
-        {/* Status filter */}
+        {/* Status filter — row 1: All / Open / Scheduled / Closed */}
         <div className="flex gap-1.5">
           {(['ALL','OPEN','SCHEDULED','CLOSED'] as const).map(f => (
             <button key={f} onClick={() => setSchedStatusFilter(f)}
@@ -1357,6 +1375,17 @@ const ScheduleView: React.FC<{
                 : `Closed (${filtered.filter(d => SCHED_CLOSED.includes(d.status)).length})`}
             </button>
           ))}
+        </div>
+        {/* Status filter — row 2: Failed + 2nd Attempt pills */}
+        <div className="flex gap-1.5">
+          <button onClick={() => setSchedStatusFilter('FAILED')}
+            className={`flex-1 py-1.5 rounded-lg font-black text-[9px] uppercase transition-all ${schedStatusFilter === 'FAILED' ? 'bg-red-600 text-white' : 'bg-stone-100 text-stone-500'}`}>
+            1st Failed ({filtered.filter(d => d.status === 'FAILED').length})
+          </button>
+          <button onClick={() => setSchedStatusFilter('2ND')}
+            className={`flex-1 py-1.5 rounded-lg font-black text-[9px] uppercase transition-all ${schedStatusFilter === '2ND' ? 'bg-stone-700 text-white' : 'bg-stone-100 text-stone-500'}`}>
+            2nd Attempt ({filtered.filter(d => d.status === 'SECOND_ATTEMPT').length})
+          </button>
         </div>
       </div>
 
@@ -1734,6 +1763,9 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
   const [feeResult, setFeeResult] = useState<number | null>(null);
   const [feeStart, setFeeStart] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 7); return d.toISOString().split('T')[0]; });
   const [feeEnd, setFeeEnd] = useState(() => new Date().toISOString().split('T')[0]);
+  const [feeCalculated, setFeeCalculated] = useState(false);
+  const [calcStart, setCalcStart] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 7); return d.toISOString().split('T')[0]; });
+  const [calcEnd, setCalcEnd] = useState(() => new Date().toISOString().split('T')[0]);
 
   useEffect(() => {
     fetch('/api/templates').then(r => r.json()).then(d => setTemplates(d.templates || []));
@@ -1867,11 +1899,6 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
 
         {activeTab === 'FEES' && (() => {
           // ── compute per-driver payroll ──────────────────────────────────
-          // Use completedAt if available, fall back to deliveryDate
-          const [feeCalculated, setFeeCalculated] = React.useState(false);
-          const [calcStart, setCalcStart] = React.useState(feeStart);
-          const [calcEnd, setCalcEnd] = React.useState(feeEnd);
-
           const inRange = feeCalculated ? deliveries.filter(d => {
             if (d.status !== DeliveryStatus.DELIVERED) return false;
             const dateToCheck = (d.completedAt || d.deliveryDate || '').split('T')[0];
@@ -2167,6 +2194,7 @@ export default function App() {
             deliveries={deliveries}
             isAdmin={isAdmin}
             currentUser={currentUser}
+            allUsers={allUsers}
             isSameDayWindow={isSameDayWindow}
             pendingCount={pendingCount}
             inTransitCount={inTransitCount}
