@@ -196,67 +196,47 @@ const LoginGate: React.FC<{ onAuthorized: (user: UserAccount) => void }> = ({ on
 // ORDER CARD
 // ─────────────────────────────────────────────────────────────────────────────
 
-const OrderCard: React.FC<{ order: Delivery; role: AppRole; onTap: () => void; isSelected?: boolean }> = ({ order, role, onTap, isSelected }) => {
-  const isAdmin = role === 'SUPER_ADMIN' || role === 'MANAGER';
-  const statusColors: Record<string, string> = {
-    PENDING: 'bg-stone-900 text-white',
-    ASSIGNED: 'bg-stone-700 text-white',
-    IN_TRANSIT: 'bg-black text-white',
-    DELIVERED: 'bg-stone-200 text-stone-500',
-    FAILED: 'bg-red-600 text-white',
-    SECOND_ATTEMPT: 'bg-stone-800 text-white',
-    PENDING_RESCHEDULE: 'bg-stone-400 text-white',
-  };
-  const sc = statusColors[order.status] || 'bg-stone-200 text-stone-600';
+const OrderCard: React.FC<{ order: Delivery; role: AppRole; onTap: () => void; isSelected?: boolean }> = ({ order, role, onTap }) => {
   const product = order.items?.[0];
+  const recipientName = order.giftReceiverName || order.customer.name;
+  const statusBg: Record<string, string> = {
+    PENDING: 'bg-stone-800', ASSIGNED: 'bg-stone-700', IN_TRANSIT: 'bg-black',
+    DELIVERED: 'bg-stone-300', FAILED: 'bg-red-600', SECOND_ATTEMPT: 'bg-stone-600',
+    PENDING_RESCHEDULE: 'bg-amber-500',
+  };
+  const bg = statusBg[order.status] || 'bg-stone-700';
+  const labelText = STATUS_CONFIG[order.status]?.label || order.status;
+  const textColor = order.status === 'DELIVERED' ? 'text-stone-600' : 'text-white';
   return (
-    <div onClick={onTap}
-      className={`mx-3 mb-2 rounded-2xl cursor-pointer active:scale-[0.98] transition-all overflow-hidden border ${isSelected ? 'border-black' : 'border-stone-100'} bg-white shadow-sm`}>
-      {/* Status + Order # row */}
-      <div className={`px-4 py-2.5 flex items-center justify-between ${sc}`}>
-        <div className="flex items-center gap-2">
-          <StatusBadge status={order.status} />
-          {order.priority === 'Urgent' && <span className="text-[9px] font-black uppercase bg-red-600 text-white px-2 py-0.5 rounded-full">URGENT</span>}
-          {order.attemptNumber === 2 && <span className="text-[9px] font-black uppercase bg-white/20 px-2 py-0.5 rounded-full">2ND ATTEMPT</span>}
-        </div>
-        <span className="text-sm font-black">#{order.orderNumber?.replace(/^#+/, '') || order.id}</span>
+    <div onClick={onTap} className="mx-3 mb-2 bg-white rounded-xl border border-stone-200 overflow-hidden active:scale-[0.99] transition-all cursor-pointer">
+      {/* Top bar: status color + order# */}
+      <div className={`${bg} px-3 py-2 flex items-center justify-between`}>
+        <span className={`text-[10px] font-black uppercase tracking-widest ${textColor}`}>{labelText}</span>
+        <span className={`text-sm font-black ${textColor}`}>#{order.orderNumber?.replace(/^#+/, '') || order.id}</span>
       </div>
-      {/* Body */}
-      <div className="px-4 pt-3 pb-3 space-y-2">
+      {/* Main content */}
+      <div className="px-3 py-2.5 space-y-1.5">
+        {/* Recipient name — big */}
+        <p className="text-lg font-black text-stone-900 leading-tight">{recipientName}</p>
         {/* Address */}
-        <div>
-          <p className="text-base font-black text-stone-900 leading-tight">{order.address.street}</p>
-          <p className="text-sm font-bold text-stone-400">{order.address.city}, FL {order.address.zip}</p>
-        </div>
-        {/* Special instructions — prominent yellow if present */}
+        <p className="text-sm text-stone-500 leading-tight">{order.address.street}, {order.address.city} {order.address.zip}</p>
+        {/* Instructions if present */}
         {order.deliveryInstructions && (
-          <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
-            <span className="text-amber-600 font-black text-[10px] uppercase shrink-0 mt-0.5">⚠ INSTRUCTIONS</span>
-            <p className="text-xs font-black text-amber-900">{order.deliveryInstructions}</p>
+          <div className="flex items-start gap-1.5 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
+            <AlertTriangle size={11} className="text-amber-600 shrink-0 mt-0.5" />
+            <p className="text-xs font-black text-amber-800 leading-snug">{order.deliveryInstructions}</p>
           </div>
         )}
-        {/* Recipient — prominent, driver must know who they're delivering to */}
-        <div className="flex items-center justify-between pt-1 border-t border-stone-100">
-          <div>
-            <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest">Delivering To</p>
-            <p className="text-base font-black text-stone-900">{order.giftReceiverName || order.customer.name}</p>
-          </div>
-          {order.giftSenderName && (
-            <div className="text-right">
-              <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest">From</p>
-              <p className="text-sm font-bold text-stone-600">{order.giftSenderName}</p>
-            </div>
-          )}
-        </div>
-        {/* Product + PRICE — both always visible, never hidden */}
+        {/* Product + price */}
         {product && (
-          <div className="flex items-center justify-between bg-stone-50 rounded-xl px-3 py-2">
-            <div className="flex items-center gap-1.5 flex-1 min-w-0">
-              <Package size={12} className="text-stone-400 shrink-0" />
-              <p className="text-sm font-black text-stone-800 truncate">{product.name}{product.quantity > 1 ? ` x${product.quantity}` : ''}</p>
-            </div>
-            <span className="text-sm font-black text-stone-900 shrink-0 ml-2">${(product.price * product.quantity).toFixed(2)}</span>
+          <div className="flex items-center justify-between pt-1 border-t border-stone-100">
+            <p className="text-sm text-stone-600 truncate flex-1 pr-2">{product.name}{product.quantity > 1 ? ` ×${product.quantity}` : ''}</p>
+            <p className="text-sm font-black text-stone-900 shrink-0">${(product.price * product.quantity).toFixed(2)}</p>
           </div>
+        )}
+        {/* Driver badge (admin only) */}
+        {(role === 'SUPER_ADMIN' || role === 'MANAGER') && (
+          <p className="text-[10px] text-stone-400">{order.driverName ? `Driver: ${order.driverName}` : '⚠ No driver assigned'}</p>
         )}
       </div>
     </div>
@@ -556,30 +536,30 @@ const OrderDetail: React.FC<{
 
 
   return (
-    <div className="flex flex-col min-h-screen bg-white">
+    <div className="flex flex-col h-screen bg-gray-50">
 
-      {/* HEADER */}
-      <div className="sticky top-0 z-10 bg-black text-white px-4 py-3 flex items-center gap-3">
-        <button onClick={onBack} className="p-2 bg-white/10 rounded-full active:bg-white/20">
+      {/* ── HEADER: black bar, order#, status, back button ── */}
+      <div className="bg-black text-white px-4 py-3 flex items-center gap-3 shrink-0">
+        <button onClick={onBack} className="w-9 h-9 flex items-center justify-center bg-white/10 rounded-full active:bg-white/20">
           <ChevronLeft size={20} />
         </button>
         <div className="flex-1 min-w-0">
-          <p className="text-xl font-black">ORDER #{cleanOrderNum}</p>
-          <StatusBadge status={order.status} />
+          <p className="text-xl font-black tracking-tight">#{cleanOrderNum}</p>
+          <p className="text-xs text-stone-400">{order.deliveryDate || 'Today'}</p>
         </div>
-        {/* Admin: status dropdown in header */}
+        {/* Admin only: status change dropdown in header */}
         {isAdmin && (
           <select
             value={order.status}
             onChange={async e => {
               const s = e.target.value as DeliveryStatus;
               onUpdate(order.id, { status: s });
-              await fetch(`/api/orders/${order.id}/status`, {
+              fetch(`/api/orders/${order.id}/status`, {
                 method: 'PATCH', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ status: s })
               }).catch(() => {});
             }}
-            className="text-[10px] font-black bg-white/10 text-white border border-white/20 rounded-lg px-2 py-1.5 outline-none shrink-0"
+            className="bg-white/10 text-white text-[11px] font-black border border-white/20 rounded-lg px-2 py-1.5 outline-none max-w-[130px]"
           >
             {STATUSES_FOR_DROPDOWN.map(s => (
               <option key={s.value} value={s.value} style={{ background: '#111', color: '#fff' }}>{s.label}</option>
@@ -588,133 +568,110 @@ const OrderDetail: React.FC<{
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto pb-8">
+      {/* ── SCROLLABLE CONTENT ── */}
+      <div className="flex-1 overflow-y-auto">
 
-        {/* 1. SPECIAL INSTRUCTIONS — amber block, impossible to miss */}
+        {/* ── SPECIAL INSTRUCTIONS — amber, always at top if present ── */}
         {order.deliveryInstructions && (
-          <div className="mx-4 mt-4 bg-amber-400 rounded-2xl px-4 py-3 flex items-start gap-2">
-            <AlertTriangle size={18} className="text-amber-900 shrink-0 mt-0.5" />
-            <p className="text-base font-black text-amber-950">{order.deliveryInstructions}</p>
+          <div className="mx-3 mt-3 bg-amber-400 rounded-xl px-4 py-3 flex gap-2 items-start">
+            <AlertTriangle size={16} className="text-amber-900 shrink-0 mt-0.5" />
+            <p className="font-black text-amber-950 text-sm leading-snug">{order.deliveryInstructions}</p>
           </div>
         )}
 
-        {/* 2. RECIPIENT — BIG, this is who the driver is going to */}
-        <div className="mx-4 mt-4 rounded-2xl border-2 border-stone-900 overflow-hidden">
-          <div className="bg-stone-900 px-4 py-2 flex items-center justify-between">
-            <p className="text-[9px] font-black uppercase tracking-widest text-stone-400">Delivering To</p>
-            {senderName && <p className="text-[9px] font-black uppercase tracking-widest text-stone-400">From</p>}
-          </div>
-          <div className="px-4 py-3 flex items-center justify-between">
+        {/* ── CUSTOMER CARD: name large, address, phone buttons ── */}
+        <div className="mx-3 mt-3 bg-white rounded-xl border border-stone-200 overflow-hidden">
+          {/* Name */}
+          <div className="px-4 pt-3 pb-2">
+            <p className="text-[10px] font-black uppercase text-stone-400 tracking-widest mb-0.5">Delivering To</p>
             <p className="text-2xl font-black text-stone-900 leading-tight">{recipientName}</p>
-            {senderName && <p className="text-sm font-bold text-stone-500 text-right max-w-[40%] leading-tight">{senderName}</p>}
+            {senderName && <p className="text-sm text-stone-500 mt-0.5">From: <span className="font-bold text-stone-700">{senderName}</span></p>}
           </div>
-          {/* Call/Text recipient */}
-          {recipientPhone && (
-            <div className="flex gap-2 px-4 pb-3">
-              <a href={`tel:${recipientPhone}`} className="flex-1 flex items-center justify-center gap-1.5 py-3 bg-black text-white rounded-xl font-black uppercase text-xs active:scale-95">
-                <Phone size={13} /> Call Recipient
-              </a>
-              <a href={`sms:${recipientPhone}`} className="flex-1 flex items-center justify-center gap-1.5 py-3 bg-stone-100 text-stone-900 rounded-xl font-black uppercase text-xs active:scale-95">
-                <MessageCircle size={13} /> Text Recipient
-              </a>
-            </div>
-          )}
-          {/* Call/Text sender */}
-          {senderPhone && (
-            <div className="flex gap-2 px-4 pb-3 border-t border-stone-100 pt-2">
-              <a href={`tel:${senderPhone}`} className="flex-1 flex items-center justify-center gap-1.5 py-3 bg-stone-800 text-white rounded-xl font-black uppercase text-xs active:scale-95">
-                <Phone size={13} /> Call Sender
-              </a>
-              <a href={`sms:${senderPhone}`} className="flex-1 flex items-center justify-center gap-1.5 py-3 bg-stone-100 text-stone-900 rounded-xl font-black uppercase text-xs active:scale-95">
-                <MessageCircle size={13} /> Text Sender
-              </a>
-            </div>
-          )}
-        </div>
-
-        {/* 3. ADDRESS + MAPS */}
-        <div className="mx-4 mt-3 rounded-2xl border border-stone-200 overflow-hidden">
-          <div className="px-4 py-3">
-            <p className="text-[9px] font-black uppercase tracking-widest text-stone-400 mb-1">Delivery Address</p>
-            <p className="text-lg font-black text-stone-900 leading-tight">{order.address.street}</p>
-            <p className="text-sm text-stone-500">{order.address.city}, FL {order.address.zip}</p>
+          {/* Address + Maps */}
+          <div className="px-4 pb-3 border-b border-stone-100">
+            <p className="text-base font-bold text-stone-700 leading-tight">{order.address.street}</p>
+            <p className="text-sm text-stone-400">{order.address.city}, FL {order.address.zip}</p>
           </div>
           <a href={mapsUrl} target="_blank" rel="noopener noreferrer"
-            className="flex items-center justify-center gap-2 py-3 bg-black text-white font-black uppercase text-sm active:bg-stone-800">
-            <Navigation size={15} /> Open in Maps
+            className="flex items-center justify-center gap-2 py-3 bg-stone-900 text-white font-black uppercase text-sm active:bg-black border-b border-stone-800">
+            <Navigation size={15} /> Navigate
           </a>
-        </div>
-
-        {/* 4. WHAT YOU'RE DELIVERING — product name + PRICE, never hidden */}
-        <div className="mx-4 mt-3 rounded-2xl border border-stone-200 overflow-hidden">
-          <div className="bg-stone-50 px-4 py-2">
-            <p className="text-[9px] font-black uppercase tracking-widest text-stone-400">What You're Delivering</p>
-          </div>
-          {order.items?.length > 0 ? order.items.map((item, i) => (
-            <div key={i} className="flex items-center justify-between px-4 py-3 border-b border-stone-100 last:border-0">
-              <p className="text-base font-black text-stone-900 flex-1 pr-3 leading-tight">{item.name}{item.quantity > 1 ? ` ×${item.quantity}` : ''}</p>
-              <span className="text-lg font-black text-stone-900 shrink-0">${(item.price * item.quantity).toFixed(2)}</span>
-            </div>
-          )) : <p className="px-4 py-3 text-sm text-stone-400">No items listed</p>}
-          <div className="px-4 py-2 bg-stone-50 border-t border-stone-100 flex justify-between items-center">
-            <span className="text-[9px] font-black uppercase text-stone-400">Delivery Fee</span>
-            <span className="text-sm font-black text-stone-600">${order.deliveryFee.toFixed(2)}</span>
-          </div>
-        </div>
-
-        {/* CONTACTS — separate sender section if no phone above */}
-        <div className="mx-4 mt-3 rounded-2xl border border-stone-200 overflow-hidden">
-          <div className="px-4 py-3 border-b border-stone-100">
-            <p className="text-[9px] font-black uppercase tracking-widest text-stone-400 mb-1">Recipient</p>
-            <p className="text-base font-black text-stone-900">{recipientName}</p>
+          {/* Phone buttons */}
+          <div className="grid grid-cols-2 divide-x divide-stone-100">
             {recipientPhone ? (
-              <div className="flex gap-2 mt-2">
-                <a href={`tel:${recipientPhone}`} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-black text-white rounded-xl font-black uppercase text-xs active:scale-95">
-                  <Phone size={13} /> Call
+              <>
+                <a href={`tel:${recipientPhone}`} className="flex items-center justify-center gap-2 py-3.5 font-black text-sm active:bg-stone-50">
+                  <Phone size={15} className="text-stone-700" /> <span className="text-stone-900">Call</span>
                 </a>
-                <a href={`sms:${recipientPhone}`} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-stone-100 text-stone-900 rounded-xl font-black uppercase text-xs active:scale-95">
-                  <MessageCircle size={13} /> Text
+                <a href={`sms:${recipientPhone}`} className="flex items-center justify-center gap-2 py-3.5 font-black text-sm active:bg-stone-50">
+                  <MessageCircle size={15} className="text-stone-700" /> <span className="text-stone-900">Text</span>
                 </a>
-              </div>
-            ) : <p className="text-xs text-stone-400 mt-1">No phone on file</p>}
+              </>
+            ) : (
+              <p className="col-span-2 text-center py-3 text-sm text-stone-400">No phone number on file</p>
+            )}
           </div>
-          {senderName && (
-            <div className="px-4 py-3">
-              <p className="text-[9px] font-black uppercase tracking-widest text-stone-400 mb-1">Gift Sender</p>
-              <p className="text-base font-black text-stone-900">{senderName}</p>
-              {senderPhone ? (
-                <div className="flex gap-2 mt-2">
-                  <a href={`tel:${senderPhone}`} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-black text-white rounded-xl font-black uppercase text-xs active:scale-95">
-                    <Phone size={13} /> Call
-                  </a>
-                  <a href={`sms:${senderPhone}`} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-stone-100 text-stone-900 rounded-xl font-black uppercase text-xs active:scale-95">
-                    <MessageCircle size={13} /> Text
-                  </a>
-                </div>
-              ) : <p className="text-xs text-stone-400 mt-1">No phone on file</p>}
+          {/* Sender phone (if different) */}
+          {senderPhone && senderPhone !== recipientPhone && (
+            <div className="grid grid-cols-2 divide-x divide-stone-100 border-t border-stone-100">
+              <a href={`tel:${senderPhone}`} className="flex items-center justify-center gap-2 py-3 font-black text-xs active:bg-stone-50">
+                <Phone size={13} className="text-stone-500" /> <span className="text-stone-600">Call Sender</span>
+              </a>
+              <a href={`sms:${senderPhone}`} className="flex items-center justify-center gap-2 py-3 font-black text-xs active:bg-stone-50">
+                <MessageCircle size={13} className="text-stone-500" /> <span className="text-stone-600">Text Sender</span>
+              </a>
             </div>
           )}
         </div>
 
-        {/* 5. GIFT MESSAGE — collapsed tap to expand */}
+        {/* ── ORDER ITEMS + PRICE ── */}
+        <div className="mx-3 mt-3 bg-white rounded-xl border border-stone-200 overflow-hidden">
+          <div className="px-4 py-2 border-b border-stone-100 bg-stone-50">
+            <p className="text-[10px] font-black uppercase text-stone-500 tracking-widest">Order Items</p>
+          </div>
+          {order.items?.length > 0 ? order.items.map((item, i) => (
+            <div key={i} className="flex items-center px-4 py-3 border-b border-stone-100 last:border-0">
+              <div className="flex-1 min-w-0">
+                <p className="font-black text-stone-900 text-base leading-tight">{item.name}</p>
+                {item.quantity > 1 && <p className="text-sm text-stone-400">Qty: {item.quantity}</p>}
+              </div>
+              <p className="font-black text-stone-900 text-lg shrink-0 ml-3">${(item.price * item.quantity).toFixed(2)}</p>
+            </div>
+          )) : <p className="px-4 py-3 text-sm text-stone-400 italic">No items listed</p>}
+          {/* Totals row */}
+          <div className="px-4 py-2 bg-stone-50 border-t border-stone-200 flex justify-between items-center">
+            <p className="text-xs text-stone-500">Delivery fee</p>
+            <p className="text-sm font-bold text-stone-600">${order.deliveryFee.toFixed(2)}</p>
+          </div>
+          {order.items?.length > 0 && (
+            <div className="px-4 py-2 bg-stone-50 border-t border-stone-100 flex justify-between items-center">
+              <p className="text-xs font-black uppercase text-stone-700">Total</p>
+              <p className="text-base font-black text-stone-900">${(order.items.reduce((s, i) => s + i.price * i.quantity, 0) + order.deliveryFee).toFixed(2)}</p>
+            </div>
+          )}
+        </div>
+
+        {/* ── GIFT MESSAGE ── */}
         {order.giftMessage && (
           <button onClick={() => setShowGiftMsg(g => !g)}
-            className="mx-4 mt-3 w-[calc(100%-2rem)] border border-stone-200 rounded-2xl px-4 py-3 text-left active:bg-stone-50">
-            <div className="flex items-center justify-between">
-              <p className="text-[9px] font-black uppercase tracking-widest text-stone-400">Gift Message</p>
+            className="mx-3 mt-3 w-[calc(100%-1.5rem)] bg-white border border-stone-200 rounded-xl px-4 py-3 text-left active:bg-stone-50">
+            <div className="flex justify-between items-center">
+              <p className="text-[10px] font-black uppercase text-stone-400 tracking-widest">Gift Message</p>
               <ChevronRight size={14} className={`text-stone-400 transition-transform ${showGiftMsg ? 'rotate-90' : ''}`} />
             </div>
-            {showGiftMsg && <p className="text-sm text-stone-600 italic mt-2">"{order.giftMessage}"</p>}
+            {showGiftMsg && <p className="text-sm text-stone-600 italic mt-2 leading-relaxed">"{order.giftMessage}"</p>}
           </button>
         )}
 
-        {/* 6. PREVIOUS FAILED ATTEMPTS */}
-        {order.attempts?.length > 0 && (
-          <div className="mx-4 mt-3 rounded-2xl border border-stone-200 px-4 py-3 space-y-2">
-            <p className="text-[9px] font-black uppercase tracking-widest text-stone-500">Previous Attempts ({order.attempts.length})</p>
+        {/* ── FAILED ATTEMPTS (if any) ── */}
+        {order.attempts && order.attempts.length > 0 && (
+          <div className="mx-3 mt-3 bg-white rounded-xl border border-stone-200 overflow-hidden">
+            <div className="px-4 py-2 bg-stone-50 border-b border-stone-100">
+              <p className="text-[10px] font-black uppercase text-stone-500 tracking-widest">Previous Attempts ({order.attempts.length})</p>
+            </div>
             {order.attempts.map((a, i) => (
-              <div key={i} className="pt-2 border-t border-stone-100 first:border-0 first:pt-0">
-                <p className="text-sm font-black text-stone-800">{FAILURE_REASON_LABELS[a.reason as FailureReason] || a.reason}</p>
+              <div key={i} className="px-4 py-3 border-b border-stone-100 last:border-0">
+                <p className="font-black text-stone-800 text-sm">{FAILURE_REASON_LABELS[a.reason as FailureReason] || a.reason}</p>
                 {a.notes && <p className="text-xs text-stone-500 italic mt-0.5">"{a.notes}"</p>}
                 <p className="text-[10px] text-stone-400 mt-0.5">{a.driverName || 'Driver'} · {formatDate(a.timestamp)}</p>
               </div>
@@ -722,128 +679,158 @@ const OrderDetail: React.FC<{
           </div>
         )}
 
-        {/* 7. ADMIN: ASSIGN DRIVER + NOTES */}
+        {/* ── ADMIN SECTION: assign driver + note (ONE place, not two) ── */}
         {isAdmin && (
-          <div className="mx-4 mt-3 rounded-2xl border border-stone-200 overflow-hidden">
+          <div className="mx-3 mt-3 bg-white rounded-xl border border-stone-200 overflow-hidden">
+            <div className="px-4 py-2 bg-stone-50 border-b border-stone-100">
+              <p className="text-[10px] font-black uppercase text-stone-500 tracking-widest">Admin</p>
+            </div>
+            {/* Driver assignment */}
             <div className="px-4 py-3 border-b border-stone-100">
-              <p className="text-[9px] font-black uppercase tracking-widest text-stone-400 mb-2">Assign Driver</p>
+              <p className="text-xs font-black text-stone-500 mb-2">
+                Driver: <span className="text-stone-900">{order.driverName || 'Not assigned'}</span>
+              </p>
               <div className="flex gap-2">
                 <select value={reassignTo} onChange={e => setReassignTo(e.target.value)}
-                  className="flex-1 bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-sm font-bold outline-none">
-                  <option value="">{order.driverName ? `Currently: ${order.driverName}` : 'Select driver...'}</option>
+                  className="flex-1 bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm font-bold outline-none">
+                  <option value="">Change driver...</option>
                   {allUsers.filter(u => (u.role === 'DRIVER' || u.role === 'MANAGER') && u.isActive).map(u => (
                     <option key={u.id} value={u.id}>{u.name}</option>
                   ))}
                 </select>
                 <button onClick={handleReassign} disabled={!reassignTo}
-                  className="px-4 py-2 bg-black text-white rounded-xl font-black text-xs uppercase disabled:opacity-30">Assign</button>
+                  className="px-4 py-2 bg-black text-white rounded-lg font-black text-xs uppercase disabled:opacity-30">
+                  Assign
+                </button>
               </div>
             </div>
+            {/* Note — one place only */}
             <div className="px-4 py-3">
-              <p className="text-[9px] font-black uppercase tracking-widest text-stone-400 mb-2">Admin Notes</p>
-              {order.adminNotes && <p className="text-xs text-stone-600 mb-2 whitespace-pre-line">{order.adminNotes}</p>}
+              {order.adminNotes && (
+                <div className="text-xs text-stone-600 mb-2 bg-stone-50 rounded-lg p-2 whitespace-pre-line">{order.adminNotes}</div>
+              )}
               <div className="flex gap-2">
-                <input value={adminNote} onChange={e => setAdminNote(e.target.value)} placeholder="Add note..."
-                  className="flex-1 bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-sm outline-none" />
-                <button onClick={handleAddNote} className="px-4 py-2 bg-black text-white rounded-xl font-black text-xs uppercase">Add</button>
+                <input value={adminNote} onChange={e => setAdminNote(e.target.value)}
+                  placeholder="Add admin note..."
+                  className="flex-1 bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm outline-none" />
+                <button onClick={handleAddNote}
+                  className="px-4 py-2 bg-black text-white rounded-lg font-black text-xs uppercase">
+                  Add
+                </button>
               </div>
             </div>
           </div>
         )}
 
-        {/* 8. DRIVER ACTIONS — photo, signature, complete, fail */}
+        {/* ── PROOF OF DELIVERY + ACTIONS ── */}
         {!isCompleted && (
-          <div className="mx-4 mt-3 space-y-2">
+          <div className="mx-3 mt-3 mb-4 space-y-2">
             <input type="file" accept="image/*" capture="environment" ref={fileRef} onChange={handlePhoto} className="hidden" />
+            {/* Note */}
             <textarea value={driverNote} onChange={e => setDriverNote(e.target.value)}
-              placeholder="Notes (e.g. left at door, gave to security...)"
-              className="w-full bg-stone-50 border border-stone-200 rounded-2xl px-4 py-3 text-sm outline-none resize-none"
-              style={{ minHeight: '80px' }} />
+              placeholder="Add delivery note..."
+              className="w-full bg-white border border-stone-200 rounded-xl px-4 py-3 text-sm outline-none resize-none"
+              style={{ minHeight: '72px' }} />
+            {/* Photo + Sig row */}
             <div className="grid grid-cols-2 gap-2">
               <button onClick={() => fileRef.current?.click()}
-                className={`py-4 rounded-xl font-black uppercase text-xs flex items-center justify-center gap-2 active:scale-95 ${photoData ? 'bg-green-600 text-white' : 'bg-stone-900 text-white'}`}>
-                <Camera size={16} />{photoData ? '✓ Photo' : 'Take Photo'}
+                className={`flex items-center justify-center gap-2 py-3.5 rounded-xl font-black uppercase text-xs active:scale-95 ${photoData ? 'bg-green-600 text-white' : 'bg-stone-900 text-white'}`}>
+                <Camera size={15} />{photoData ? '✓ Photo' : 'Add Photo'}
               </button>
               <button onClick={() => setIsSigning(true)}
-                className={`py-4 rounded-xl font-black uppercase text-xs flex items-center justify-center gap-2 active:scale-95 ${sigData ? 'bg-green-600 text-white' : 'bg-stone-900 text-white'}`}>
-                <PenTool size={16} />{sigData ? '✓ Signed' : 'Signature'}
+                className={`flex items-center justify-center gap-2 py-3.5 rounded-xl font-black uppercase text-xs active:scale-95 ${sigData ? 'bg-green-600 text-white' : 'bg-stone-900 text-white'}`}>
+                <PenTool size={15} />{sigData ? '✓ Signed' : 'Signature'}
               </button>
             </div>
-            {photoData && <img src={photoData} className="w-full rounded-2xl max-h-40 object-cover" alt="POD" />}
+            {photoData && <img src={photoData} className="w-full rounded-xl max-h-36 object-cover" alt="POD" />}
+            {/* DONE */}
             <button onClick={handleComplete}
-              className="w-full py-5 bg-green-600 text-white rounded-2xl font-black uppercase text-base tracking-wider flex items-center justify-center gap-2 active:scale-95">
-              <CheckCircle2 size={22} /> DELIVERED
+              className="w-full py-5 bg-green-600 text-white rounded-2xl font-black uppercase text-lg tracking-wide flex items-center justify-center gap-2 active:scale-95">
+              <CheckCircle2 size={22} /> DONE
             </button>
+            {/* FAILED */}
             <button onClick={() => setShowFailFlow(true)}
-              className="w-full py-4 border-2 border-stone-800 text-stone-800 rounded-2xl font-black uppercase text-sm flex items-center justify-center gap-2 active:scale-95">
-              <XCircle size={18} /> MARK AS FAILED
+              className="w-full py-4 border-2 border-stone-800 text-stone-900 rounded-2xl font-black uppercase text-sm flex items-center justify-center gap-2 active:scale-95">
+              <XCircle size={18} /> FAILED
             </button>
           </div>
         )}
 
-        {/* 9. COMPLETED SUMMARY */}
+        {/* ── COMPLETED: show POD + notification button ── */}
         {isCompleted && (
-          <div className="mx-4 mt-3 rounded-2xl border border-stone-200 px-4 py-3 space-y-2">
-            <p className="text-xs text-stone-500">
-              {order.completedAt ? `Completed: ${formatDate(order.completedAt)} at ${formatTime(order.completedAt)}` : 'Completed'}
-            </p>
-            {order.driverNotes && <p className="text-sm italic text-stone-600">"{order.driverNotes}"</p>}
-            {order.confirmationPhoto && <img src={order.confirmationPhoto} className="w-full rounded-xl max-h-40 object-cover" alt="POD" />}
+          <div className="mx-3 mt-3 mb-4 space-y-2">
+            <div className="bg-white rounded-xl border border-stone-200 px-4 py-3">
+              <StatusBadge status={order.status} />
+              {order.completedAt && (
+                <p className="text-xs text-stone-500 mt-1">
+                  {formatDate(order.completedAt)} at {formatTime(order.completedAt)}
+                </p>
+              )}
+              {order.driverNotes && <p className="text-sm italic text-stone-600 mt-2">"{order.driverNotes}"</p>}
+            </div>
+            {order.confirmationPhoto && (
+              <img src={order.confirmationPhoto} className="w-full rounded-xl max-h-36 object-cover" alt="Photo" />
+            )}
             {order.confirmationSignature && (
-              <div className="border border-stone-100 rounded-xl p-2">
+              <div className="bg-white border border-stone-200 rounded-xl p-3">
                 <p className="text-[9px] font-black uppercase text-stone-400 mb-1">Signature</p>
-                <img src={order.confirmationSignature} className="w-full max-h-20 object-contain" alt="Sig" />
+                <img src={order.confirmationSignature} className="w-full max-h-16 object-contain" alt="Sig" />
               </div>
             )}
+            {/* Send notification */}
             {order.status === DeliveryStatus.DELIVERED && !order.successNotificationSent && (
               <button onClick={() => loadPreview('SUCCESS')}
-                className="w-full py-3 bg-black text-white rounded-xl font-black uppercase text-sm flex items-center justify-center gap-2 active:scale-95">
+                className="w-full py-3.5 bg-black text-white rounded-xl font-black uppercase text-sm flex items-center justify-center gap-2 active:scale-95">
                 <Bell size={16} /> Send Delivery Confirmation
               </button>
             )}
             {order.status === DeliveryStatus.DELIVERED && order.successNotificationSent && (
-              <p className="text-xs font-black text-green-600">✓ Confirmation sent</p>
+              <p className="text-center text-xs font-black text-green-600 py-2">✓ Confirmation sent to customer</p>
             )}
             {(order.status === DeliveryStatus.FAILED || order.status === DeliveryStatus.PENDING_RESCHEDULE) && !order.failureNotificationSent && (
               <button onClick={() => loadPreview('FAILURE')}
-                className="w-full py-3 bg-black text-white rounded-xl font-black uppercase text-sm flex items-center justify-center gap-2 active:scale-95">
+                className="w-full py-3.5 bg-black text-white rounded-xl font-black uppercase text-sm flex items-center justify-center gap-2 active:scale-95">
                 <Bell size={16} /> Send Reschedule Message
               </button>
             )}
             {(order.status === DeliveryStatus.FAILED || order.status === DeliveryStatus.PENDING_RESCHEDULE) && order.failureNotificationSent && (
-              <p className="text-xs font-black text-green-600">✓ Reschedule message sent</p>
+              <p className="text-center text-xs font-black text-green-600 py-2">✓ Reschedule message sent</p>
             )}
           </div>
         )}
 
-      </div>
+      </div>{/* end scroll */}
 
-      {/* Modals */}
-      {showFailFlow && <FailedDeliveryFlow order={order} currentUser={currentUser} onSubmit={handleFailSubmit} onCancel={() => setShowFailFlow(false)} />}
-      {showReschedule && pendingFailure && <RescheduleModal order={order} failureReason={pendingFailure.reason} driverNotes={pendingFailure.notes} photo={pendingFailure.photo} onAutoReschedule={handleAutoReschedule} onManualReschedule={handleManualReschedule} />}
-
+      {/* ── MODALS ── */}
+      {showFailFlow && (
+        <FailedDeliveryFlow order={order} currentUser={currentUser} onSubmit={handleFailSubmit} onCancel={() => setShowFailFlow(false)} />
+      )}
+      {showReschedule && pendingFailure && (
+        <RescheduleModal order={order} failureReason={pendingFailure.reason} driverNotes={pendingFailure.notes} photo={pendingFailure.photo} onAutoReschedule={handleAutoReschedule} onManualReschedule={handleManualReschedule} />
+      )}
       {showNotifyPreview && (
         <div className="fixed inset-0 bg-black/80 z-[200] flex items-end p-4">
-          <div className="w-full bg-white rounded-3xl p-5 space-y-4">
+          <div className="w-full bg-white rounded-2xl p-5 space-y-3">
             <div className="flex items-center justify-between">
               <p className="font-black uppercase text-sm">Preview Message</p>
               <button onClick={() => setShowNotifyPreview(null)}><X size={20} /></button>
             </div>
-            <div className="bg-stone-50 rounded-xl p-4">
+            <div className="bg-stone-50 rounded-xl p-3">
               <p className="text-sm text-stone-700 leading-relaxed">{notifyPreviewText}</p>
             </div>
             {notifySent
-              ? <p className="text-center font-black text-green-600 py-3">✓ Sent!</p>
+              ? <p className="text-center font-black text-green-600 py-2">✓ Sent!</p>
               : <button onClick={handleSend} disabled={isSending}
-                  className="w-full py-5 bg-black text-white rounded-xl font-black uppercase tracking-wider text-lg flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50">
-                  {isSending ? <RefreshCw size={20} className="animate-spin" /> : <Send size={20} />} SEND
+                  className="w-full py-4 bg-black text-white rounded-xl font-black uppercase text-base flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50">
+                  {isSending ? <RefreshCw size={18} className="animate-spin" /> : <Send size={18} />} SEND
                 </button>
             }
           </div>
         </div>
       )}
-
-      {isSigning && <SignaturePad onSave={(sig) => { setSigData(sig); setIsSigning(false); }} onCancel={() => setIsSigning(false)} />}
+      {isSigning && (
+        <SignaturePad onSave={(sig) => { setSigData(sig); setIsSigning(false); }} onCancel={() => setIsSigning(false)} />
+      )}
     </div>
   );
 };
