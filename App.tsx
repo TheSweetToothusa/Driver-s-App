@@ -220,11 +220,11 @@ const OrderCard: React.FC<{ order: Delivery; role: AppRole; onTap: () => void; i
         <p className="text-lg font-black text-stone-900 leading-tight">{recipientName}</p>
         {/* Address */}
         <p className="text-sm text-stone-500 leading-tight">{order.address.street}, {order.address.city} {order.address.zip}</p>
-        {/* Instructions if present */}
+        {/* Instructions — full amber bar, impossible to miss */}
         {order.deliveryInstructions && (
-          <div className="flex items-start gap-1.5 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
-            <AlertTriangle size={11} className="text-amber-600 shrink-0 mt-0.5" />
-            <p className="text-xs font-black text-amber-800 leading-snug">{order.deliveryInstructions}</p>
+          <div className="flex items-center gap-2 bg-amber-400 rounded-lg px-3 py-2 -mx-0.5">
+            <AlertTriangle size={14} className="text-amber-900 shrink-0" />
+            <p className="text-sm font-black text-amber-950 leading-snug">{order.deliveryInstructions}</p>
           </div>
         )}
         {/* Product + price */}
@@ -571,11 +571,14 @@ const OrderDetail: React.FC<{
       {/* ── SCROLLABLE CONTENT ── */}
       <div className="flex-1 overflow-y-auto">
 
-        {/* ── INSTRUCTIONS — amber banner if present ── */}
+        {/* ── INSTRUCTIONS — hard to miss ── */}
         {order.deliveryInstructions && (
-          <div className="mx-3 mt-3 bg-amber-400 rounded-xl px-4 py-3 flex gap-2 items-start">
-            <AlertTriangle size={15} className="text-amber-900 shrink-0 mt-0.5" />
-            <p className="font-black text-amber-950 text-sm leading-snug">{order.deliveryInstructions}</p>
+          <div className="mx-3 mt-3 bg-amber-400 rounded-xl px-4 py-4 flex gap-3 items-start">
+            <AlertTriangle size={22} className="text-amber-900 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-[9px] font-black uppercase text-amber-800 tracking-widest mb-0.5">Special Instructions</p>
+              <p className="font-black text-amber-950 text-base leading-snug">{order.deliveryInstructions}</p>
+            </div>
           </div>
         )}
 
@@ -956,7 +959,10 @@ const OrdersView: React.FC<OrdersViewProps> = ({
                     <p className="text-[10px] font-black text-stone-600 truncate">{order.items[0].name} — ${order.items[0].price.toFixed(2)}</p>
                   )}
                   {order.deliveryInstructions && (
-                    <p className="text-[9px] text-amber-700 font-black truncate">⚠ {order.deliveryInstructions}</p>
+                    <div className="flex items-center gap-1 mt-0.5 bg-amber-100 rounded px-1.5 py-0.5">
+                      <AlertTriangle size={9} className="text-amber-700 shrink-0" />
+                      <p className="text-[9px] text-amber-800 font-black leading-tight">{order.deliveryInstructions}</p>
+                    </div>
                   )}
                 </div>
                 {/* Driver */}
@@ -1070,7 +1076,10 @@ const OrdersView: React.FC<OrdersViewProps> = ({
                     <p className="text-xs text-stone-400 truncate">{order.items[0].name} — ${(order.items[0].price * order.items[0].quantity).toFixed(2)}</p>
                   )}
                   {order.deliveryInstructions && (
-                    <p className="text-[10px] font-black text-amber-700 mt-0.5 flex items-center gap-1"><AlertTriangle size={9} />  {order.deliveryInstructions}</p>
+                    <div className="flex items-center gap-1.5 bg-amber-400 rounded-lg px-2.5 py-1.5 mt-1">
+                      <AlertTriangle size={12} className="text-amber-900 shrink-0" />
+                      <p className="text-xs font-black text-amber-950 leading-snug">{order.deliveryInstructions}</p>
+                    </div>
                   )}
                 </div>
                 <ChevronRight size={16} className="text-stone-300 shrink-0" />
