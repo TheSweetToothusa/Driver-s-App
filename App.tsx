@@ -876,6 +876,218 @@ const OrderDetail: React.FC<{
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+// ORDERS VIEW — Admin: full table. Driver: date-nav list.
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface OrdersViewProps {
+  deliveries: Delivery[];
+  isAdmin: boolean;
+  currentUser: UserAccount;
+  isSameDayWindow: boolean;
+  pendingCount: number;
+  inTransitCount: number;
+  deliveredTodayCount: number;
+  onSelectOrder: (o: Delivery) => void;
+}
+
+const OrdersView: React.FC<OrdersViewProps> = ({
+  deliveries, isAdmin, currentUser, isSameDayWindow,
+  pendingCount, inTransitCount, deliveredTodayCount, onSelectOrder
+}) => {
+  const today = new Date().toISOString().split('T')[0];
+  const [driverDate, setDriverDate] = useState(today);
+  const [activeTab, setActiveTab] = useState<'active' | 'done'>('active');
+  const [search, setSearch] = useState('');
+
+  const shiftDate = (days: number) => {
+    const d = new Date(driverDate + 'T12:00:00');
+    d.setDate(d.getDate() + days);
+    setDriverDate(d.toISOString().split('T')[0]);
+  };
+
+  const fmtDate = (iso: string) => new Date(iso + 'T12:00:00').toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
+
+  // ── ADMIN VIEW ──
+  if (isAdmin) {
+    const sorted = [...deliveries].sort((a, b) => b.id.localeCompare(a.id)); // newest first
+    const filtered = sorted.filter(d => {
+      if (!search) return true;
+      const q = search.toLowerCase();
+      return (
+        d.orderNumber?.toLowerCase().includes(q) ||
+        d.customer?.name?.toLowerCase().includes(q) ||
+        d.address?.street?.toLowerCase().includes(q) ||
+        d.address?.city?.toLowerCase().includes(q) ||
+        d.giftReceiverName?.toLowerCase().includes(q)
+      );
+    });
+
+    const unassignedCount = deliveries.filter(d => !d.driverId || d.status === DeliveryStatus.PENDING).length;
+
+    return (
+      <div className="flex flex-col h-full">
+        {/* Stats bar */}
+        {isSameDayWindow && (
+          <div className="mx-0 px-4 py-2 bg-amber-400 flex items-center gap-2">
+            <Clock size={13} className="text-amber-900 shrink-0" />
+            <p className="text-[11px] font-black text-amber-900 uppercase">Same-day window open — closes at 2:00 PM</p>
+          </div>
+        )}
+        <div className="grid grid-cols-4 border-b border-stone-100">
+          {[
+            { label: 'Unassigned', val: unassignedCount, color: 'text-red-600' },
+            { label: 'Assigned', val: deliveries.filter(d => d.status === DeliveryStatus.ASSIGNED).length, color: 'text-blue-600' },
+            { label: 'Out for Delivery', val: inTransitCount, color: 'text-black' },
+            { label: 'Done Today', val: deliveredTodayCount, color: 'text-green-600' },
+          ].map(s => (
+            <div key={s.label} className="py-3 text-center border-r border-stone-100 last:border-0">
+              <p className={`text-xl font-black ${s.color}`}>{s.val}</p>
+              <p className="text-[8px] font-black uppercase text-stone-400 leading-tight px-1">{s.label}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Search */}
+        <div className="px-4 py-2 border-b border-stone-100">
+          <input
+            value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Search order #, customer, address..."
+            className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-black"
+          />
+        </div>
+
+        {/* Table header */}
+        <div className="grid grid-cols-[80px_1fr_100px_90px] bg-stone-50 border-b border-stone-200 px-4 py-2">
+          <p className="text-[9px] font-black uppercase text-stone-500">Order #</p>
+          <p className="text-[9px] font-black uppercase text-stone-500">Customer / Address</p>
+          <p className="text-[9px] font-black uppercase text-stone-500">Driver</p>
+          <p className="text-[9px] font-black uppercase text-stone-500 text-right">Status</p>
+        </div>
+
+        {/* Rows */}
+        <div className="flex-1 overflow-y-auto">
+          {filtered.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20">
+              <Package size={32} className="text-stone-200 mb-2" />
+              <p className="text-xs font-black uppercase text-stone-300">No orders found</p>
+            </div>
+          ) : filtered.map((order, idx) => {
+            const statusDot: Record<string, string> = {
+              PENDING: 'bg-stone-400', ASSIGNED: 'bg-blue-500', IN_TRANSIT: 'bg-black',
+              DELIVERED: 'bg-green-500', FAILED: 'bg-red-500',
+              SECOND_ATTEMPT: 'bg-stone-700', PENDING_RESCHEDULE: 'bg-amber-500',
+            };
+            const dot = statusDot[order.status] || 'bg-stone-300';
+            const label = STATUS_CONFIG[order.status]?.label || order.status;
+            return (
+              <div key={order.id} onClick={() => onSelectOrder(order)}
+                className={`grid grid-cols-[80px_1fr_100px_90px] px-4 py-3 border-b border-stone-50 cursor-pointer active:bg-stone-50 transition-all ${idx % 2 === 0 ? 'bg-white' : 'bg-stone-50/30'}`}>
+                <div>
+                  <p className="text-sm font-black text-black">#{order.orderNumber?.replace(/^#+/, '') || order.id}</p>
+                  <p className="text-[9px] text-stone-400">{order.deliveryDate ? fmtDate(order.deliveryDate) : '—'}</p>
+                </div>
+                <div className="pr-2 min-w-0">
+                  <p className="text-sm font-bold text-stone-900 truncate">{order.giftReceiverName || order.customer?.name}</p>
+                  <p className="text-[10px] text-stone-400 truncate">{order.address?.street}, {order.address?.city}</p>
+                  {order.deliveryInstructions && (
+                    <p className="text-[9px] text-amber-700 font-black truncate">⚠ {order.deliveryInstructions}</p>
+                  )}
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-stone-700">{order.driverName || <span className="text-red-500 font-black">Unassigned</span>}</p>
+                </div>
+                <div className="flex items-start justify-end">
+                  <div className="flex items-center gap-1">
+                    <span className={`w-2 h-2 rounded-full shrink-0 ${dot}`} />
+                    <span className="text-[9px] font-black text-stone-600 text-right leading-tight">{label}</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  // ── DRIVER VIEW ──
+  const myOrders = deliveries.filter(d => {
+    const dd = (d.deliveryDate || today).split('T')[0];
+    return dd === driverDate && (d.driverId === currentUser.id || d.driverId === 'manager_1' && currentUser.role === 'MANAGER');
+  });
+  const active = myOrders.filter(d => d.status !== DeliveryStatus.DELIVERED && d.status !== DeliveryStatus.CLOSED);
+  const done = myOrders.filter(d => d.status === DeliveryStatus.DELIVERED || d.status === DeliveryStatus.CLOSED);
+  const shown = activeTab === 'active' ? active : done;
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Date navigator */}
+      <div className="bg-white border-b border-stone-100 px-4 py-3">
+        <div className="flex items-center justify-between mb-2">
+          <button onClick={() => shiftDate(-1)} className="w-10 h-10 rounded-full bg-stone-100 flex items-center justify-center active:scale-95">
+            <ChevronLeft size={20} />
+          </button>
+          <div className="text-center">
+            <p className="text-lg font-black text-stone-900">{fmtDate(driverDate)}</p>
+            {driverDate === today && <p className="text-[10px] font-black text-black uppercase tracking-widest">TODAY</p>}
+          </div>
+          <button onClick={() => shiftDate(1)} className="w-10 h-10 rounded-full bg-stone-100 flex items-center justify-center active:scale-95">
+            <ChevronRight size={20} />
+          </button>
+        </div>
+        {/* Active / Done tabs */}
+        <div className="flex rounded-xl overflow-hidden border border-stone-200">
+          <button onClick={() => setActiveTab('active')}
+            className={`flex-1 py-2 font-black text-xs uppercase transition-all ${activeTab === 'active' ? 'bg-black text-white' : 'bg-white text-stone-400'}`}>
+            Active ({active.length})
+          </button>
+          <button onClick={() => setActiveTab('done')}
+            className={`flex-1 py-2 font-black text-xs uppercase transition-all ${activeTab === 'done' ? 'bg-black text-white' : 'bg-white text-stone-400'}`}>
+            Done ({done.length}/{myOrders.length})
+          </button>
+        </div>
+      </div>
+
+      {/* Driver order list */}
+      <div className="flex-1 overflow-y-auto">
+        {shown.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-24">
+            <Package size={36} className="text-stone-200 mb-3" />
+            <p className="text-xs font-black uppercase text-stone-300">
+              {activeTab === 'active' ? 'No active deliveries' : 'None completed yet'}
+            </p>
+          </div>
+        ) : shown.map((order, idx) => {
+          const statusDot: Record<string, string> = {
+            ASSIGNED: 'bg-blue-500', IN_TRANSIT: 'bg-black', DELIVERED: 'bg-green-500',
+            FAILED: 'bg-red-500', SECOND_ATTEMPT: 'bg-stone-700',
+          };
+          const dot = statusDot[order.status] || 'bg-stone-400';
+          return (
+            <div key={order.id} onClick={() => onSelectOrder(order)}
+              className="flex items-center gap-4 px-4 py-4 border-b border-stone-100 cursor-pointer active:bg-stone-50 transition-all">
+              <p className="text-xl font-black text-stone-300 w-6 shrink-0">{idx + 1}</p>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-0.5">
+                  <p className="text-[11px] font-black text-stone-500">#{order.orderNumber?.replace(/^#+/, '') || order.id}</p>
+                  <span className={`w-2 h-2 rounded-full shrink-0 ${dot}`} />
+                </div>
+                <p className="text-base font-black text-stone-900 leading-tight">{order.giftReceiverName || order.customer?.name}</p>
+                <p className="text-sm text-stone-500">{order.address?.street}, {order.address?.city}</p>
+                {order.deliveryInstructions && (
+                  <p className="text-[10px] font-black text-amber-700 mt-0.5">⚠ {order.deliveryInstructions}</p>
+                )}
+              </div>
+              <ChevronRight size={18} className="text-stone-300 shrink-0" />
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 // SCHEDULE VIEW
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -1547,8 +1759,15 @@ export default function App() {
     setIsLoading(true);
     try {
       const fetched = await getDeliveries();
-      setDeliveries(fetched);
-      setDataSource(fetched.some((d: Delivery) => d.id === '33989') ? 'MOCK' : 'LIVE');
+      // Auto-assign unassigned orders to Katie (default driver)
+      const withDefaults = fetched.map((d: Delivery) => {
+        if (!d.driverId || d.driverId === '') {
+          return { ...d, driverId: 'manager_1', driverName: 'Katie', status: d.status === DeliveryStatus.PENDING ? DeliveryStatus.ASSIGNED : d.status };
+        }
+        return d;
+      });
+      setDeliveries(withDefaults);
+      setDataSource(withDefaults.some((d: Delivery) => d.id === '33989') ? 'MOCK' : 'LIVE');
       setLastSync(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
     } catch { setDataSource('ERROR'); }
     finally { setIsLoading(false); }
@@ -1652,71 +1871,16 @@ export default function App() {
 
         {/* ── ORDERS TAB ── */}
         {tab === 'ORDERS' && (
-          <div>
-            {/* Same-day banner */}
-            {isSameDayWindow && (
-              <div className="mx-4 mt-4 p-3 bg-amber-400 rounded-2xl flex items-center gap-2">
-                <Clock size={16} className="text-black shrink-0" />
-                <p className="text-[11px] font-black text-black uppercase">Same-day window open — cutoff at 2:00 PM</p>
-              </div>
-            )}
-
-            {/* Quick stats */}
-            <div className="grid grid-cols-3 gap-3 px-4 mt-4">
-              <div className="bg-stone-50 rounded-2xl p-3 text-center">
-                <p className="text-2xl font-black text-stone-900">{pendingCount}</p>
-                <p className="text-[9px] font-black uppercase text-stone-400">Pending</p>
-              </div>
-              <div className="bg-blue-50 rounded-2xl p-3 text-center">
-                <p className="text-2xl font-black text-blue-700">{inTransitCount}</p>
-                <p className="text-[9px] font-black uppercase text-blue-400">In Transit</p>
-              </div>
-              <div className="bg-green-50 rounded-2xl p-3 text-center">
-                <p className="text-2xl font-black text-green-700">{deliveredTodayCount}</p>
-                <p className="text-[9px] font-black uppercase text-green-400">Done Today</p>
-              </div>
-            </div>
-
-            {/* All orders — newest/most urgent first */}
-            <div className="mt-4">
-              {(() => {
-                const sorted = [...deliveries].sort((a, b) => {
-                  // Priority: IN_TRANSIT > PENDING/ASSIGNED > SECOND_ATTEMPT > FAILED > PENDING_RESCHEDULE > DELIVERED
-                  const rank: Record<string,number> = {
-                    IN_TRANSIT: 0, PENDING: 1, ASSIGNED: 1,
-                    SECOND_ATTEMPT: 2, FAILED: 3,
-                    PENDING_RESCHEDULE: 4, DELIVERED: 5, CLOSED: 6
-                  };
-                  const ra = rank[a.status] ?? 5;
-                  const rb = rank[b.status] ?? 5;
-                  if (ra !== rb) return ra - rb;
-                  // Within same status, urgent first
-                  if (a.priority === 'Urgent' && b.priority !== 'Urgent') return -1;
-                  if (b.priority === 'Urgent' && a.priority !== 'Urgent') return 1;
-                  return 0;
-                });
-
-                // Drivers only see their orders + unassigned
-                const visible = isAdmin
-                  ? sorted
-                  : sorted.filter(d => !d.driverId || d.driverId === currentUser.id);
-
-                if (visible.length === 0) {
-                  return (
-                    <div className="flex flex-col items-center justify-center py-24">
-                      <Package size={40} className="text-stone-200 mb-3" />
-                      <p className="text-[11px] font-black uppercase text-stone-300">No orders yet</p>
-                      <p className="text-[10px] text-stone-300 mt-1">Pull down to refresh</p>
-                    </div>
-                  );
-                }
-
-                return visible.map(order => (
-                  <OrderCard key={order.id} order={order} role={currentUser.role} onTap={() => setSelectedOrder(order)} />
-                ));
-              })()}
-            </div>
-          </div>
+          <OrdersView
+            deliveries={deliveries}
+            isAdmin={isAdmin}
+            currentUser={currentUser}
+            isSameDayWindow={isSameDayWindow}
+            pendingCount={pendingCount}
+            inTransitCount={inTransitCount}
+            deliveredTodayCount={deliveredTodayCount}
+            onSelectOrder={setSelectedOrder}
+          />
         )}
 
         {/* ── SCHEDULE TAB ── */}
