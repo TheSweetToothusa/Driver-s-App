@@ -1002,12 +1002,142 @@ const DriverPayCard: React.FC<{
   );
 };
 
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MESSAGES PANEL — templates + sent history
+// ─────────────────────────────────────────────────────────────────────────────
+
+const MessagesPanel: React.FC = () => {
+  const [subTab, setSubTab] = useState<'HISTORY' | 'TEMPLATES'>('HISTORY');
+  const [messages, setMessages] = useState<any[]>([]);
+  const [templates, setTemplates] = useState<MessageTemplate[]>([]);
+  const [loadingMsgs, setLoadingMsgs] = useState(true);
+  const [editingTemplate, setEditingTemplate] = useState<string | null>(null);
+  const [templateEdits, setTemplateEdits] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    fetch('/api/messages').then(r => r.json()).then(d => { setMessages(d.messages || []); setLoadingMsgs(false); });
+    fetch('/api/templates').then(r => r.json()).then(d => setTemplates(d.templates || []));
+  }, []);
+
+  const handleSaveTemplate = async (id: string) => {
+    const body = templateEdits[id]; if (!body) return;
+    const res = await fetch(`/api/templates/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ body }) });
+    const data = await res.json();
+    setTemplates(prev => prev.map(t => t.id === id ? data.template : t));
+    setEditingTemplate(null);
+  };
+
+  return (
+    <div className="space-y-4 p-5">
+      {/* Sub-tab toggle */}
+      <div className="flex gap-2 bg-stone-100 rounded-2xl p-1">
+        <button onClick={() => setSubTab('HISTORY')}
+          className={`flex-1 py-3 rounded-xl font-black uppercase text-[10px] transition-all ${subTab === 'HISTORY' ? 'bg-white text-black shadow-sm' : 'text-stone-400'}`}>
+          History
+        </button>
+        <button onClick={() => setSubTab('TEMPLATES')}
+          className={`flex-1 py-3 rounded-xl font-black uppercase text-[10px] transition-all ${subTab === 'TEMPLATES' ? 'bg-white text-black shadow-sm' : 'text-stone-400'}`}>
+          Templates
+        </button>
+      </div>
+
+      {/* HISTORY */}
+      {subTab === 'HISTORY' && (
+        <div className="space-y-3">
+          <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest">Most recent first • Max 500 stored</p>
+          {loadingMsgs && (
+            <div className="flex items-center justify-center py-12">
+              <RefreshCw size={22} className="animate-spin text-stone-300" />
+            </div>
+          )}
+          {!loadingMsgs && messages.length === 0 && (
+            <div className="text-center py-12">
+              <MessageCircle size={32} className="mx-auto text-stone-200 mb-2" />
+              <p className="text-[11px] font-black uppercase text-stone-300">No messages sent yet</p>
+            </div>
+          )}
+          {messages.map((msg: any) => (
+            <div key={msg.id} className="bg-white border border-stone-100 rounded-[24px] shadow-sm overflow-hidden">
+              {/* Header */}
+              <div className="flex items-center justify-between px-5 py-4 border-b border-stone-50">
+                <div className="flex items-center gap-2">
+                  <span className={`text-[9px] font-black uppercase px-2.5 py-1 rounded-full ${msg.type === 'SUCCESS' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
+                    {msg.type === 'SUCCESS' ? 'Delivered' : 'Failed'}
+                  </span>
+                  <span className={`text-[9px] font-black uppercase px-2.5 py-1 rounded-full bg-stone-100 text-stone-500`}>
+                    {msg.channel}
+                  </span>
+                </div>
+                <span className="text-[9px] font-black text-stone-400">
+                  {msg.sentAt ? new Date(msg.sentAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' + new Date(msg.sentAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                </span>
+              </div>
+              {/* Details */}
+              <div className="px-5 py-3 space-y-1">
+                <p className="font-black text-stone-900 text-sm">{msg.customerName}</p>
+                <p className="text-[10px] font-black text-stone-400 uppercase">Order #{msg.orderNumber} · Driver: {msg.driverName}</p>
+                <p className="text-[10px] text-stone-400">{msg.channel === 'SMS' ? '📱' : '✉️'} {msg.to}</p>
+              </div>
+              {/* Message body — collapsible */}
+              <details className="px-5 pb-4">
+                <summary className="text-[10px] font-black uppercase text-stone-400 cursor-pointer select-none">View message</summary>
+                <p className="mt-2 text-xs text-stone-600 leading-relaxed bg-stone-50 rounded-xl p-3 whitespace-pre-line">{msg.message}</p>
+              </details>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* TEMPLATES */}
+      {subTab === 'TEMPLATES' && (
+        <div className="space-y-5">
+          <div className="p-4 bg-amber-50 rounded-2xl border border-amber-100">
+            <p className="text-xs font-black text-amber-700 mb-2">Available variables:</p>
+            <div className="flex flex-wrap gap-1">
+              {['{{customer_name}}', '{{order_number}}', '{{driver_name}}', '{{address}}', '{{failure_reason}}', '{{driver_notes}}', '{{katie_phone}}'].map(v => (
+                <span key={v} className="text-[10px] font-black bg-white border border-amber-200 rounded-lg px-2 py-1 text-amber-700">{v}</span>
+              ))}
+            </div>
+          </div>
+          {templates.map(t => (
+            <div key={t.id} className="p-5 bg-white border border-stone-100 rounded-[28px] shadow-sm space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="font-black text-stone-900">{t.label}</p>
+                <span className={`text-[9px] font-black uppercase px-2 py-1 rounded-full ${t.id === 'SUCCESS' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>{t.id}</span>
+              </div>
+              {editingTemplate === t.id ? (
+                <>
+                  <textarea value={templateEdits[t.id] ?? t.body} onChange={e => setTemplateEdits(p => ({ ...p, [t.id]: e.target.value }))} rows={6}
+                    className="w-full bg-stone-50 border border-stone-200 rounded-2xl px-4 py-3 text-sm font-medium outline-none focus:border-black resize-none" style={{ minHeight: '120px' }} />
+                  <div className="flex gap-2">
+                    <button onClick={() => handleSaveTemplate(t.id)} className="flex-1 py-3 bg-black text-white rounded-2xl font-black uppercase text-xs">Save</button>
+                    <button onClick={() => setEditingTemplate(null)} className="flex-1 py-3 bg-stone-100 text-stone-500 rounded-2xl font-black uppercase text-xs">Cancel</button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm text-stone-600 leading-relaxed bg-stone-50 rounded-xl p-3 whitespace-pre-line">{t.body}</p>
+                  <button onClick={() => { setEditingTemplate(t.id); setTemplateEdits(p => ({ ...p, [t.id]: t.body })); }}
+                    className="w-full py-3 bg-stone-100 text-stone-700 rounded-2xl font-black uppercase text-xs flex items-center justify-center gap-2">
+                    <Edit3 size={14} /> Edit Template
+                  </button>
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // ADMIN PANEL
 // ─────────────────────────────────────────────────────────────────────────────
 
 const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: UserAccount[]; setAllUsers: React.Dispatch<React.SetStateAction<UserAccount[]>>; }> = ({ role, deliveries, allUsers, setAllUsers }) => {
-  const [activeTab, setActiveTab] = useState<'DRIVERS' | 'RESCHEDULE' | 'TEMPLATES' | 'FEES'>('DRIVERS');
+  const [activeTab, setActiveTab] = useState<'DRIVERS' | 'RESCHEDULE' | 'MESSAGES' | 'FEES'>('DRIVERS');
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
   const [newDriver, setNewDriver] = useState({ name: '', pin: '', phone: '', vehicle: '' });
   const [addError, setAddError] = useState('');
@@ -1029,7 +1159,7 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
 
   const handleAddDriver = async () => {
     setAddError(''); setAddSuccess('');
-    if (!newDriver.name || !newDriver.pin) { setAddError('Name and PIN required'); return; }
+    if (!newDriver.name || !newDriver.pin || !newDriver.phone) { setAddError('Name, PIN, and phone number are required'); return; }
     if (newDriver.pin.length !== 4) { setAddError('PIN must be 4 digits'); return; }
     const res = await fetch('/api/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...newDriver, role: 'DRIVER' }) });
     const data = await res.json();
@@ -1067,7 +1197,7 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
     <div className="flex flex-col h-full bg-white">
       <div className="sticky top-0 bg-white z-10 border-b border-stone-100 px-4 pt-4 pb-0">
         <div className="flex gap-1 bg-stone-100 rounded-2xl p-1 overflow-x-auto">
-          {(['DRIVERS', 'RESCHEDULE', 'TEMPLATES', 'FEES'] as const).map(tab => (
+          {(['DRIVERS', 'RESCHEDULE', 'MESSAGES', 'FEES'] as const).map(tab => (
             <button key={tab} onClick={() => setActiveTab(tab)}
               className={`flex-1 py-2.5 rounded-xl font-black uppercase text-[9px] whitespace-nowrap transition-all ${activeTab === tab ? 'bg-white text-black shadow-sm' : 'text-stone-400'}`}
             >{tab}</button>
@@ -1083,7 +1213,7 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
               <p className="font-black uppercase text-sm text-stone-800 flex items-center gap-2"><UserPlus size={16} /> Add Driver</p>
               <input type="text" placeholder="Name" value={newDriver.name} onChange={e => setNewDriver(p => ({ ...p, name: e.target.value }))} className="w-full bg-stone-50 border border-stone-100 rounded-2xl px-4 py-3 text-sm font-medium outline-none focus:border-black" />
               <input type="text" placeholder="4-digit PIN" maxLength={4} inputMode="numeric" value={newDriver.pin} onChange={e => setNewDriver(p => ({ ...p, pin: e.target.value.replace(/\D/g, '').slice(0, 4) }))} className="w-full bg-stone-50 border border-stone-100 rounded-2xl px-4 py-3 text-sm font-medium outline-none focus:border-black" />
-              <input type="tel" placeholder="Phone (optional)" value={newDriver.phone} onChange={e => setNewDriver(p => ({ ...p, phone: e.target.value }))} className="w-full bg-stone-50 border border-stone-100 rounded-2xl px-4 py-3 text-sm font-medium outline-none focus:border-black" />
+              <input type="tel" placeholder="Phone number *required*" value={newDriver.phone} onChange={e => setNewDriver(p => ({ ...p, phone: e.target.value }))} className="w-full bg-stone-50 border border-stone-100 rounded-2xl px-4 py-3 text-sm font-medium outline-none focus:border-black" />
               <input type="text" placeholder="Vehicle (optional)" value={newDriver.vehicle} onChange={e => setNewDriver(p => ({ ...p, vehicle: e.target.value }))} className="w-full bg-stone-50 border border-stone-100 rounded-2xl px-4 py-3 text-sm font-medium outline-none focus:border-black" />
               {addError && <p className="text-xs font-black text-red-500">{addError}</p>}
               {addSuccess && <p className="text-xs font-black text-green-600">{addSuccess}</p>}
@@ -1114,7 +1244,9 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
 
         {activeTab === 'RESCHEDULE' && <PendingRescheduleQueue allUsers={allUsers} />}
 
-        {activeTab === 'TEMPLATES' && (
+        {activeTab === 'MESSAGES' && <MessagesPanel />}
+
+        {false && activeTab === 'TEMPLATES_REMOVED' && (
           <div className="space-y-5">
             <div className="p-4 bg-amber-50 rounded-2xl border border-amber-100">
               <p className="text-xs font-black text-amber-700 mb-2">Available variables:</p>

@@ -24,10 +24,12 @@ const POD_STORAGE_PATH = path.join(__dirname, "pod_data.json");
 const USERS_PATH = path.join(__dirname, "users.json");
 const TEMPLATES_PATH = path.join(__dirname, "templates.json");
 const RESCHEDULE_PATH = path.join(__dirname, "reschedule_queue.json");
+const MESSAGE_LOG_PATH = path.join(__dirname, "message_log.json");
 
 // --- Initialize storage ---
 if (!fs.existsSync(POD_STORAGE_PATH)) fs.writeFileSync(POD_STORAGE_PATH, JSON.stringify({}));
 if (!fs.existsSync(RESCHEDULE_PATH)) fs.writeFileSync(RESCHEDULE_PATH, JSON.stringify([]));
+if (!fs.existsSync(MESSAGE_LOG_PATH)) fs.writeFileSync(MESSAGE_LOG_PATH, JSON.stringify([]));
 
 if (!fs.existsSync(USERS_PATH)) {
   fs.writeFileSync(USERS_PATH, JSON.stringify([
@@ -57,6 +59,8 @@ function writeUsers(u: any[]) { fs.writeFileSync(USERS_PATH, JSON.stringify(u, n
 function readTemplates() { return JSON.parse(fs.readFileSync(TEMPLATES_PATH, 'utf-8')); }
 function readRescheduleQueue() { return JSON.parse(fs.readFileSync(RESCHEDULE_PATH, 'utf-8')); }
 function writeRescheduleQueue(q: any[]) { fs.writeFileSync(RESCHEDULE_PATH, JSON.stringify(q, null, 2)); }
+function readMessageLog() { return JSON.parse(fs.readFileSync(MESSAGE_LOG_PATH, 'utf-8')); }
+function appendMessageLog(entry: any) { const log = readMessageLog(); log.unshift(entry); fs.writeFileSync(MESSAGE_LOG_PATH, JSON.stringify(log.slice(0, 500), null, 2)); }
 
 function isWithinSendingHours(): boolean {
   const h = new Date().getHours();
@@ -368,8 +372,27 @@ async function startServer() {
       if (!pod[order.id]) pod[order.id] = {};
       pod[order.id][type === 'SUCCESS' ? 'successNotificationSent' : 'failureNotificationSent'] = true;
       fs.writeFileSync(POD_STORAGE_PATH, JSON.stringify(pod, null, 2));
+      // Log the message
+      appendMessageLog({
+        id: `msg_${Date.now()}`,
+        sentAt: new Date().toISOString(),
+        type,
+        channel,
+        to: phone || email || '',
+        customerName: order.customer?.name || '',
+        orderNumber: order.orderNumber || '',
+        driverName: order.driverName || '',
+        message,
+        orderId: order.id
+      });
     }
     res.json({ sent, channel, message });
+  });
+
+  // ── MESSAGE LOG ─────────────────────────────────────────────────────────────
+
+  app.get("/api/messages", (_req, res) => {
+    res.json({ messages: readMessageLog() });
   });
 
   // ── STATIC / VITE ───────────────────────────────────────────────────────────
