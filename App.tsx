@@ -1142,27 +1142,70 @@ const ScheduleView: React.FC<{
     return list;
   }, [deliveries]);
 
+  const shiftDay = (n: number) => {
+    const d = new Date(selectedDate + 'T12:00:00');
+    d.setDate(d.getDate() + n);
+    setSelectedDate(d.toISOString().split('T')[0]);
+  };
+  const todayStr = new Date().toISOString().split('T')[0];
+  const fmtSelectedDate = (iso: string) => {
+    const d = new Date(iso + 'T12:00:00');
+    const isToday = iso === todayStr;
+    const isTomorrow = iso === new Date(Date.now()+86400000).toISOString().split('T')[0];
+    const isYesterday = iso === new Date(Date.now()-86400000).toISOString().split('T')[0];
+    const label = isToday ? 'Today' : isTomorrow ? 'Tomorrow' : isYesterday ? 'Yesterday' : '';
+    return { day: d.toLocaleDateString('en-US',{weekday:'short'}), date: d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}), label };
+  };
+  const fmt = fmtSelectedDate(selectedDate);
+
   return (
     <div className="flex flex-col h-full bg-white">
-      <div className="sticky top-0 bg-white z-10 border-b border-stone-100 p-4 space-y-3">
+      <div className="sticky top-0 bg-white z-10 border-b border-stone-200 px-4 pt-3 pb-3 space-y-3">
+        {/* View mode tabs */}
         <div className="flex gap-1.5">
           {(['DAY', 'WEEK', 'MONTH', 'CUSTOM'] as ViewMode[]).map(m => (
             <button key={m} onClick={() => setViewMode(m)}
-              className={`flex-1 py-2.5 rounded-xl font-black uppercase text-[10px] transition-all ${viewMode === m ? 'bg-black text-white' : 'bg-stone-100 text-stone-500'}`}
+              className={`flex-1 py-2 rounded-lg font-black uppercase text-[10px] transition-all ${viewMode === m ? 'bg-black text-white' : 'bg-stone-100 text-stone-500'}`}
             >{m}</button>
           ))}
         </div>
-        {viewMode === 'CUSTOM' ? (
+        {/* Date navigation */}
+        {viewMode === 'DAY' ? (
           <div className="flex items-center gap-2">
-            <input type="date" value={customStart} onChange={e => setCustomStart(e.target.value)} className="flex-1 bg-stone-50 border border-stone-100 rounded-xl px-3 py-2 text-xs font-black outline-none" />
-            <span className="text-stone-400 font-black text-xs">–</span>
-            <input type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)} className="flex-1 bg-stone-50 border border-stone-100 rounded-xl px-3 py-2 text-xs font-black outline-none" />
+            <button onClick={() => shiftDay(-1)} className="w-10 h-10 bg-stone-100 rounded-xl flex items-center justify-center active:bg-stone-200 shrink-0">
+              <ChevronLeft size={20} className="text-stone-700" />
+            </button>
+            <div className="flex-1 text-center">
+              {fmt.label && <p className="text-[10px] font-black uppercase text-black tracking-widest">{fmt.label}</p>}
+              <p className="text-base font-black text-stone-900">{fmt.day}, {fmt.date}</p>
+            </div>
+            <button onClick={() => shiftDay(1)} className="w-10 h-10 bg-stone-100 rounded-xl flex items-center justify-center active:bg-stone-200 shrink-0">
+              <ChevronRight size={20} className="text-stone-700" />
+            </button>
+          </div>
+        ) : viewMode === 'CUSTOM' ? (
+          <div className="flex items-center gap-2">
+            <input type="date" value={customStart} onChange={e => setCustomStart(e.target.value)}
+              className="flex-1 bg-stone-50 border border-stone-200 rounded-xl px-3 py-2.5 text-sm font-bold outline-none" />
+            <span className="text-stone-400 font-black">–</span>
+            <input type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)}
+              className="flex-1 bg-stone-50 border border-stone-200 rounded-xl px-3 py-2.5 text-sm font-bold outline-none" />
           </div>
         ) : (
-          <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="w-full bg-stone-50 border border-stone-100 rounded-xl px-4 py-3 text-sm font-black outline-none text-center" />
+          <div className="flex items-center gap-2">
+            <button onClick={() => shiftDay(viewMode==='WEEK'?-7:-30)} className="w-10 h-10 bg-stone-100 rounded-xl flex items-center justify-center active:bg-stone-200 shrink-0">
+              <ChevronLeft size={20} className="text-stone-700" />
+            </button>
+            <p className="flex-1 text-center text-base font-black text-stone-900">{fmt.day}, {fmt.date}</p>
+            <button onClick={() => shiftDay(viewMode==='WEEK'?7:30)} className="w-10 h-10 bg-stone-100 rounded-xl flex items-center justify-center active:bg-stone-200 shrink-0">
+              <ChevronRight size={20} className="text-stone-700" />
+            </button>
+          </div>
         )}
+        {/* Driver filter (admin only) */}
         {isAdmin && uniqueDrivers.length > 0 && (
-          <select value={filterDriver} onChange={e => setFilterDriver(e.target.value)} className="w-full bg-stone-50 border border-stone-100 rounded-xl px-4 py-3 text-sm font-medium outline-none">
+          <select value={filterDriver} onChange={e => setFilterDriver(e.target.value)}
+            className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-2.5 text-sm font-bold outline-none">
             <option value="ALL">All Drivers</option>
             {uniqueDrivers.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
           </select>
@@ -1739,7 +1782,7 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [dataSource, setDataSource] = useState<'LIVE' | 'MOCK' | 'ERROR'>('MOCK');
-  const [tab, setTab] = useState<'ORDERS' | 'SCHEDULE' | 'ADMIN'>('ORDERS');
+  const [tab, setTab] = useState<'ORDERS' | 'SCHEDULE' | 'ADMIN'>('SCHEDULE');
   const isAdmin = currentUser?.role === 'SUPER_ADMIN' || currentUser?.role === 'MANAGER';
 
   useEffect(() => {

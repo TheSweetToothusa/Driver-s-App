@@ -90,7 +90,11 @@ const mapShopifyOrder = (order: any): Delivery => {
     || attributes['deliverydate'] 
     || attributes['delivery_date']
     || attributes['date']
+    || attributes['Delivery Date']
+    || attributes['Delivery date']
     || '';
+  // If no delivery date found, log it so we can debug
+  if (!rawDate) console.log('No delivery date for order', order.id, 'attributes:', Object.keys(attributes));
 
   return {
     id: order.id.toString(),

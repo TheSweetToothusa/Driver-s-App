@@ -438,3 +438,5 @@ async function startServer() {
 }
 
 startServer();
+
+// DEBUG endpoint — shows raw note_attributes for first 3 orders
