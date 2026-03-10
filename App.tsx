@@ -926,6 +926,8 @@ const OrdersView: React.FC<OrdersViewProps> = ({
   const [activeTab, setActiveTab] = useState<'active' | 'done'>('active');
   const [search, setSearch] = useState('');
   const [ordersDriverFilter, setOrdersDriverFilter] = useState('ALL');
+  const [dateFilter, setDateFilter] = useState<'TODAY'|'ALL'>('TODAY');
+  const [statusFilter, setStatusFilter] = useState<'ALL'|'OPEN'|'SCHEDULED'|'COMPLETED'>('ALL');
 
   const shiftDate = (days: number) => {
     const d = new Date(driverDate + 'T12:00:00');
@@ -941,8 +943,6 @@ const OrdersView: React.FC<OrdersViewProps> = ({
     const unassignedCount = deliveries.filter(d => !d.driverId || d.status === DeliveryStatus.PENDING).length;
 
     const adminToday = new Date().toISOString().split('T')[0];
-    const [dateFilter, setDateFilter] = React.useState<'TODAY'|'ALL'>('TODAY');
-    const [statusFilter, setStatusFilter] = React.useState<'ALL'|'OPEN'|'SCHEDULED'|'COMPLETED'>('ALL');
 
     const COMPLETED_STATUSES = [DeliveryStatus.DELIVERED, DeliveryStatus.FAILED, DeliveryStatus.PENDING_RESCHEDULE, DeliveryStatus.SECOND_ATTEMPT, DeliveryStatus.CLOSED];
     const OPEN_STATUSES = [DeliveryStatus.PENDING, DeliveryStatus.SCHEDULED, DeliveryStatus.ASSIGNED, DeliveryStatus.IN_TRANSIT];
@@ -2076,6 +2076,10 @@ export default function App() {
     return <LoginGate onAuthorized={user => { setCurrentUser(user); localStorage.setItem('currentUser', JSON.stringify(user)); }} />;
   }
 
+  const [zipQuery, setZipQuery] = useState('');
+  const [zipRate, setZipRate] = useState<number | null | undefined>(undefined);
+  const [showZipBar, setShowZipBar] = useState(false);
+
   if (selectedOrder) {
     return (
       <div className="max-w-md mx-auto min-h-screen bg-white">
@@ -2098,20 +2102,10 @@ export default function App() {
     d.status !== DeliveryStatus.DELIVERED &&
     d.status !== DeliveryStatus.CLOSED
   );
-  const todayOrders = deliveries.filter(d => {
-    const dd = (d.deliveryDate || '').split('T')[0];
-    return dd === todayStr;
-  });
   const pendingCount = deliveries.filter(d => d.status === DeliveryStatus.PENDING || d.status === DeliveryStatus.ASSIGNED).length;
   const inTransitCount = deliveries.filter(d => d.status === DeliveryStatus.IN_TRANSIT).length;
   const deliveredTodayCount = deliveries.filter(d => d.status === DeliveryStatus.DELIVERED && (d.completedAt || '').startsWith(todayStr)).length;
-
-  const now = new Date();
-  const isSameDayWindow = now.getHours() < 14; // before 2pm
-
-  const [zipQuery, setZipQuery] = useState('');
-  const [zipRate, setZipRate] = useState<number | null | undefined>(undefined);
-  const [showZipBar, setShowZipBar] = useState(false);
+  const isSameDayWindow = new Date().getHours() < 14;
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-white flex flex-col">
