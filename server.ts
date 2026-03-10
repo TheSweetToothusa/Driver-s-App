@@ -144,9 +144,13 @@ async function startServer() {
   app.post("/api/users", (req, res) => {
     const { name, pin, role, phone, email, vehicle } = req.body;
     if (!name || !pin || !role) return res.status(400).json({ error: "name, pin, role required" });
+    if (!phone) return res.status(400).json({ error: "Phone number is required" });
     const users = readUsers();
     if (users.find((u: any) => u.name.toLowerCase() === name.toLowerCase())) {
       return res.status(409).json({ error: "A user with that name already exists" });
+    }
+    if (users.find((u: any) => u.pin === pin)) {
+      return res.status(409).json({ error: "That PIN is already taken. Choose a different 4-digit PIN." });
     }
     const newUser = { id: `user_${Date.now()}`, name, pin, role, phone: phone || '', email: email || '', vehicle: vehicle || '', isActive: true, failedAttempts: 0, createdAt: new Date().toISOString() };
     users.push(newUser);

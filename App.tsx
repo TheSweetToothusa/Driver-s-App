@@ -1447,6 +1447,7 @@ export default function App() {
   }, []);
 
   const logout = () => {
+    if (!window.confirm(`Log out as ${currentUser?.name}?`)) return;
     localStorage.removeItem('currentUser');
     setCurrentUser(null); setDeliveries([]); setSelectedOrder(null);
   };
@@ -1488,7 +1489,9 @@ export default function App() {
             <span className="text-[8px] font-black uppercase text-stone-400">{lastSync || '...'}</span>
           </div>
           <button onClick={fetchOrders} className={`p-2 text-stone-400 ${isLoading ? 'animate-spin' : ''}`}><RefreshCw size={16} /></button>
-          <button onClick={logout} className="p-2 text-stone-400 hover:text-red-500 transition-colors"><LogOut size={18} /></button>
+          <button onClick={logout} className="flex items-center gap-1.5 px-3 py-2 bg-red-50 text-red-500 rounded-xl font-black uppercase text-[10px] active:scale-95 transition-all border border-red-100">
+            <LogOut size={14} /> Log Out
+          </button>
         </div>
       </div>
 
