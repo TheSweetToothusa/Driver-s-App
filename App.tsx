@@ -571,96 +571,67 @@ const OrderDetail: React.FC<{
       {/* ── SCROLLABLE CONTENT ── */}
       <div className="flex-1 overflow-y-auto">
 
-        {/* ── 1. INSTRUCTIONS ── */}
+        {/* ── INSTRUCTIONS — amber banner if present ── */}
         {order.deliveryInstructions && (
           <div className="mx-3 mt-3 bg-amber-400 rounded-xl px-4 py-3 flex gap-2 items-start">
-            <AlertTriangle size={16} className="text-amber-900 shrink-0 mt-0.5" />
+            <AlertTriangle size={15} className="text-amber-900 shrink-0 mt-0.5" />
             <p className="font-black text-amber-950 text-sm leading-snug">{order.deliveryInstructions}</p>
           </div>
         )}
 
-        {/* ── 2. RECIPIENT — who it's going TO ── */}
-        <div className="mx-3 mt-3 bg-white rounded-xl border border-stone-200 overflow-hidden">
-          <div className="px-4 pt-3 pb-2">
-            <p className="text-[10px] font-black uppercase text-stone-400 tracking-widest mb-0.5">Recipient</p>
-            <p className="text-3xl font-black text-stone-900 leading-tight">{recipientName}</p>
-          </div>
-          <div className="grid grid-cols-2 divide-x divide-stone-100 border-t border-stone-100">
-            {recipientPhone ? (
-              <>
-                <a href={`tel:${recipientPhone}`} className="flex items-center justify-center gap-2 py-4 font-black text-sm active:bg-stone-50">
-                  <Phone size={16} className="text-stone-800" /> <span className="text-stone-900 font-black">Call</span>
-                </a>
-                <a href={`sms:${recipientPhone}`} className="flex items-center justify-center gap-2 py-4 font-black text-sm active:bg-stone-50">
-                  <MessageCircle size={16} className="text-stone-800" /> <span className="text-stone-900 font-black">Text</span>
-                </a>
-              </>
-            ) : (
-              <p className="col-span-2 text-center py-3 text-xs text-stone-400 italic">No recipient phone on file</p>
+        {/* ── ONE FLAT CARD — LionWheel style ── */}
+        <div className="mx-3 mt-3 bg-white rounded-xl border border-stone-200 divide-y divide-stone-100">
+
+          {/* Recipient row */}
+          <div className="px-4 py-3 flex items-center justify-between">
+            <div>
+              <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest mb-0.5">Recipient</p>
+              <p className="text-xl font-black text-stone-900">{recipientName}</p>
+            </div>
+            {recipientPhone && (
+              <a href={`tel:${recipientPhone}`} className="w-11 h-11 bg-stone-900 rounded-full flex items-center justify-center active:bg-black shrink-0">
+                <Phone size={18} className="text-white" />
+              </a>
             )}
           </div>
-        </div>
 
-        {/* ── 3. GIFT SENDER — who PLACED the order, always has contact info ── */}
-        <div className="mx-3 mt-2 bg-white rounded-xl border border-stone-200 overflow-hidden">
-          <div className="px-4 pt-3 pb-2">
-            <p className="text-[10px] font-black uppercase text-stone-400 tracking-widest mb-0.5">Gift Sender</p>
-            <p className="text-xl font-black text-stone-900 leading-tight">{senderName || 'Unknown'}</p>
-            {order.giftSenderEmail && <p className="text-xs text-stone-400 mt-0.5">{order.giftSenderEmail}</p>}
-          </div>
-          <div className="grid grid-cols-2 divide-x divide-stone-100 border-t border-stone-100">
-            {senderPhone ? (
-              <>
-                <a href={`tel:${senderPhone}`} className="flex items-center justify-center gap-2 py-4 font-black text-sm active:bg-stone-50">
-                  <Phone size={16} className="text-stone-800" /> <span className="text-stone-900 font-black">Call</span>
-                </a>
-                <a href={`sms:${senderPhone}`} className="flex items-center justify-center gap-2 py-4 font-black text-sm active:bg-stone-50">
-                  <MessageCircle size={16} className="text-stone-800" /> <span className="text-stone-900 font-black">Text</span>
-                </a>
-              </>
-            ) : (
-              <p className="col-span-2 text-center py-3 text-xs text-stone-400 italic">No sender phone on file</p>
+          {/* Gift Sender row — always shown, primary contact */}
+          <div className="px-4 py-3 flex items-center justify-between">
+            <div>
+              <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest mb-0.5">Gift Sender</p>
+              <p className="text-base font-bold text-stone-800">{senderName || '—'}</p>
+              {order.giftSenderEmail && <p className="text-xs text-stone-400 mt-0.5">{order.giftSenderEmail}</p>}
+            </div>
+            {senderPhone && (
+              <a href={`tel:${senderPhone}`} className="w-11 h-11 bg-stone-900 rounded-full flex items-center justify-center active:bg-black shrink-0">
+                <Phone size={18} className="text-white" />
+              </a>
             )}
           </div>
-        </div>
 
-        {/* ── 4. ADDRESS + NAVIGATE ── */}
-        <div className="mx-3 mt-3 bg-white rounded-xl border border-stone-200 overflow-hidden">
+          {/* Address row + Navigate button */}
           <div className="px-4 py-3">
-            <p className="text-base font-black text-stone-900 leading-tight">{order.address.street}</p>
+            <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest mb-0.5">Address</p>
+            <p className="text-base font-bold text-stone-900">{order.address.street}</p>
             <p className="text-sm text-stone-500">{order.address.city}, FL {order.address.zip}</p>
           </div>
           <a href={mapsUrl} target="_blank" rel="noopener noreferrer"
-            className="flex items-center justify-center gap-2 py-3.5 bg-black text-white font-black uppercase text-sm active:bg-stone-800">
-            <Navigation size={15} /> Navigate
+            className="flex items-center justify-center gap-2 py-3.5 bg-black text-white font-black uppercase text-sm active:bg-stone-800 w-full">
+            <Navigation size={15} /> Open in Maps
           </a>
-        </div>
 
-        {/* ── 5. ORDER ITEMS + PRICE ── */}
-        <div className="mx-3 mt-3 bg-white rounded-xl border border-stone-200 overflow-hidden">
-          <div className="px-4 py-2 border-b border-stone-100 bg-stone-50">
-            <p className="text-[10px] font-black uppercase text-stone-500 tracking-widest">Order Items</p>
-          </div>
-          {order.items?.length > 0 ? order.items.map((item, i) => (
-            <div key={i} className="flex items-center px-4 py-3 border-b border-stone-100 last:border-0">
-              <div className="flex-1 min-w-0">
-                <p className="font-black text-stone-900 text-base leading-tight">{item.name}</p>
-                {item.quantity > 1 && <p className="text-sm text-stone-400">Qty: {item.quantity}</p>}
+          {/* Order items */}
+          {order.items?.length > 0 && order.items.map((item, i) => (
+            <div key={i} className="px-4 py-3 flex items-center justify-between">
+              <div className="flex-1 min-w-0 pr-3">
+                <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest mb-0.5">Item {order.items.length > 1 ? i+1 : ''}</p>
+                <p className="font-bold text-stone-900 text-sm leading-tight">{item.name}</p>
+                {item.quantity > 1 && <p className="text-xs text-stone-400">Qty: {item.quantity}</p>}
               </div>
-              <p className="font-black text-stone-900 text-lg shrink-0 ml-3">${(item.price * item.quantity).toFixed(2)}</p>
+              <p className="font-black text-stone-900 text-base shrink-0">${(item.price * item.quantity).toFixed(2)}</p>
             </div>
-          )) : <p className="px-4 py-3 text-sm text-stone-400 italic">No items listed</p>}
-          {/* Totals row */}
-          <div className="px-4 py-2 bg-stone-50 border-t border-stone-200 flex justify-between items-center">
-            <p className="text-xs text-stone-500">Delivery fee</p>
-            <p className="text-sm font-bold text-stone-600">${order.deliveryFee.toFixed(2)}</p>
-          </div>
-          {order.items?.length > 0 && (
-            <div className="px-4 py-2 bg-stone-50 border-t border-stone-100 flex justify-between items-center">
-              <p className="text-xs font-black uppercase text-stone-700">Total</p>
-              <p className="text-base font-black text-stone-900">${(order.items.reduce((s, i) => s + i.price * i.quantity, 0) + order.deliveryFee).toFixed(2)}</p>
-            </div>
-          )}
+          ))}
+
         </div>
 
         {/* ── GIFT MESSAGE ── */}
