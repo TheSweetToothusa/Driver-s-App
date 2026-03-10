@@ -571,7 +571,7 @@ const OrderDetail: React.FC<{
       {/* ── SCROLLABLE CONTENT ── */}
       <div className="flex-1 overflow-y-auto">
 
-        {/* ── SPECIAL INSTRUCTIONS — amber, always at top if present ── */}
+        {/* ── 1. INSTRUCTIONS ── */}
         {order.deliveryInstructions && (
           <div className="mx-3 mt-3 bg-amber-400 rounded-xl px-4 py-3 flex gap-2 items-start">
             <AlertTriangle size={16} className="text-amber-900 shrink-0 mt-0.5" />
@@ -579,52 +579,54 @@ const OrderDetail: React.FC<{
           </div>
         )}
 
-        {/* ── CUSTOMER CARD: name large, address, phone buttons ── */}
+        {/* ── 2. RECIPIENT NAME — biggest thing on screen, driver knows immediately ── */}
         <div className="mx-3 mt-3 bg-white rounded-xl border border-stone-200 overflow-hidden">
-          {/* Name */}
-          <div className="px-4 pt-3 pb-2">
-            <p className="text-[10px] font-black uppercase text-stone-400 tracking-widest mb-0.5">Delivering To</p>
-            <p className="text-2xl font-black text-stone-900 leading-tight">{recipientName}</p>
-            {senderName && <p className="text-sm text-stone-500 mt-0.5">From: <span className="font-bold text-stone-700">{senderName}</span></p>}
+          <div className="px-4 pt-3 pb-3">
+            <p className="text-[10px] font-black uppercase text-stone-400 tracking-widest mb-1">Delivering To</p>
+            <p className="text-3xl font-black text-stone-900 leading-tight">{recipientName}</p>
+            {senderName && <p className="text-sm text-stone-500 mt-1">From: <span className="font-bold text-stone-700">{senderName}</span></p>}
           </div>
-          {/* Address + Maps */}
-          <div className="px-4 pb-3 border-b border-stone-100">
-            <p className="text-base font-bold text-stone-700 leading-tight">{order.address.street}</p>
-            <p className="text-sm text-stone-400">{order.address.city}, FL {order.address.zip}</p>
-          </div>
-          <a href={mapsUrl} target="_blank" rel="noopener noreferrer"
-            className="flex items-center justify-center gap-2 py-3 bg-stone-900 text-white font-black uppercase text-sm active:bg-black border-b border-stone-800">
-            <Navigation size={15} /> Navigate
-          </a>
-          {/* Phone buttons */}
-          <div className="grid grid-cols-2 divide-x divide-stone-100">
+          {/* Call / Text recipient */}
+          <div className="grid grid-cols-2 divide-x divide-stone-100 border-t border-stone-100">
             {recipientPhone ? (
               <>
-                <a href={`tel:${recipientPhone}`} className="flex items-center justify-center gap-2 py-3.5 font-black text-sm active:bg-stone-50">
-                  <Phone size={15} className="text-stone-700" /> <span className="text-stone-900">Call</span>
+                <a href={`tel:${recipientPhone}`} className="flex items-center justify-center gap-2 py-4 font-black text-sm active:bg-stone-50">
+                  <Phone size={16} className="text-stone-800" /> <span className="text-stone-900 font-black">Call</span>
                 </a>
-                <a href={`sms:${recipientPhone}`} className="flex items-center justify-center gap-2 py-3.5 font-black text-sm active:bg-stone-50">
-                  <MessageCircle size={15} className="text-stone-700" /> <span className="text-stone-900">Text</span>
+                <a href={`sms:${recipientPhone}`} className="flex items-center justify-center gap-2 py-4 font-black text-sm active:bg-stone-50">
+                  <MessageCircle size={16} className="text-stone-800" /> <span className="text-stone-900 font-black">Text</span>
                 </a>
               </>
             ) : (
-              <p className="col-span-2 text-center py-3 text-sm text-stone-400">No phone number on file</p>
+              <p className="col-span-2 text-center py-3 text-xs text-stone-400">No phone number on file</p>
             )}
           </div>
-          {/* Sender phone (if different) */}
+          {/* Sender phone row if present */}
           {senderPhone && senderPhone !== recipientPhone && (
-            <div className="grid grid-cols-2 divide-x divide-stone-100 border-t border-stone-100">
-              <a href={`tel:${senderPhone}`} className="flex items-center justify-center gap-2 py-3 font-black text-xs active:bg-stone-50">
+            <div className="grid grid-cols-2 divide-x divide-stone-100 border-t border-stone-100 bg-stone-50">
+              <a href={`tel:${senderPhone}`} className="flex items-center justify-center gap-1.5 py-3 font-black text-xs active:bg-stone-100">
                 <Phone size={13} className="text-stone-500" /> <span className="text-stone-600">Call Sender</span>
               </a>
-              <a href={`sms:${senderPhone}`} className="flex items-center justify-center gap-2 py-3 font-black text-xs active:bg-stone-50">
+              <a href={`sms:${senderPhone}`} className="flex items-center justify-center gap-1.5 py-3 font-black text-xs active:bg-stone-100">
                 <MessageCircle size={13} className="text-stone-500" /> <span className="text-stone-600">Text Sender</span>
               </a>
             </div>
           )}
         </div>
 
-        {/* ── ORDER ITEMS + PRICE ── */}
+        {/* ── 3. ADDRESS + NAVIGATE ── */}
+        <div className="mx-3 mt-3 bg-white rounded-xl border border-stone-200 overflow-hidden">
+          <div className="px-4 py-3">
+            <p className="text-base font-black text-stone-900 leading-tight">{order.address.street}</p>
+            <p className="text-sm text-stone-500">{order.address.city}, FL {order.address.zip}</p>
+          </div>
+          <a href={mapsUrl} target="_blank" rel="noopener noreferrer"
+            className="flex items-center justify-center gap-2 py-3.5 bg-black text-white font-black uppercase text-sm active:bg-stone-800">
+            <Navigation size={15} /> Navigate
+          </a>
+        </div>
+
+        {/* ── 4. ORDER ITEMS + PRICE ── */}
         <div className="mx-3 mt-3 bg-white rounded-xl border border-stone-200 overflow-hidden">
           <div className="px-4 py-2 border-b border-stone-100 bg-stone-50">
             <p className="text-[10px] font-black uppercase text-stone-500 tracking-widest">Order Items</p>
@@ -1048,22 +1050,34 @@ const OrdersView: React.FC<OrdersViewProps> = ({
             FAILED: 'bg-red-500', SECOND_ATTEMPT: 'bg-stone-700',
           };
           const dot = statusDot[order.status] || 'bg-stone-400';
+          const statusBg: Record<string,string> = { PENDING:'bg-stone-700', ASSIGNED:'bg-stone-600', IN_TRANSIT:'bg-black', DELIVERED:'bg-stone-200', FAILED:'bg-red-600', SECOND_ATTEMPT:'bg-stone-600', PENDING_RESCHEDULE:'bg-amber-500' };
+          const cardBg = statusBg[order.status] || 'bg-stone-700';
+          const labelText = STATUS_CONFIG[order.status]?.label || order.status;
+          const isDelivered = order.status === DeliveryStatus.DELIVERED;
           return (
             <div key={order.id} onClick={() => onSelectOrder(order)}
-              className="flex items-center gap-4 px-4 py-4 border-b border-stone-100 cursor-pointer active:bg-stone-50 transition-all">
-              <p className="text-xl font-black text-stone-300 w-6 shrink-0">{idx + 1}</p>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-0.5">
-                  <p className="text-[11px] font-black text-stone-500">#{order.orderNumber?.replace(/^#+/, '') || order.id}</p>
-                  <span className={`w-2 h-2 rounded-full shrink-0 ${dot}`} />
-                </div>
-                <p className="text-base font-black text-stone-900 leading-tight">{order.giftReceiverName || order.customer?.name}</p>
-                <p className="text-sm text-stone-500">{order.address?.street}, {order.address?.city}</p>
-                {order.deliveryInstructions && (
-                  <p className="text-[10px] font-black text-amber-700 mt-0.5">⚠ {order.deliveryInstructions}</p>
-                )}
+              className="mx-3 mb-2 bg-white rounded-xl border border-stone-200 overflow-hidden active:scale-[0.99] transition-all cursor-pointer">
+              {/* Status bar */}
+              <div className={`${cardBg} px-3 py-1.5 flex items-center justify-between`}>
+                <span className={`text-[10px] font-black uppercase tracking-widest ${isDelivered ? 'text-stone-500' : 'text-white'}`}>{labelText}</span>
+                <span className={`text-xs font-black ${isDelivered ? 'text-stone-500' : 'text-white'}`}>#{order.orderNumber?.replace(/^#+/, '') || order.id}</span>
               </div>
-              <ChevronRight size={18} className="text-stone-300 shrink-0" />
+              <div className="px-3 py-2.5 flex items-center gap-3">
+                {/* Stop number */}
+                <span className="text-2xl font-black text-stone-200 w-7 shrink-0 text-center">{idx + 1}</span>
+                <div className="flex-1 min-w-0">
+                  {/* RECIPIENT NAME — first and largest */}
+                  <p className="text-base font-black text-stone-900 leading-tight">{order.giftReceiverName || order.customer?.name}</p>
+                  <p className="text-sm text-stone-500 truncate">{order.address?.street}, {order.address?.city}</p>
+                  {order.items?.[0] && (
+                    <p className="text-xs text-stone-400 truncate">{order.items[0].name} — ${(order.items[0].price * order.items[0].quantity).toFixed(2)}</p>
+                  )}
+                  {order.deliveryInstructions && (
+                    <p className="text-[10px] font-black text-amber-700 mt-0.5 flex items-center gap-1"><AlertTriangle size={9} />  {order.deliveryInstructions}</p>
+                  )}
+                </div>
+                <ChevronRight size={16} className="text-stone-300 shrink-0" />
+              </div>
             </div>
           );
         })}
@@ -1744,17 +1758,28 @@ export default function App() {
     setIsLoading(true);
     try {
       const fetched = await getDeliveries();
-      // Auto-assign unassigned orders to Katie (default driver)
+      const isMock = fetched.some((d: Delivery) => d.id === '33989');
+      // Auto-assign unassigned orders to Katie
       const withDefaults = fetched.map((d: Delivery) => {
-        if (!d.driverId || d.driverId === '') {
-          return { ...d, driverId: 'manager_1', driverName: 'Katie', status: d.status === DeliveryStatus.PENDING ? DeliveryStatus.ASSIGNED : d.status };
+        const pod = d; // podData already merged in service
+        if (!pod.driverId || pod.driverId === '') {
+          return { ...pod, driverId: 'manager_1', driverName: 'Katie', status: pod.status === DeliveryStatus.PENDING ? DeliveryStatus.ASSIGNED : pod.status };
         }
-        return d;
+        return pod;
       });
       setDeliveries(withDefaults);
-      setDataSource(withDefaults.some((d: Delivery) => d.id === '33989') ? 'MOCK' : 'LIVE');
+      setDataSource(isMock ? 'MOCK' : 'LIVE');
       setLastSync(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-    } catch { setDataSource('ERROR'); }
+    } catch (err) {
+      console.error('fetchOrders failed:', err);
+      // Always fall back to samples so app is never empty
+      const { getDeliveries: gd } = await import('./services/shopifyService');
+      try {
+        const fallback = await gd();
+        setDeliveries(fallback.map((d: Delivery) => ({ ...d, driverId: 'manager_1', driverName: 'Katie' })));
+      } catch {}
+      setDataSource('ERROR');
+    }
     finally { setIsLoading(false); }
   };
 

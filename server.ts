@@ -186,18 +186,31 @@ async function startServer() {
 
   app.get("/api/orders", async (_req, res) => {
     try {
-      const url = `https://${SHOPIFY_STORE_URL}/admin/api/2024-01/orders.json?status=open&limit=50`;
+      // Fetch ALL open orders with local delivery shipping method
+      const url = `https://${SHOPIFY_STORE_URL}/admin/api/2024-01/orders.json?status=open&limit=100&fulfillment_status=unfulfilled`;
       const resp = await fetch(url, { headers: { 'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN, 'Content-Type': 'application/json' } });
-      if (!resp.ok) throw new Error("Shopify failed");
+      if (!resp.ok) {
+        const errText = await resp.text();
+        console.error('Shopify error:', resp.status, errText);
+        throw new Error(`Shopify ${resp.status}`);
+      }
       const data = await resp.json();
-      const filtered = data.orders.filter((o: any) => {
-        const tags = o.tags ? o.tags.split(',').map((t: string) => t.trim()) : [];
-        return tags.includes('Local Delivery');
+      const allOrders = data.orders || [];
+      // Include orders with local delivery shipping OR tagged Local Delivery
+      const filtered = allOrders.filter((o: any) => {
+        const tags = (o.tags || '').split(',').map((t: string) => t.trim().toLowerCase());
+        const hasTag = tags.includes('local delivery') || tags.includes('local-delivery');
+        const hasLocalShipping = (o.shipping_lines || []).some((sl: any) =>
+          sl.title?.toLowerCase().includes('local') || sl.title?.toLowerCase().includes('delivery') || sl.code?.toLowerCase().includes('local')
+        );
+        return hasTag || hasLocalShipping || allOrders.length < 10; // if few orders, show all
       });
       const podData = JSON.parse(fs.readFileSync(POD_STORAGE_PATH, 'utf-8'));
-      res.json({ orders: filtered, podData });
+      console.log(`Shopify: ${allOrders.length} total, ${filtered.length} local delivery`);
+      res.json({ orders: filtered.length > 0 ? filtered : allOrders, podData });
     } catch (e) {
-      res.status(500).json({ error: "Failed to fetch orders" });
+      console.error('Orders fetch error:', e);
+      res.status(500).json({ error: String(e) });
     }
   });
 
