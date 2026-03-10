@@ -235,21 +235,29 @@ const OrderCard: React.FC<{ order: Delivery; role: AppRole; onTap: () => void; i
             <p className="text-xs font-black text-amber-900">{order.deliveryInstructions}</p>
           </div>
         )}
-        {/* Product */}
-        {product && (
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1.5">
-              <Package size={12} className="text-stone-400 shrink-0" />
-              <p className="text-sm font-black text-stone-800">{product.name}{product.quantity > 1 ? ` ×${product.quantity}` : ''}</p>
+        {/* Recipient — prominent, driver must know who they're delivering to */}
+        <div className="flex items-center justify-between pt-1 border-t border-stone-100">
+          <div>
+            <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest">Delivering To</p>
+            <p className="text-base font-black text-stone-900">{order.giftReceiverName || order.customer.name}</p>
+          </div>
+          {order.giftSenderName && (
+            <div className="text-right">
+              <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest">From</p>
+              <p className="text-sm font-bold text-stone-600">{order.giftSenderName}</p>
             </div>
-            {isAdmin && <span className="text-sm font-black text-stone-500">${order.deliveryFee}</span>}
+          )}
+        </div>
+        {/* Product + PRICE — both always visible, never hidden */}
+        {product && (
+          <div className="flex items-center justify-between bg-stone-50 rounded-xl px-3 py-2">
+            <div className="flex items-center gap-1.5 flex-1 min-w-0">
+              <Package size={12} className="text-stone-400 shrink-0" />
+              <p className="text-sm font-black text-stone-800 truncate">{product.name}{product.quantity > 1 ? ` x${product.quantity}` : ''}</p>
+            </div>
+            <span className="text-sm font-black text-stone-900 shrink-0 ml-2">${(product.price * product.quantity).toFixed(2)}</span>
           </div>
         )}
-        {/* Recipient → Sender */}
-        <div className="flex items-center justify-between pt-1 border-t border-stone-100">
-          <p className="text-[11px] font-black text-stone-700">To: {order.giftReceiverName || order.customer.name}</p>
-          {order.giftSenderName && <p className="text-[11px] font-bold text-stone-500">From: {order.giftSenderName}</p>}
-        </div>
       </div>
     </div>
   );
@@ -582,7 +590,7 @@ const OrderDetail: React.FC<{
 
       <div className="flex-1 overflow-y-auto pb-8">
 
-        {/* 1. SPECIAL INSTRUCTIONS — amber, top, impossible to miss */}
+        {/* 1. SPECIAL INSTRUCTIONS — amber block, impossible to miss */}
         {order.deliveryInstructions && (
           <div className="mx-4 mt-4 bg-amber-400 rounded-2xl px-4 py-3 flex items-start gap-2">
             <AlertTriangle size={18} className="text-amber-900 shrink-0 mt-0.5" />
@@ -590,24 +598,38 @@ const OrderDetail: React.FC<{
           </div>
         )}
 
-        {/* 2. PRODUCT */}
-        <div className="mx-4 mt-4 rounded-2xl border border-stone-200 overflow-hidden">
-          <div className="bg-stone-900 px-4 py-2">
-            <p className="text-[9px] font-black uppercase tracking-widest text-stone-400">What You're Delivering</p>
+        {/* 2. RECIPIENT — BIG, this is who the driver is going to */}
+        <div className="mx-4 mt-4 rounded-2xl border-2 border-stone-900 overflow-hidden">
+          <div className="bg-stone-900 px-4 py-2 flex items-center justify-between">
+            <p className="text-[9px] font-black uppercase tracking-widest text-stone-400">Delivering To</p>
+            {senderName && <p className="text-[9px] font-black uppercase tracking-widest text-stone-400">From</p>}
           </div>
-          {order.items?.length > 0 ? order.items.map((item, i) => (
-            <div key={i} className="flex items-center justify-between px-4 py-3 border-b border-stone-100 last:border-0">
-              <div className="flex-1 pr-3">
-                <p className="text-base font-black text-stone-900">{item.name}</p>
-                <p className="text-sm font-bold text-stone-500">${item.price.toFixed(2)}{item.quantity > 1 ? ` × ${item.quantity} = $${(item.price * item.quantity).toFixed(2)}` : ''}</p>
-              </div>
-              <span className="text-2xl font-black text-stone-300">×{item.quantity}</span>
+          <div className="px-4 py-3 flex items-center justify-between">
+            <p className="text-2xl font-black text-stone-900 leading-tight">{recipientName}</p>
+            {senderName && <p className="text-sm font-bold text-stone-500 text-right max-w-[40%] leading-tight">{senderName}</p>}
+          </div>
+          {/* Call/Text recipient */}
+          {recipientPhone && (
+            <div className="flex gap-2 px-4 pb-3">
+              <a href={`tel:${recipientPhone}`} className="flex-1 flex items-center justify-center gap-1.5 py-3 bg-black text-white rounded-xl font-black uppercase text-xs active:scale-95">
+                <Phone size={13} /> Call Recipient
+              </a>
+              <a href={`sms:${recipientPhone}`} className="flex-1 flex items-center justify-center gap-1.5 py-3 bg-stone-100 text-stone-900 rounded-xl font-black uppercase text-xs active:scale-95">
+                <MessageCircle size={13} /> Text Recipient
+              </a>
             </div>
-          )) : <p className="px-4 py-3 text-sm text-stone-400">No items listed</p>}
-          <div className="px-4 py-2 bg-stone-50 border-t border-stone-100 flex justify-between items-center">
-            <span className="text-[9px] font-black uppercase text-stone-400">Delivery Fee</span>
-            <span className="text-xs font-black text-stone-600">${order.deliveryFee.toFixed(2)}</span>
-          </div>
+          )}
+          {/* Call/Text sender */}
+          {senderPhone && (
+            <div className="flex gap-2 px-4 pb-3 border-t border-stone-100 pt-2">
+              <a href={`tel:${senderPhone}`} className="flex-1 flex items-center justify-center gap-1.5 py-3 bg-stone-800 text-white rounded-xl font-black uppercase text-xs active:scale-95">
+                <Phone size={13} /> Call Sender
+              </a>
+              <a href={`sms:${senderPhone}`} className="flex-1 flex items-center justify-center gap-1.5 py-3 bg-stone-100 text-stone-900 rounded-xl font-black uppercase text-xs active:scale-95">
+                <MessageCircle size={13} /> Text Sender
+              </a>
+            </div>
+          )}
         </div>
 
         {/* 3. ADDRESS + MAPS */}
@@ -623,7 +645,24 @@ const OrderDetail: React.FC<{
           </a>
         </div>
 
-        {/* 4. CONTACTS */}
+        {/* 4. WHAT YOU'RE DELIVERING — product name + PRICE, never hidden */}
+        <div className="mx-4 mt-3 rounded-2xl border border-stone-200 overflow-hidden">
+          <div className="bg-stone-50 px-4 py-2">
+            <p className="text-[9px] font-black uppercase tracking-widest text-stone-400">What You're Delivering</p>
+          </div>
+          {order.items?.length > 0 ? order.items.map((item, i) => (
+            <div key={i} className="flex items-center justify-between px-4 py-3 border-b border-stone-100 last:border-0">
+              <p className="text-base font-black text-stone-900 flex-1 pr-3 leading-tight">{item.name}{item.quantity > 1 ? ` ×${item.quantity}` : ''}</p>
+              <span className="text-lg font-black text-stone-900 shrink-0">${(item.price * item.quantity).toFixed(2)}</span>
+            </div>
+          )) : <p className="px-4 py-3 text-sm text-stone-400">No items listed</p>}
+          <div className="px-4 py-2 bg-stone-50 border-t border-stone-100 flex justify-between items-center">
+            <span className="text-[9px] font-black uppercase text-stone-400">Delivery Fee</span>
+            <span className="text-sm font-black text-stone-600">${order.deliveryFee.toFixed(2)}</span>
+          </div>
+        </div>
+
+        {/* CONTACTS — separate sender section if no phone above */}
         <div className="mx-4 mt-3 rounded-2xl border border-stone-200 overflow-hidden">
           <div className="px-4 py-3 border-b border-stone-100">
             <p className="text-[9px] font-black uppercase tracking-widest text-stone-400 mb-1">Recipient</p>
