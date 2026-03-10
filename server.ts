@@ -211,6 +211,18 @@ async function startServer() {
     res.json({ success: true });
   });
 
+  app.patch("/api/orders/:id/status", (req, res) => {
+    const { status } = req.body;
+    const pod = JSON.parse(fs.readFileSync(POD_STORAGE_PATH, 'utf-8'));
+    if (!pod[req.params.id]) pod[req.params.id] = {};
+    pod[req.params.id].status = status;
+    if (status === 'DELIVERED' && !pod[req.params.id].completedAt) {
+      pod[req.params.id].completedAt = new Date().toISOString();
+    }
+    fs.writeFileSync(POD_STORAGE_PATH, JSON.stringify(pod, null, 2));
+    res.json({ success: true });
+  });
+
   app.post("/api/orders/:id/note", (req, res) => {
     const { note } = req.body;
     const pod = JSON.parse(fs.readFileSync(POD_STORAGE_PATH, 'utf-8'));

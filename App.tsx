@@ -577,22 +577,32 @@ const OrderDetail: React.FC<{
 
         {/* ── PRODUCT — verify at pickup and at door ── */}
         <div className="mx-4 mt-3 bg-stone-950 text-white rounded-2xl px-5 py-4">
-          <p className="text-[9px] font-black uppercase tracking-widest text-stone-400 mb-2">What You're Delivering</p>
+          <p className="text-[9px] font-black uppercase tracking-widest text-stone-400 mb-3">What You're Delivering</p>
           {order.items?.length > 0 ? order.items.map((item, i) => (
-            <div key={i} className="flex items-start justify-between py-2 border-b border-stone-800 last:border-0">
-              <div>
+            <div key={i} className="flex items-start justify-between py-3 border-b border-stone-800 last:border-0">
+              <div className="flex-1 pr-4">
                 <p className="text-lg font-black leading-tight">{item.name}</p>
-                <p className="text-sm text-stone-400">${item.price.toFixed(2)} each</p>
+                <p className="text-base font-black text-green-400 mt-0.5">${item.price.toFixed(2)}{item.quantity > 1 ? ` × ${item.quantity} = $${(item.price * item.quantity).toFixed(2)}` : ''}</p>
               </div>
-              <span className="text-2xl font-black text-stone-300 shrink-0 ml-4">×{item.quantity}</span>
+              <span className="text-3xl font-black text-white shrink-0">×{item.quantity}</span>
             </div>
           )) : <p className="text-stone-400 text-sm">No items listed</p>}
-          {isAdmin && (
-            <div className="mt-3 pt-3 border-t border-stone-800 flex justify-between items-center">
+          <div className="mt-3 pt-3 border-t border-stone-800 space-y-1">
+            {order.items?.length > 1 && (
+              <div className="flex justify-between">
+                <p className="text-[9px] font-black uppercase text-stone-400">Product Subtotal</p>
+                <p className="text-sm font-black text-stone-300">${order.items.reduce((s,i) => s + i.price * i.quantity, 0).toFixed(2)}</p>
+              </div>
+            )}
+            <div className="flex justify-between items-center">
               <p className="text-[9px] font-black uppercase text-stone-400">Delivery Fee</p>
-              <p className="text-lg font-black">${order.deliveryFee.toFixed(2)}</p>
+              <p className="text-sm font-black text-stone-300">${order.deliveryFee.toFixed(2)}</p>
             </div>
-          )}
+            <div className="flex justify-between items-center pt-1 border-t border-stone-700">
+              <p className="text-[10px] font-black uppercase text-white">Order Total</p>
+              <p className="text-lg font-black text-white">${(order.items.reduce((s,i) => s + i.price * i.quantity, 0) + order.deliveryFee).toFixed(2)}</p>
+            </div>
+          </div>
         </div>
 
         {/* ── ADDRESS + MAP ── */}
@@ -888,11 +898,22 @@ interface OrdersViewProps {
   inTransitCount: number;
   deliveredTodayCount: number;
   onSelectOrder: (o: Delivery) => void;
+  onUpdateOrder: (id: string, updates: Partial<Delivery>) => void;
 }
+
+const STATUSES_FOR_DROPDOWN = [
+  { value: 'PENDING',            label: 'Not Assigned',     color: '#6b7280' },
+  { value: 'ASSIGNED',           label: 'Driver Assigned',  color: '#2563eb' },
+  { value: 'IN_TRANSIT',         label: 'Out for Delivery', color: '#000000' },
+  { value: 'DELIVERED',          label: 'Delivered',        color: '#16a34a' },
+  { value: 'FAILED',             label: 'Failed Delivery',  color: '#dc2626' },
+  { value: 'SECOND_ATTEMPT',     label: '2nd Attempt',      color: '#374151' },
+  { value: 'PENDING_RESCHEDULE', label: 'Needs Reschedule', color: '#d97706' },
+];
 
 const OrdersView: React.FC<OrdersViewProps> = ({
   deliveries, isAdmin, currentUser, isSameDayWindow,
-  pendingCount, inTransitCount, deliveredTodayCount, onSelectOrder
+  pendingCount, inTransitCount, deliveredTodayCount, onSelectOrder, onUpdateOrder
 }) => {
   const today = new Date().toISOString().split('T')[0];
   const [driverDate, setDriverDate] = useState(today);
@@ -979,28 +1000,52 @@ const OrdersView: React.FC<OrdersViewProps> = ({
             };
             const dot = statusDot[order.status] || 'bg-stone-300';
             const label = STATUS_CONFIG[order.status]?.label || order.status;
+            const statusCfg = STATUSES_FOR_DROPDOWN.find(s => s.value === order.status) || STATUSES_FOR_DROPDOWN[0];
             return (
-              <div key={order.id} onClick={() => onSelectOrder(order)}
-                className={`grid grid-cols-[80px_1fr_100px_90px] px-4 py-3 border-b border-stone-50 cursor-pointer active:bg-stone-50 transition-all ${idx % 2 === 0 ? 'bg-white' : 'bg-stone-50/30'}`}>
-                <div>
+              <div key={order.id}
+                className={`grid grid-cols-[90px_1fr_90px_130px] px-3 py-3 border-b border-stone-100 transition-all ${idx % 2 === 0 ? 'bg-white' : 'bg-stone-50/40'}`}>
+                {/* Order # — tap to open */}
+                <div className="cursor-pointer" onClick={() => onSelectOrder(order)}>
                   <p className="text-sm font-black text-black">#{order.orderNumber?.replace(/^#+/, '') || order.id}</p>
                   <p className="text-[9px] text-stone-400">{order.deliveryDate ? fmtDate(order.deliveryDate) : '—'}</p>
                 </div>
-                <div className="pr-2 min-w-0">
+                {/* Customer + address — tap to open */}
+                <div className="pr-2 min-w-0 cursor-pointer" onClick={() => onSelectOrder(order)}>
                   <p className="text-sm font-bold text-stone-900 truncate">{order.giftReceiverName || order.customer?.name}</p>
                   <p className="text-[10px] text-stone-400 truncate">{order.address?.street}, {order.address?.city}</p>
+                  {order.items?.[0] && (
+                    <p className="text-[10px] font-black text-stone-600 truncate">{order.items[0].name} — ${order.items[0].price.toFixed(2)}</p>
+                  )}
                   {order.deliveryInstructions && (
                     <p className="text-[9px] text-amber-700 font-black truncate">⚠ {order.deliveryInstructions}</p>
                   )}
                 </div>
-                <div>
-                  <p className="text-xs font-bold text-stone-700">{order.driverName || <span className="text-red-500 font-black">Unassigned</span>}</p>
+                {/* Driver */}
+                <div className="cursor-pointer" onClick={() => onSelectOrder(order)}>
+                  <p className="text-xs font-bold text-stone-700 truncate">{order.driverName || <span className="text-red-500 font-black">—</span>}</p>
                 </div>
-                <div className="flex items-start justify-end">
-                  <div className="flex items-center gap-1">
-                    <span className={`w-2 h-2 rounded-full shrink-0 ${dot}`} />
-                    <span className="text-[9px] font-black text-stone-600 text-right leading-tight">{label}</span>
-                  </div>
+                {/* Status dropdown — inline change, no navigation */}
+                <div onClick={e => e.stopPropagation()}>
+                  <select
+                    value={order.status}
+                    onChange={e => {
+                      const newStatus = e.target.value as DeliveryStatus;
+                      onUpdateOrder(order.id, { status: newStatus });
+                      fetch(`/api/orders/${order.id}/status`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ status: newStatus })
+                      }).catch(() => {});
+                    }}
+                    style={{ backgroundColor: statusCfg.color, color: 'white' }}
+                    className="w-full text-[10px] font-black rounded-lg px-2 py-1.5 outline-none border-0 appearance-none cursor-pointer"
+                  >
+                    {STATUSES_FOR_DROPDOWN.map(s => (
+                      <option key={s.value} value={s.value} style={{ backgroundColor: s.color, color: 'white' }}>
+                        {s.label}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
             );
@@ -1880,6 +1925,7 @@ export default function App() {
             inTransitCount={inTransitCount}
             deliveredTodayCount={deliveredTodayCount}
             onSelectOrder={setSelectedOrder}
+            onUpdateOrder={handleUpdateOrder}
           />
         )}
 
