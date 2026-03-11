@@ -118,6 +118,8 @@ export interface Delivery {
 
   successNotificationSent?: boolean;
   failureNotificationSent?: boolean;
+  orderTotal?: number;
+  createdAt?: string;
 }
 
 export interface MessageTemplate {

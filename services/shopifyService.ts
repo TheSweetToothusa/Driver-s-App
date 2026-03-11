@@ -115,6 +115,7 @@ const mapShopifyOrder = (order: any): Delivery => {
     },
     items: filteredItems,
     deliveryFee: shippingPrice,
+    orderTotal: parseFloat(order.total_price || order.subtotal_price || "0"),
     deliveryInstructions: order.note || attributes['delivery instructions'] || attributes['instructions'] || '',
     status: DeliveryStatus.PENDING,
     deliveryDate: parseDeliveryDate(rawDate),

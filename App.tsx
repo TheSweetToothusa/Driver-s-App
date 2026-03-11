@@ -643,64 +643,80 @@ const OrderDetail: React.FC<{
           </div>
         )}
 
-        {/* ── ONE FLAT CARD — LionWheel style ── */}
-        <div className="mx-3 mt-3 bg-white rounded-xl border border-stone-200 divide-y divide-stone-100">
+        {/* ── MAIN DETAIL CARD — Lionwheel style ── */}
+        <div className="mx-3 mt-3 bg-white rounded-xl border border-stone-200 overflow-hidden">
 
-          {/* ── RECIPIENT ── */}
+          {/* Recipient name + delivery badge */}
           <div className="px-4 pt-4 pb-3">
-            <p className="text-[10px] font-black uppercase tracking-widest text-stone-400 mb-1">📦 Recipient</p>
             <p className="text-2xl font-black text-stone-900 leading-tight">{recipientName}</p>
-            {recipientPhone && (
-              <div className="mt-3 space-y-2">
-                <a href={`sms:${recipientPhone}`}
-                  className="flex items-center justify-center gap-2 w-full py-3 bg-stone-900 text-white rounded-xl font-black uppercase text-xs active:bg-black">
-                  <MessageSquare size={14} /> Text Recipient
-                </a>
-                <ContactCallReveal phone={recipientPhone} label="Recipient" />
-              </div>
-            )}
+            <span className="inline-flex items-center gap-1 mt-1.5 px-3 py-1 rounded-full border border-stone-300 text-xs font-bold text-stone-600">
+              🚚 Local Delivery
+            </span>
           </div>
 
-          {/* ── GIFT SENDER ── */}
-          <div className="px-4 pt-3 pb-4 border-t-4 border-stone-100">
-            <p className="text-[10px] font-black uppercase tracking-widest text-stone-400 mb-1">🎁 Gift Sender</p>
-            <p className="text-2xl font-black text-stone-900 leading-tight">{senderName || '—'}</p>
-            {order.giftSenderEmail && <p className="text-xs text-stone-500 mt-0.5">{order.giftSenderEmail}</p>}
-            {senderPhone && (
-              <div className="mt-3 space-y-2">
-                <a href={`sms:${senderPhone}`}
-                  className="flex items-center justify-center gap-2 w-full py-3 bg-stone-900 text-white rounded-xl font-black uppercase text-xs active:bg-black">
-                  <MessageSquare size={14} /> Text Sender
-                </a>
-                <ContactCallReveal phone={senderPhone} label="Sender" />
-              </div>
-            )}
+          {/* Info rows — Lionwheel table style */}
+          <div className="border-t border-stone-100 divide-y divide-stone-100">
+            <div className="flex px-4 py-2.5"><span className="w-36 text-sm font-bold text-stone-900 shrink-0">Status:</span><span className="text-sm text-stone-700 font-bold">{STATUS_CONFIG[order.status]?.label || order.status}</span></div>
+            <div className="flex px-4 py-2.5"><span className="w-36 text-sm font-bold text-stone-900 shrink-0">Order ID:</span><span className="text-sm text-stone-700">#{cleanOrderNum}</span></div>
+            <div className="flex px-4 py-2.5"><span className="w-36 text-sm font-bold text-stone-900 shrink-0">Address:</span><span className="text-sm text-stone-700">{order.address.street}, {order.address.city}</span></div>
+            <div className="flex px-4 py-2.5"><span className="w-36 text-sm font-bold text-stone-900 shrink-0">Zip code:</span><span className="text-sm text-stone-700">{order.address.zip}</span></div>
+            <div className="flex px-4 py-2.5"><span className="w-36 text-sm font-bold text-stone-900 shrink-0">Parcels:</span><span className="text-sm font-black text-stone-900">{order.items?.reduce((s,i) => s + i.quantity, 0) || 1}</span></div>
+            <div className="flex px-4 py-2.5"><span className="w-36 text-sm font-bold text-stone-900 shrink-0">Delivery Method:</span><span className="text-sm text-stone-700">Local Delivery</span></div>
+            <div className="flex px-4 py-2.5"><span className="w-36 text-sm font-bold text-stone-900 shrink-0">Recipient Name:</span><span className="text-sm text-stone-700">{recipientName}</span></div>
+            {order.orderTotal != null && <div className="flex px-4 py-2.5"><span className="w-36 text-sm font-bold text-stone-900 shrink-0">Order Total:</span><span className="text-sm font-black text-stone-900">${Number(order.orderTotal).toFixed(2)}</span></div>}
+            {order.createdAt && <div className="flex px-4 py-2.5"><span className="w-36 text-sm font-bold text-stone-900 shrink-0">Created at:</span><span className="text-sm text-stone-700">{order.createdAt.split('T')[0]}</span></div>}
           </div>
 
-          {/* Address row + Navigate button */}
-          <div className="px-4 py-3">
-            <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest mb-0.5">Address</p>
-            <p className="text-base font-bold text-stone-900">{order.address.street}</p>
-            <p className="text-sm text-stone-500">{order.address.city}, FL {order.address.zip}</p>
-          </div>
+          {/* Items table */}
+          {order.items?.length > 0 && (
+            <div className="border-t border-stone-200">
+              <div className="flex px-4 py-2 bg-stone-50">
+                <span className="flex-1 text-xs font-black uppercase text-stone-500">Item Name</span>
+                <span className="w-10 text-xs font-black uppercase text-stone-500 text-center">Qty</span>
+                <span className="w-14 text-xs font-black uppercase text-stone-500 text-right">Price</span>
+              </div>
+              {order.items.map((item, i) => (
+                <div key={i} className="flex items-center px-4 py-3 border-t border-stone-100">
+                  <div className="flex-1 min-w-0 pr-2">
+                    <p className="text-sm font-bold text-stone-900 leading-tight">{item.name}</p>
+                    {item.sku && <p className="text-[10px] text-stone-400 italic mt-0.5">SKU: {item.sku}</p>}
+                  </div>
+                  <span className="w-10 text-sm text-stone-700 text-center">{item.quantity}</span>
+                  <span className="w-14 text-sm font-bold text-stone-900 text-right">${item.price.toFixed(1)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Navigate button */}
           <a href={mapsUrl} target="_blank" rel="noopener noreferrer"
-            className="flex items-center justify-center gap-2 py-3.5 bg-black text-white font-black uppercase text-sm active:bg-stone-800 w-full">
+            className="flex items-center justify-center gap-2 py-3.5 bg-black text-white font-black uppercase text-sm active:bg-stone-800 w-full border-t border-stone-200">
             <Navigation size={15} /> Open in Maps
           </a>
-
-          {/* Order items */}
-          {order.items?.length > 0 && order.items.map((item, i) => (
-            <div key={i} className="px-4 py-3 flex items-center justify-between">
-              <div className="flex-1 min-w-0 pr-3">
-                <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest mb-0.5">Item {order.items.length > 1 ? i+1 : ''}</p>
-                <p className="font-bold text-stone-900 text-sm leading-tight">{item.name}</p>
-                {item.quantity > 1 && <p className="text-xs text-stone-400">Qty: {item.quantity}</p>}
-              </div>
-              <p className="font-black text-stone-900 text-base shrink-0">${(item.price * item.quantity).toFixed(2)}</p>
-            </div>
-          ))}
-
         </div>
+
+        {/* ── RECIPIENT PHONE ── */}
+        {recipientPhone && (
+          <div className="mx-3 mt-3 bg-white rounded-xl border border-stone-200 px-4 py-3 space-y-2">
+            <ContactCallReveal phone={recipientPhone} label="Recipient" />
+          </div>
+        )}
+
+        {/* ── GIFTER SECTION ── */}
+        {(senderName || senderPhone) && (
+          <div className="mx-3 mt-3 bg-white rounded-xl border border-stone-200 px-4 py-3">
+            <div className="flex items-center gap-2 mb-2">
+              <Gift size={16} className="text-stone-500" />
+              <span className="text-sm font-black uppercase text-stone-700">Gifter</span>
+            </div>
+            {senderName && <div className="flex mb-1"><span className="w-32 text-sm font-bold text-stone-900">Gifter Name:</span><span className="text-sm text-stone-700">{senderName}</span></div>}
+            {senderPhone && (
+              <div className="flex items-center mt-2"><span className="w-32 text-sm font-bold text-stone-900">Gifter Phone:</span>
+                <ContactCallReveal phone={senderPhone} label="Gifter" />
+              </div>
+            )}
+          </div>
+        )}
 
         {/* ── GIFT MESSAGE ── */}
         {order.giftMessage && (
