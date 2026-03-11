@@ -4,6 +4,8 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { config } from "dotenv";
+import pkg from 'pg';
+const { Pool } = pkg;
 
 config({ path: '.env.local' });
 
@@ -16,17 +18,65 @@ const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY || '';
 const SENDGRID_FROM_EMAIL = process.env.SENDGRID_FROM_EMAIL || 'noreply@thesweettooth.com';
 const KATIE_PHONE = '305-994-4070';
 
-// --- File paths ---
+// --- PostgreSQL pool (persistent across deploys) ---
+const pool = process.env.DATABASE_URL ? new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false }
+}) : null;
+
+// --- File paths (fallback if no DB) ---
 const POD_STORAGE_PATH = path.join(__dirname, "pod_data.json");
 const USERS_PATH = path.join(__dirname, "users.json");
 const TEMPLATES_PATH = path.join(__dirname, "templates.json");
 const RESCHEDULE_PATH = path.join(__dirname, "reschedule_queue.json");
 const MESSAGE_LOG_PATH = path.join(__dirname, "message_log.json");
 
-// --- Initialize storage ---
+// --- Initialize file storage fallbacks ---
 if (!fs.existsSync(POD_STORAGE_PATH)) fs.writeFileSync(POD_STORAGE_PATH, JSON.stringify({}));
 if (!fs.existsSync(RESCHEDULE_PATH)) fs.writeFileSync(RESCHEDULE_PATH, JSON.stringify([]));
 if (!fs.existsSync(MESSAGE_LOG_PATH)) fs.writeFileSync(MESSAGE_LOG_PATH, JSON.stringify([]));
+
+// --- DB helpers ---
+async function dbGet(key: string): Promise<any> {
+  if (!pool) return null;
+  try {
+    const r = await pool.query('SELECT value FROM kv_store WHERE key=$1', [key]);
+    return r.rows[0] ? JSON.parse(r.rows[0].value) : null;
+  } catch { return null; }
+}
+
+async function dbSet(key: string, value: any): Promise<void> {
+  if (!pool) return;
+  try {
+    await pool.query(
+      'INSERT INTO kv_store(key,value) VALUES($1,$2) ON CONFLICT(key) DO UPDATE SET value=$2, updated_at=NOW()',
+      [key, JSON.stringify(value)]
+    );
+  } catch(e) { console.error('dbSet error', e); }
+}
+
+// --- Init DB tables ---
+async function initDB() {
+  if (!pool) return;
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS kv_store (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  console.log('DB ready');
+
+  // Seed default users if not present
+  const existing = await dbGet('users');
+  if (!existing) {
+    await dbSet('users', [
+      { id: "super_admin", name: "Mikey", pin: "1979", role: "SUPER_ADMIN", isActive: true, failedAttempts: 0, createdAt: new Date().toISOString() },
+      { id: "manager_1", name: "Katie", pin: "4070", role: "MANAGER", phone: "3059944070", isActive: true, failedAttempts: 0, createdAt: new Date().toISOString() }
+    ]);
+    console.log('Default users seeded');
+  }
+}
 
 if (!fs.existsSync(USERS_PATH)) {
   fs.writeFileSync(USERS_PATH, JSON.stringify([
@@ -51,8 +101,20 @@ if (!fs.existsSync(TEMPLATES_PATH)) {
 }
 
 // --- Helpers ---
-function readUsers() { return JSON.parse(fs.readFileSync(USERS_PATH, 'utf-8')); }
-function writeUsers(u: any[]) { fs.writeFileSync(USERS_PATH, JSON.stringify(u, null, 2)); }
+function readUsers(): any[] {
+  // Sync fallback — DB reads are async so callers that need sync use file
+  try { return JSON.parse(fs.readFileSync(USERS_PATH, 'utf-8')); } catch { return []; }
+}
+function writeUsers(u: any[]) {
+  try { fs.writeFileSync(USERS_PATH, JSON.stringify(u, null, 2)); } catch {}
+  dbSet('users', u); // also persist to DB
+}
+async function readUsersDB(): Promise<any[]> {
+  const db = await dbGet('users');
+  if (db) return db;
+  // fallback to file
+  try { return JSON.parse(fs.readFileSync(USERS_PATH, 'utf-8')); } catch { return []; }
+}
 function readTemplates() { return JSON.parse(fs.readFileSync(TEMPLATES_PATH, 'utf-8')); }
 function readRescheduleQueue() { return JSON.parse(fs.readFileSync(RESCHEDULE_PATH, 'utf-8')); }
 function writeRescheduleQueue(q: any[]) { fs.writeFileSync(RESCHEDULE_PATH, JSON.stringify(q, null, 2)); }
@@ -93,16 +155,17 @@ async function sendEmail(to: string, subject: string, body: string): Promise<boo
 }
 
 async function startServer() {
+  await initDB();
   const app = express();
   const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000;
   app.use(express.json({ limit: '50mb' }));
 
   // ── AUTH ────────────────────────────────────────────────────────────────────
 
-  app.post("/api/auth/login", (req, res) => {
+  app.post("/api/auth/login", async (req, res) => {
     const { pin } = req.body;
     if (!pin || pin.length !== 4) return res.status(400).json({ error: "Enter a 4-digit PIN" });
-    const users = readUsers();
+    const users = await readUsersDB();
     const user = users.find((u: any) => u.pin === pin);
     if (!user) return res.status(401).json({ error: "Incorrect PIN. Try again." });
     if (!user.isActive) return res.status(403).json({ error: "Account is inactive. Contact Katie." });
@@ -118,15 +181,16 @@ async function startServer() {
 
   // ── USERS ───────────────────────────────────────────────────────────────────
 
-  app.get("/api/users", (_req, res) => {
-    res.json({ users: readUsers().map(({ pin: _, ...u }: any) => u) });
+  app.get("/api/users", async (_req, res) => {
+    const users = await readUsersDB();
+    res.json({ users: users.map(({ pin: _, ...u }: any) => u) });
   });
 
-  app.post("/api/users", (req, res) => {
+  app.post("/api/users", async (req, res) => {
     const { name, pin, role, phone, email, vehicle } = req.body;
     if (!name || !pin || !role) return res.status(400).json({ error: "name, pin, role required" });
     if (!phone) return res.status(400).json({ error: "Phone number is required" });
-    const users = readUsers();
+    const users = await readUsersDB();
     if (users.find((u: any) => u.name.toLowerCase() === name.toLowerCase())) {
       return res.status(409).json({ error: "A user with that name already exists" });
     }
@@ -140,8 +204,8 @@ async function startServer() {
     res.json({ user: safeUser });
   });
 
-  app.patch("/api/users/:id", (req, res) => {
-    const users = readUsers();
+  app.patch("/api/users/:id", async (req, res) => {
+    const users = await readUsersDB();
     const idx = users.findIndex((u: any) => u.id === req.params.id);
     if (idx === -1) return res.status(404).json({ error: "Not found" });
     users[idx] = { ...users[idx], ...req.body };
@@ -150,10 +214,10 @@ async function startServer() {
     res.json({ user: safeUser });
   });
 
-  app.post("/api/users/:id/reset-pin", (req, res) => {
+  app.post("/api/users/:id/reset-pin", async (req, res) => {
     const { newPin } = req.body;
     if (!newPin || newPin.length !== 4) return res.status(400).json({ error: "4-digit PIN required" });
-    const users = readUsers();
+    const users = await readUsersDB();
     const idx = users.findIndex((u: any) => u.id === req.params.id);
     if (idx === -1) return res.status(404).json({ error: "Not found" });
     users[idx].pin = newPin;
