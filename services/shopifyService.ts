@@ -1,4 +1,5 @@
 import { Delivery, DeliveryStatus } from '../types';
+import { DELIVERY_FEES } from '../src/constants';
 
 export const getDeliveries = async (): Promise<Delivery[]> => {
   try {
@@ -83,7 +84,9 @@ const mapShopifyOrder = (order: any): Delivery => {
       price: parseFloat(item.price || '0'),
     }));
 
-  const shippingPrice = parseFloat(order.shipping_lines?.[0]?.price || '15.00');
+  // Look up fee from ZIP-based rate table; fall back to Shopify shipping price
+  const zipCode = (order.shipping_address?.zip || '').toString().trim().slice(0, 5);
+  const shippingPrice = DELIVERY_FEES[zipCode] ?? parseFloat(order.shipping_lines?.[0]?.price || '0');
 
   // Try multiple attribute keys for delivery date
   const rawDate = attributes['delivery date'] 

@@ -1492,7 +1492,7 @@ const PendingRescheduleQueue: React.FC<{ allUsers: UserAccount[] }> = ({ allUser
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// DRIVER PAY CARD — collapsible per-driver payroll row
+// DRIVER PAY CARD — collapsible per-delivery fees row
 // ─────────────────────────────────────────────────────────────────────────────
 
 const DriverPayCard: React.FC<{
@@ -1903,7 +1903,7 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
         )}
 
         {activeTab === 'FEES' && (() => {
-          // ── compute per-driver payroll ──────────────────────────────────
+          // ── compute per-delivery fees ──────────────────────────────────
           const inRange = feeCalculated ? deliveries.filter(d => {
             if (d.status !== DeliveryStatus.DELIVERED) return false;
             const dateToCheck = (d.completedAt || d.deliveryDate || '').split('T')[0];
@@ -1935,7 +1935,7 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
               {/* Date range picker */}
               <div className="p-5 bg-white border border-stone-100 rounded-[28px] shadow-sm space-y-4">
                 <p className="font-black uppercase text-sm text-stone-800 flex items-center gap-2">
-                  <FileText size={16} /> Driver Payroll
+                  <FileText size={16} /> Delivery Fees
                 </p>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
@@ -1952,7 +1952,7 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
 
                 <button onClick={() => { setCalcStart(feeStart); setCalcEnd(feeEnd); setFeeCalculated(true); }}
                   className="w-full py-4 bg-black text-white rounded-2xl font-black uppercase tracking-widest text-sm active:scale-95 transition-all">
-                  Calculate Payroll
+                  Calculate Fees
                 </button>
 
                 {/* Grand total banner — only shown after Calculate */}
@@ -1978,26 +1978,7 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
                 <DriverPayCard key={row.id} row={row} />
               )))}
 
-              {/* ZIP rate calculator */}
-              <div className="p-5 bg-white border border-stone-100 rounded-[28px] shadow-sm space-y-4">
-                <p className="font-black uppercase text-sm text-stone-800 flex items-center gap-2">
-                  <MapPin size={16} /> Rate by ZIP
-                </p>
-                <div className="flex gap-2">
-                  <input type="text" placeholder="ZIP code" value={feeZip}
-                    onChange={e => setFeeZip(e.target.value.replace(/\D/g, '').slice(0, 5))}
-                    className="flex-1 bg-stone-50 border border-stone-100 rounded-2xl px-4 py-4 text-lg font-black outline-none focus:border-black text-center tracking-widest" />
-                  <button onClick={() => setFeeResult(DELIVERY_FEES[feeZip] ?? null)}
-                    className="px-5 py-4 bg-black text-white rounded-2xl font-black uppercase text-xs active:scale-95">Check</button>
-                </div>
-                {feeZip.length === 5 && feeResult !== null &&
-                  <div className="flex items-center justify-between p-4 bg-green-50 rounded-2xl border border-green-100">
-                    <span className="font-black text-stone-700 uppercase text-sm">ZIP {feeZip}</span>
-                    <span className="text-2xl font-black text-green-700">${feeResult}</span>
-                  </div>}
-                {feeZip.length === 5 && feeResult === null &&
-                  <p className="text-xs font-black text-red-400 text-center">ZIP not in rate table</p>}
-              </div>
+
 
             </div>
           );
