@@ -61,6 +61,32 @@ function StatusBadge({ status }: { status: string }) {
 // SIGNATURE PAD
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Tap to reveal number, then confirm to call — no pocket dials
+const ContactCallReveal: React.FC<{ phone: string; label: string }> = ({ phone, label }) => {
+  const [revealed, setRevealed] = React.useState(false);
+  if (!revealed) {
+    return (
+      <button onClick={() => setRevealed(true)}
+        className="flex items-center justify-center gap-2 w-full py-3 bg-stone-100 text-stone-700 rounded-xl font-black uppercase text-xs active:bg-stone-200">
+        <Phone size={14} /> Show Number to Call {label}
+      </button>
+    );
+  }
+  return (
+    <div className="flex items-center gap-2 bg-stone-50 border border-stone-200 rounded-xl px-3 py-2">
+      <span className="flex-1 font-black text-stone-900 text-sm tracking-widest">{phone}</span>
+      <a href={`tel:${phone}`}
+        className="px-4 py-2 bg-black text-white rounded-lg font-black uppercase text-xs active:bg-stone-800">
+        Call
+      </a>
+      <button onClick={() => setRevealed(false)}
+        className="px-3 py-2 bg-stone-200 text-stone-600 rounded-lg font-black uppercase text-xs active:bg-stone-300">
+        Hide
+      </button>
+    </div>
+  );
+};
+
 const SignaturePad: React.FC<{ onSave: (d: string) => void; onCancel: () => void }> = ({ onSave, onCancel }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const isDrawing = useRef(false);
@@ -620,39 +646,33 @@ const OrderDetail: React.FC<{
         {/* ── ONE FLAT CARD — LionWheel style ── */}
         <div className="mx-3 mt-3 bg-white rounded-xl border border-stone-200 divide-y divide-stone-100">
 
-          {/* ── RECIPIENT — bold, large, unmissable ── */}
+          {/* ── RECIPIENT ── */}
           <div className="px-4 pt-4 pb-3">
             <p className="text-[10px] font-black uppercase tracking-widest text-stone-400 mb-1">📦 Recipient</p>
             <p className="text-2xl font-black text-stone-900 leading-tight">{recipientName}</p>
             {recipientPhone && (
-              <div className="flex gap-2 mt-3">
-                <a href={`tel:${recipientPhone}`}
-                  className="flex-1 flex items-center justify-center gap-2 py-3 bg-stone-900 text-white rounded-xl font-black uppercase text-xs active:bg-black">
-                  <Phone size={14} /> Call Recipient
-                </a>
+              <div className="mt-3 space-y-2">
                 <a href={`sms:${recipientPhone}`}
-                  className="flex-1 flex items-center justify-center gap-2 py-3 bg-stone-900 text-white rounded-xl font-black uppercase text-xs active:bg-black">
+                  className="flex items-center justify-center gap-2 w-full py-3 bg-stone-900 text-white rounded-xl font-black uppercase text-xs active:bg-black">
                   <MessageSquare size={14} /> Text Recipient
                 </a>
+                <ContactCallReveal phone={recipientPhone} label="Recipient" />
               </div>
             )}
           </div>
 
-          {/* ── GIFT SENDER — equally bold and clear ── */}
+          {/* ── GIFT SENDER ── */}
           <div className="px-4 pt-3 pb-4 border-t-4 border-stone-100">
             <p className="text-[10px] font-black uppercase tracking-widest text-stone-400 mb-1">🎁 Gift Sender</p>
             <p className="text-2xl font-black text-stone-900 leading-tight">{senderName || '—'}</p>
             {order.giftSenderEmail && <p className="text-xs text-stone-500 mt-0.5">{order.giftSenderEmail}</p>}
             {senderPhone && (
-              <div className="flex gap-2 mt-3">
-                <a href={`tel:${senderPhone}`}
-                  className="flex-1 flex items-center justify-center gap-2 py-3 bg-stone-900 text-white rounded-xl font-black uppercase text-xs active:bg-black">
-                  <Phone size={14} /> Call Sender
-                </a>
+              <div className="mt-3 space-y-2">
                 <a href={`sms:${senderPhone}`}
-                  className="flex-1 flex items-center justify-center gap-2 py-3 bg-stone-900 text-white rounded-xl font-black uppercase text-xs active:bg-black">
+                  className="flex items-center justify-center gap-2 w-full py-3 bg-stone-900 text-white rounded-xl font-black uppercase text-xs active:bg-black">
                   <MessageSquare size={14} /> Text Sender
                 </a>
+                <ContactCallReveal phone={senderPhone} label="Sender" />
               </div>
             )}
           </div>
