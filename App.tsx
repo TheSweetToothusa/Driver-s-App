@@ -6,7 +6,7 @@ import {
   Eye, Camera, PenTool,
   Settings, FileText,
   UserPlus, Users,
-  MessageCircle, ChevronLeft, Edit3,
+  MessageCircle, MessageSquare, ChevronLeft, Edit3,
   Bell, Clock, XCircle, Gift, User,
   AlertTriangle, RotateCcw, Inbox
 } from 'lucide-react';
@@ -620,30 +620,40 @@ const OrderDetail: React.FC<{
         {/* ── ONE FLAT CARD — LionWheel style ── */}
         <div className="mx-3 mt-3 bg-white rounded-xl border border-stone-200 divide-y divide-stone-100">
 
-          {/* Recipient row */}
-          <div className="px-4 py-3 flex items-center justify-between">
-            <div>
-              <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest mb-0.5">Recipient</p>
-              <p className="text-xl font-black text-stone-900">{recipientName}</p>
-            </div>
+          {/* ── RECIPIENT — bold, large, unmissable ── */}
+          <div className="px-4 pt-4 pb-3">
+            <p className="text-[10px] font-black uppercase tracking-widest text-stone-400 mb-1">📦 Recipient</p>
+            <p className="text-2xl font-black text-stone-900 leading-tight">{recipientName}</p>
             {recipientPhone && (
-              <a href={`tel:${recipientPhone}`} className="w-11 h-11 bg-stone-900 rounded-full flex items-center justify-center active:bg-black shrink-0">
-                <Phone size={18} className="text-white" />
-              </a>
+              <div className="flex gap-2 mt-3">
+                <a href={`tel:${recipientPhone}`}
+                  className="flex-1 flex items-center justify-center gap-2 py-3 bg-stone-900 text-white rounded-xl font-black uppercase text-xs active:bg-black">
+                  <Phone size={14} /> Call Recipient
+                </a>
+                <a href={`sms:${recipientPhone}`}
+                  className="flex-1 flex items-center justify-center gap-2 py-3 bg-stone-900 text-white rounded-xl font-black uppercase text-xs active:bg-black">
+                  <MessageSquare size={14} /> Text Recipient
+                </a>
+              </div>
             )}
           </div>
 
-          {/* Gift Sender row — always shown, primary contact */}
-          <div className="px-4 py-3 flex items-center justify-between">
-            <div>
-              <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest mb-0.5">Gift Sender</p>
-              <p className="text-base font-bold text-stone-800">{senderName || '—'}</p>
-              {order.giftSenderEmail && <p className="text-xs text-stone-400 mt-0.5">{order.giftSenderEmail}</p>}
-            </div>
+          {/* ── GIFT SENDER — equally bold and clear ── */}
+          <div className="px-4 pt-3 pb-4 border-t-4 border-stone-100">
+            <p className="text-[10px] font-black uppercase tracking-widest text-stone-400 mb-1">🎁 Gift Sender</p>
+            <p className="text-2xl font-black text-stone-900 leading-tight">{senderName || '—'}</p>
+            {order.giftSenderEmail && <p className="text-xs text-stone-500 mt-0.5">{order.giftSenderEmail}</p>}
             {senderPhone && (
-              <a href={`tel:${senderPhone}`} className="w-11 h-11 bg-stone-900 rounded-full flex items-center justify-center active:bg-black shrink-0">
-                <Phone size={18} className="text-white" />
-              </a>
+              <div className="flex gap-2 mt-3">
+                <a href={`tel:${senderPhone}`}
+                  className="flex-1 flex items-center justify-center gap-2 py-3 bg-stone-900 text-white rounded-xl font-black uppercase text-xs active:bg-black">
+                  <Phone size={14} /> Call Sender
+                </a>
+                <a href={`sms:${senderPhone}`}
+                  className="flex-1 flex items-center justify-center gap-2 py-3 bg-stone-900 text-white rounded-xl font-black uppercase text-xs active:bg-black">
+                  <MessageSquare size={14} /> Text Sender
+                </a>
+              </div>
             )}
           </div>
 
