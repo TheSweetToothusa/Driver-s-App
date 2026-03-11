@@ -2018,6 +2018,9 @@ export default function App() {
   const [dataSource, setDataSource] = useState<'LIVE' | 'MOCK' | 'ERROR'>('MOCK');
   const [tab, setTab] = useState<'ORDERS' | 'SCHEDULE' | 'ADMIN'>('SCHEDULE');
   const isAdmin = currentUser?.role === 'SUPER_ADMIN' || currentUser?.role === 'MANAGER';
+  const [zipQuery, setZipQuery] = useState('');
+  const [zipRate, setZipRate] = useState<number | null | undefined>(undefined);
+  const [showZipBar, setShowZipBar] = useState(false);
 
   useEffect(() => {
     if (currentUser) {
@@ -2075,10 +2078,6 @@ export default function App() {
   if (!currentUser) {
     return <LoginGate onAuthorized={user => { setCurrentUser(user); localStorage.setItem('currentUser', JSON.stringify(user)); }} />;
   }
-
-  const [zipQuery, setZipQuery] = useState('');
-  const [zipRate, setZipRate] = useState<number | null | undefined>(undefined);
-  const [showZipBar, setShowZipBar] = useState(false);
 
   if (selectedOrder) {
     return (
