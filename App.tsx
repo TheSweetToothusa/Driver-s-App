@@ -808,11 +808,16 @@ const OrderDetail: React.FC<{
               </button>
             </div>
             {photoData && <img src={photoData} className="w-full rounded-xl max-h-36 object-cover" alt="POD" />}
-            {/* DELIVERED */}
-            <button onClick={handleComplete}
-              className="w-full py-5 bg-green-600 text-white rounded-2xl font-black uppercase text-xl tracking-wide flex items-center justify-center gap-2 active:scale-95 shadow-lg">
+            {/* DELIVERED — requires photo */}
+            <button
+              onClick={photoData ? handleComplete : () => alert('Please add a delivery photo first.')}
+              disabled={!photoData}
+              className={'w-full py-5 rounded-2xl font-black uppercase text-xl tracking-wide flex items-center justify-center gap-2 shadow-lg transition-all ' + (photoData ? 'bg-green-600 text-white active:scale-95 cursor-pointer' : 'bg-stone-300 text-stone-400 cursor-not-allowed opacity-60')}>
               <CheckCircle2 size={24} /> DELIVERED
             </button>
+            {!photoData && (
+              <p className="text-center text-xs font-bold text-red-500 uppercase tracking-wide -mt-1">📷 Add a photo to enable delivery confirmation</p>
+            )}
             {/* FAILED */}
             <button onClick={() => setShowFailFlow(true)}
               className="w-full py-4 border-2 border-stone-800 text-stone-900 rounded-2xl font-black uppercase text-sm flex items-center justify-center gap-2 active:scale-95">
