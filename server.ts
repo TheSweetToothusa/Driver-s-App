@@ -168,7 +168,7 @@ async function startServer() {
   app.get("/api/orders", async (_req, res) => {
     try {
       // Fetch ALL open orders with local delivery shipping method
-      const url = `https://${SHOPIFY_STORE_URL}/admin/api/2024-01/orders.json?status=open&limit=100&fulfillment_status=unfulfilled`;
+      const url = `https://${SHOPIFY_STORE_URL}/admin/api/2024-01/orders.json?status=any&limit=250`;
       const resp = await fetch(url, { headers: { 'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN, 'Content-Type': 'application/json' } });
       if (!resp.ok) {
         const errText = await resp.text();
@@ -261,6 +261,23 @@ async function startServer() {
     if (deliveryFee !== undefined) pod[req.params.id].deliveryFee = deliveryFee;
     fs.writeFileSync(POD_STORAGE_PATH, JSON.stringify(pod, null, 2));
     res.json({ success: true });
+  });
+
+  // ── DEBUG: see raw order statuses ──────────────────────────────────────────
+  app.get('/api/debug/orders', async (req, res) => {
+    try {
+      const url = `https://${SHOPIFY_STORE_URL}/admin/api/2024-01/orders.json?status=any&limit=50`;
+      const resp = await fetch(url, { headers: { 'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN } });
+      const data = await resp.json();
+      const summary = (data.orders || []).map((o: any) => ({
+        id: o.id, name: o.name,
+        fulfillment_status: o.fulfillment_status,
+        financial_status: o.financial_status,
+        tags: o.tags,
+        st_tags: (o.tags||'').split(',').filter((t:string)=>t.trim().startsWith('st_'))
+      }));
+      res.json({ count: summary.length, orders: summary });
+    } catch(e) { res.status(500).json({ error: String(e) }); }
   });
 
   // ── POD ─────────────────────────────────────────────────────────────────────

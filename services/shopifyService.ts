@@ -117,8 +117,10 @@ const mapShopifyOrder = (order: any): Delivery => {
     deliveryFee: shippingPrice,
     orderTotal: parseFloat(order.total_price || order.subtotal_price || "0"),
     deliveryInstructions: order.note || attributes['delivery instructions'] || attributes['instructions'] || '',
-    status: (order._st_status as DeliveryStatus) || DeliveryStatus.PENDING,
-    completedAt: order._st_completedAt || undefined,
+    // Status priority: 1) our st_ tag, 2) Shopify fulfillment_status, 3) PENDING
+    status: (order._st_status as DeliveryStatus) ||
+      (order.fulfillment_status === 'fulfilled' ? DeliveryStatus.DELIVERED : DeliveryStatus.PENDING),
+    completedAt: order._st_completedAt || (order.fulfillment_status === "fulfilled" ? order.updated_at : undefined),
     deliveryDate: parseDeliveryDate(rawDate),
     priority: order.tags?.toLowerCase().includes('urgent') ? 'Urgent' :
               order.tags?.toLowerCase().includes('sympathy') ? 'Sympathy' : 'Standard',
