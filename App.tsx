@@ -1950,9 +1950,11 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
 
         {activeTab === 'FEES' && (() => {
           // ── compute per-delivery fees ──────────────────────────────────
+          // Use completedAt first, fall back to deliveryDate (completedAt lost on server restart)
           const inRange = feeCalculated ? deliveries.filter(d => {
             if (d.status !== DeliveryStatus.DELIVERED) return false;
-            const dateToCheck = (d.completedAt || d.deliveryDate || '').split('T')[0];
+            const dateToCheck = (d.completedAt || d.submittedAt || d.deliveryDate || '').split('T')[0];
+            if (!dateToCheck) return true; // include if no date info — show all delivered
             return dateToCheck >= calcStart && dateToCheck <= calcEnd;
           }) : [];
 

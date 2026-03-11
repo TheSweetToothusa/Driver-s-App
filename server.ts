@@ -187,8 +187,27 @@ async function startServer() {
         return hasTag || hasLocalShipping || allOrders.length < 10; // if few orders, show all
       });
       const podData = JSON.parse(fs.readFileSync(POD_STORAGE_PATH, 'utf-8'));
-      console.log(`Shopify: ${allOrders.length} total, ${filtered.length} local delivery`);
-      res.json({ orders: filtered.length > 0 ? filtered : allOrders, podData });
+
+      // Restore status/completedAt from Shopify tags (survives server restarts)
+      const ordersWithTags = (filtered.length > 0 ? filtered : allOrders).map((o: any) => {
+        const tagsList = (o.tags || '').split(',').map((t: string) => t.trim());
+        const statusTag = tagsList.find((t: string) => t.startsWith('st_status:'));
+        const completedTag = tagsList.find((t: string) => t.startsWith('st_completed:'));
+        const driverTag = tagsList.find((t: string) => t.startsWith('st_driver:'));
+        if (statusTag) {
+          o._st_status = statusTag.replace('st_status:', '');
+        }
+        if (completedTag) {
+          o._st_completedAt = completedTag.replace('st_completed:', '').replace(/-(?=\d{2}-\d{2}[T ])/g, ':');
+        }
+        if (driverTag) {
+          o._st_driverId = driverTag.replace('st_driver:', '');
+        }
+        return o;
+      });
+
+      console.log(`Shopify: ${allOrders.length} total, ${(filtered.length > 0 ? filtered : allOrders).length} local delivery`);
+      res.json({ orders: ordersWithTags, podData });
     } catch (e) {
       console.error('Orders fetch error:', e);
       res.status(500).json({ error: String(e) });
@@ -246,12 +265,36 @@ async function startServer() {
 
   // ── POD ─────────────────────────────────────────────────────────────────────
 
-  app.post("/api/pod", (req, res) => {
+  app.post("/api/pod", async (req, res) => {
     const { orderId, photo, signature, notes, completedAt, status, driverId, driverName, failureReason } = req.body;
     try {
       const pod = JSON.parse(fs.readFileSync(POD_STORAGE_PATH, 'utf-8'));
       pod[orderId] = { ...pod[orderId], photo, signature, notes, completedAt, submittedAt: new Date().toISOString(), status, driverId, driverName, failureReason };
       fs.writeFileSync(POD_STORAGE_PATH, JSON.stringify(pod, null, 2));
+
+      // Write status + completedAt back to Shopify as order tags so it survives server restarts
+      if (SHOPIFY_STORE_URL && SHOPIFY_ACCESS_TOKEN && status === 'DELIVERED') {
+        try {
+          // Get existing tags first
+          const existing = await fetch(`https://${SHOPIFY_STORE_URL}/admin/api/2024-01/orders/${orderId}.json?fields=tags`, {
+            headers: { 'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN }
+          });
+          const existingData = await existing.json();
+          const currentTags = existingData.order?.tags || '';
+          const tagsList = currentTags.split(',').map((t: string) => t.trim()).filter((t: string) => t && !t.startsWith('st_status:') && !t.startsWith('st_completed:') && !t.startsWith('st_driver:'));
+          tagsList.push(`st_status:DELIVERED`);
+          tagsList.push(`st_completed:${(completedAt || new Date().toISOString()).replace(/:/g,'-')}`);
+          if (driverId) tagsList.push(`st_driver:${driverId}`);
+          await fetch(`https://${SHOPIFY_STORE_URL}/admin/api/2024-01/orders/${orderId}.json`, {
+            method: 'PUT',
+            headers: { 'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ order: { id: orderId, tags: tagsList.join(', ') } })
+          });
+        } catch (tagErr) {
+          console.error('Failed to write tags to Shopify (non-fatal):', tagErr);
+        }
+      }
+
       res.json({ success: true });
     } catch { res.status(500).json({ error: "Failed to save POD" }); }
   });
