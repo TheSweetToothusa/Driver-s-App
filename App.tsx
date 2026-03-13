@@ -2115,24 +2115,15 @@ export default function App() {
     try {
       const fetched = await getDeliveries();
       const isMock = fetched.some((d: Delivery) => d.id === '33989');
-      // Auto-assign unassigned orders to Katie
-      const withDefaults = fetched.map((d: Delivery) => {
-        const pod = d; // podData already merged in service
-        if (!pod.driverId || pod.driverId === '') {
-          return { ...pod, driverId: 'manager_1', driverName: 'Katie', status: pod.status === DeliveryStatus.PENDING ? DeliveryStatus.ASSIGNED : pod.status };
-        }
-        return pod;
-      });
-      setDeliveries(withDefaults);
+      setDeliveries(fetched);
       setDataSource(isMock ? 'MOCK' : 'LIVE');
       setLastSync(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
     } catch (err) {
       console.error('fetchOrders failed:', err);
-      // Always fall back to samples so app is never empty
       const { getDeliveries: gd } = await import('./services/shopifyService');
       try {
         const fallback = await gd();
-        setDeliveries(fallback.map((d: Delivery) => ({ ...d, driverId: 'manager_1', driverName: 'Katie' })));
+        setDeliveries(fallback);
       } catch {}
       setDataSource('ERROR');
     }

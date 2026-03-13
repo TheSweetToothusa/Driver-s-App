@@ -127,9 +127,8 @@ const mapShopifyOrder = (order: any): Delivery => {
     deliveryDate: parseDeliveryDate(rawDate),
     priority: order.tags?.toLowerCase().includes('urgent') ? 'Urgent' :
               order.tags?.toLowerCase().includes('sympathy') ? 'Sympathy' : 'Standard',
-    driverId: '',
-    driverName: '',
-    attempts: [],
+    driverId: order._st_driverId || '',
+    driverName: order._st_driverName || '',
     internalNotes: [],
     giftMessage: attributes['gift message'] || attributes['giftmessage'] || attributes['message'] || order.note || '',
     giftSenderName: `${buyer.first_name || ''} ${buyer.last_name || ''}`.trim() || 'Customer',

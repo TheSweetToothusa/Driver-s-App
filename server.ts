@@ -258,15 +258,11 @@ async function startServer() {
         const statusTag = tagsList.find((t: string) => t.startsWith('st_status:'));
         const completedTag = tagsList.find((t: string) => t.startsWith('st_completed:'));
         const driverTag = tagsList.find((t: string) => t.startsWith('st_driver:'));
-        if (statusTag) {
-          o._st_status = statusTag.replace('st_status:', '');
-        }
-        if (completedTag) {
-          o._st_completedAt = completedTag.replace('st_completed:', '').replace(/-(?=\d{2}-\d{2}[T ])/g, ':');
-        }
-        if (driverTag) {
-          o._st_driverId = driverTag.replace('st_driver:', '');
-        }
+        const driverNameTag = tagsList.find((t: string) => t.startsWith('st_drivername:'));
+        if (statusTag) o._st_status = statusTag.replace('st_status:', '');
+        if (completedTag) o._st_completedAt = completedTag.replace('st_completed:', '').replace(/-(?=\d{2}-\d{2}[T ])/g, ':');
+        if (driverTag) o._st_driverId = driverTag.replace('st_driver:', '');
+        if (driverNameTag) o._st_driverName = driverNameTag.replace('st_drivername:', '');
         return o;
       });
 
@@ -362,10 +358,11 @@ async function startServer() {
           });
           const existingData = await existing.json();
           const currentTags = existingData.order?.tags || '';
-          const tagsList = currentTags.split(',').map((t: string) => t.trim()).filter((t: string) => t && !t.startsWith('st_status:') && !t.startsWith('st_completed:') && !t.startsWith('st_driver:'));
+          const tagsList = currentTags.split(',').map((t: string) => t.trim()).filter((t: string) => t && !t.startsWith('st_status:') && !t.startsWith('st_completed:') && !t.startsWith('st_driver:') && !t.startsWith('st_drivername:'));
           tagsList.push(`st_status:DELIVERED`);
           tagsList.push(`st_completed:${(completedAt || new Date().toISOString()).replace(/:/g,'-')}`);
           if (driverId) tagsList.push(`st_driver:${driverId}`);
+          if (driverName) tagsList.push(`st_drivername:${driverName.replace(/,/g, '')}`);
           await fetch(`https://${SHOPIFY_STORE_URL}/admin/api/2024-01/orders/${orderId}.json`, {
             method: 'PUT',
             headers: { 'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN, 'Content-Type': 'application/json' },
