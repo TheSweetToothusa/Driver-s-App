@@ -75,6 +75,24 @@ async function initDB() {
       { id: "manager_1", name: "Katie", pin: "4070", role: "MANAGER", phone: "3059944070", isActive: true, failedAttempts: 0, createdAt: new Date().toISOString() }
     ]);
     console.log('Default users seeded');
+  } else {
+    // Always ensure core accounts are unlocked and have correct PINs
+    const users = JSON.parse(existing);
+    let changed = false;
+    const mikey = users.find((u: any) => u.id === 'super_admin');
+    const katie = users.find((u: any) => u.id === 'manager_1');
+    if (mikey && (mikey.lockedUntil || mikey.failedAttempts > 0)) {
+      mikey.lockedUntil = undefined; mikey.failedAttempts = 0; changed = true;
+    }
+    if (katie && (katie.lockedUntil || katie.failedAttempts > 0)) {
+      katie.lockedUntil = undefined; katie.failedAttempts = 0; changed = true;
+    }
+    // If Katie's PIN got corrupted, reset to default
+    if (katie && katie.pin !== '4070' && katie.pin !== '3333') {
+      katie.pin = '4070'; changed = true;
+      console.log('Katie PIN reset to default 4070');
+    }
+    if (changed) await dbSet('users', users);
   }
 
   // Seed Katie as default driver if not already set
@@ -117,9 +135,9 @@ function readUsers(): any[] {
   // Sync fallback — DB reads are async so callers that need sync use file
   try { return JSON.parse(fs.readFileSync(USERS_PATH, 'utf-8')); } catch { return []; }
 }
-function writeUsers(u: any[]) {
+async function writeUsers(u: any[]) {
   try { fs.writeFileSync(USERS_PATH, JSON.stringify(u, null, 2)); } catch {}
-  dbSet('users', u); // also persist to DB
+  await dbSet('users', u); // persist to DB — awaited so it never gets lost
 }
 async function readUsersDB(): Promise<any[]> {
   const db = await dbGet('users');
@@ -186,7 +204,7 @@ async function startServer() {
     }
     user.failedAttempts = 0;
     user.lockedUntil = undefined;
-    writeUsers(users);
+    await writeUsers(users);
     const { pin: _, ...safeUser } = user;
     res.json({ user: safeUser });
   });
@@ -211,7 +229,7 @@ async function startServer() {
     }
     const newUser = { id: `user_${Date.now()}`, name, pin, role, phone: phone || '', email: email || '', vehicle: vehicle || '', isActive: true, failedAttempts: 0, createdAt: new Date().toISOString() };
     users.push(newUser);
-    writeUsers(users);
+    await writeUsers(users);
     const { pin: _, ...safeUser } = newUser;
     res.json({ user: safeUser });
   });
@@ -221,7 +239,7 @@ async function startServer() {
     const idx = users.findIndex((u: any) => u.id === req.params.id);
     if (idx === -1) return res.status(404).json({ error: "Not found" });
     users[idx] = { ...users[idx], ...req.body };
-    writeUsers(users);
+    await writeUsers(users);
     const { pin: _, ...safeUser } = users[idx];
     res.json({ user: safeUser });
   });
@@ -235,7 +253,7 @@ async function startServer() {
     users[idx].pin = newPin;
     users[idx].lockedUntil = undefined;
     users[idx].failedAttempts = 0;
-    writeUsers(users);
+    await writeUsers(users);
     res.json({ success: true });
   });
 
