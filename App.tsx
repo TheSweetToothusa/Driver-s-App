@@ -73,6 +73,7 @@ const ContactCallReveal: React.FC<{ phone: string; label: string; showTemplates?
   const [revealed, setRevealed] = React.useState(false);
   const [showTpl, setShowTpl] = React.useState(false);
   const [smsSent, setSmsSent] = React.useState(false);
+  const [customMsg, setCustomMsg] = React.useState('');
   const clean = phone.replace(/\D/g, '');
   const dn = driverName || 'your driver';
   const dp = driverPhone || '';
@@ -137,6 +138,23 @@ const ContactCallReveal: React.FC<{ phone: string; label: string; showTemplates?
               </a>
             );
           })}
+          {/* Custom message */}
+          <div className="bg-white border border-stone-200 rounded-lg px-3 py-2.5 space-y-2">
+            <p className="text-xs font-bold text-stone-800">✏️ Write your own</p>
+            <textarea
+              value={customMsg}
+              onChange={e => setCustomMsg(e.target.value)}
+              placeholder="Type your message here..."
+              rows={3}
+              className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-black resize-none"
+            />
+            <a
+              href={customMsg.trim() ? `sms:${clean}?body=${encodeURIComponent(customMsg)}` : '#'}
+              onClick={e => { if (!customMsg.trim()) { e.preventDefault(); return; } handleTemplateTap(); }}
+              className={`flex items-center justify-center gap-2 w-full py-2.5 rounded-lg font-black uppercase text-xs transition-all ${customMsg.trim() ? 'bg-green-500 text-white active:bg-green-600' : 'bg-stone-200 text-stone-400 cursor-not-allowed'}`}>
+              💬 Send Custom Message
+            </a>
+          </div>
         </div>
       )}
     </div>
@@ -2153,6 +2171,7 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
   const [feeCalculated, setFeeCalculated] = useState(false);
   const [calcStart, setCalcStart] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 7); return d.toISOString().split('T')[0]; });
   const [calcEnd, setCalcEnd] = useState(() => new Date().toISOString().split('T')[0]);
+  const [feeDriverFilter, setFeeDriverFilter] = useState<string>('ALL');
   const [defaultDriverId, setDefaultDriverId] = useState<string>('');
   const [defaultDriverSaved, setDefaultDriverSaved] = useState(false);
 
@@ -2362,13 +2381,15 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
             stops
           })).sort((a, b) => b.total - a.total);
 
-          const grandTotal = driverRows.reduce((s, r) => s + r.total, 0);
-          const grandCount = driverRows.reduce((s, r) => s + r.count, 0);
+
+          const filteredRows = feeDriverFilter === 'ALL' ? driverRows : driverRows.filter(r => r.id === feeDriverFilter);
+          const grandTotal = filteredRows.reduce((s, r) => s + r.total, 0);
+          const grandCount = filteredRows.reduce((s, r) => s + r.count, 0);
 
           return (
             <div className="space-y-4">
 
-              {/* Date range picker */}
+              {/* Date range + driver filter */}
               <div className="p-5 bg-white border border-stone-100 rounded-[28px] shadow-sm space-y-4">
                 <p className="font-black uppercase text-sm text-stone-800 flex items-center gap-2">
                   <FileText size={16} /> Delivery Fees
@@ -2386,16 +2407,33 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
                   </div>
                 </div>
 
+                {/* Driver filter */}
+                <div>
+                  <label className="text-[8px] font-black uppercase text-stone-400 mb-1 block">Driver</label>
+                  <select
+                    value={feeDriverFilter}
+                    onChange={e => { setFeeDriverFilter(e.target.value); setFeeCalculated(false); }}
+                    className="w-full bg-stone-50 border border-stone-100 rounded-xl px-3 py-2.5 text-sm font-bold outline-none focus:border-black appearance-none"
+                  >
+                    <option value="ALL">All Drivers</option>
+                    {allUsers.filter(u => (u.role === 'DRIVER' || u.role === 'MANAGER') && u.isActive).map(u => (
+                      <option key={u.id} value={u.id}>{u.name}</option>
+                    ))}
+                  </select>
+                </div>
+
                 <button onClick={() => { setCalcStart(feeStart); setCalcEnd(feeEnd); setFeeCalculated(true); }}
                   className="w-full py-4 bg-black text-white rounded-2xl font-black uppercase tracking-widest text-sm active:scale-95 transition-all">
                   Calculate Fees
                 </button>
 
-                {/* Grand total banner — only shown after Calculate */}
+                {/* Grand total banner */}
                 {feeCalculated && (
                   <div className="flex items-center justify-between p-4 bg-black rounded-2xl">
                     <div>
-                      <p className="text-[9px] font-black uppercase text-white/50 mb-0.5">Grand Total</p>
+                      <p className="text-[9px] font-black uppercase text-white/50 mb-0.5">
+                        {feeDriverFilter === 'ALL' ? 'Grand Total — All Drivers' : `Total — ${allUsers.find(u => u.id === feeDriverFilter)?.name || 'Driver'}`}
+                      </p>
                       <p className="text-[10px] font-black text-white/60">{grandCount} successful {grandCount === 1 ? 'delivery' : 'deliveries'}</p>
                       <p className="text-[9px] text-white/40">{calcStart} → {calcEnd}</p>
                     </div>
@@ -2404,17 +2442,15 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
                 )}
               </div>
 
-              {/* Per-driver cards — only after Calculate */}
-              {feeCalculated && (driverRows.length === 0 ? (
+              {/* Per-driver cards */}
+              {feeCalculated && (filteredRows.length === 0 ? (
                 <div className="text-center py-12">
                   <FileText size={32} className="mx-auto text-stone-200 mb-2" />
                   <p className="text-[11px] font-black uppercase text-stone-300">No completed deliveries in this range</p>
                 </div>
-              ) : driverRows.map(row => (
+              ) : filteredRows.map(row => (
                 <DriverPayCard key={row.id} row={row} />
               )))}
-
-
 
             </div>
           );
