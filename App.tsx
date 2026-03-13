@@ -2168,7 +2168,6 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
     setDefaultDriverSaved(true);
     setTimeout(() => setDefaultDriverSaved(false), 3000);
   };
-
   const drivers = allUsers.filter(u => u.role === 'DRIVER');
 
   const handleAddDriver = async () => {
@@ -2230,6 +2229,20 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
                 <p className="font-black uppercase text-sm text-stone-800 flex items-center gap-2">⭐ Default Driver</p>
                 <p className="text-xs text-stone-400 mt-0.5">All new incoming orders are automatically assigned to this driver</p>
               </div>
+              {/* Current default — clearly shown */}
+              <div className="flex items-center gap-3 bg-green-50 border border-green-200 rounded-2xl px-4 py-3">
+                <div className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center text-white font-black text-sm shrink-0">
+                  {(allUsers.find(u => u.id === defaultDriverId) || allUsers.find(u => u.id === 'manager_1'))?.name?.charAt(0) || '?'}
+                </div>
+                <div>
+                  <p className="text-[10px] font-black uppercase text-green-700 tracking-widest">Currently Assigned To</p>
+                  <p className="text-sm font-black text-green-900">
+                    {allUsers.find(u => u.id === defaultDriverId)?.name || 'Katie'}
+                  </p>
+                </div>
+              </div>
+              {/* Change default */}
+              <p className="text-[10px] font-black uppercase text-stone-400 tracking-widest">Change default driver:</p>
               <select
                 value={defaultDriverId}
                 onChange={e => setDefaultDriverId(e.target.value)}

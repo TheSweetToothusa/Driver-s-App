@@ -76,6 +76,13 @@ async function initDB() {
     ]);
     console.log('Default users seeded');
   }
+
+  // Seed Katie as default driver if not already set
+  const defaultDriver = await getKV('default_driver');
+  if (!defaultDriver) {
+    await setKV('default_driver', JSON.stringify({ driverId: 'manager_1', driverName: 'Katie' }));
+    console.log('Default driver set to Katie');
+  }
 }
 
 if (!fs.existsSync(USERS_PATH)) {
