@@ -62,11 +62,48 @@ function StatusBadge({ status }: { status: string }) {
 
 // Tap to reveal number, then confirm to call — no pocket dials
 const SMS_TEMPLATES_DATA = [
-  { id: 'no_one_home', label: '🚪 No One Home', build: (n: string, p: string, _a: string) => `Hi, this is ${n} from The Sweet Tooth 🍫 Someone sent you a gift and I'm here to deliver it! I can't leave chocolate outside. Please call/text me back ASAP: ${p}` },
-  { id: 'cant_find_unit', label: '🏢 Can\'t Find Unit', build: (n: string, p: string, a: string) => `Hi, Sweet Tooth delivery 🍫 Someone sent you a gift! I'm at ${a} but can't find your unit. Can you call/text me at ${p} to help me get to you?` },
-  { id: 'gated', label: '🔒 Gated / No Access', build: (n: string, p: string, _a: string) => `Hi, Sweet Tooth delivery 🍫 Someone sent you a gift! I'm at your gate/building and need the access code or to be buzzed in. Please call/text ${p} right away!` },
-  { id: 'wrong_address', label: '📍 Wrong Address', build: (n: string, p: string, _a: string) => `Hi, Sweet Tooth delivery 🍫 Someone sent you a gift but I'm having trouble finding you! Can you confirm your full address? Call/text me at ${p}.` },
-  { id: 'running_late', label: '🚗 Running Late', build: (n: string, p: string, _a: string) => `Hi, Sweet Tooth delivery 🍫 Someone sent you a gift and I'm on my way — just hitting some traffic. Will someone be home in the next 15-20 mins? If not, what's the best time to come back? Call/text ${p}.` },
+  {
+    id: 'im_outside',
+    label: "🚪 I'm Outside / Anyone Home?",
+    build: (n: string, p: string, _a: string) =>
+      `Hi! This is The Sweet Tooth 🍫 — we're a chocolate gift shop and someone sent you a special gift! Our driver is outside right now. Is anyone home to receive it? It's perishable and we can't leave it outside. Please call or text us back at ${p}. Thank you!`,
+  },
+  {
+    id: 'no_one_home',
+    label: '🔔 No Answer — Leave With Someone?',
+    build: (n: string, p: string, _a: string) =>
+      `Hi! This is The Sweet Tooth 🍫 — someone sent you a chocolate gift and our driver just tried to deliver it but couldn't reach you. It's perishable and we can't leave it outside. Is there a neighbor, doorman, or someone nearby who can receive it? Please call or text us at ${p} ASAP. Thank you!`,
+  },
+  {
+    id: 'cant_find_unit',
+    label: "🏢 Can't Find Your Unit",
+    build: (n: string, p: string, a: string) =>
+      `Hi! This is The Sweet Tooth 🍫 — someone sent you a chocolate gift and our driver is at ${a || 'your address'} but is having trouble finding your unit. Can you help guide us in? Please call or text ${p} right away. We don't want your gift to go to waste!`,
+  },
+  {
+    id: 'gated',
+    label: '🔒 Gated / Need Access',
+    build: (n: string, p: string, _a: string) =>
+      `Hi! This is The Sweet Tooth 🍫 — someone sent you a chocolate gift! Our driver is at your gate or building entrance and needs the access code or to be buzzed in. Please call or text us at ${p} right away so we can get your gift to you!`,
+  },
+  {
+    id: 'wrong_address',
+    label: '📍 Having Trouble Finding You',
+    build: (n: string, p: string, _a: string) =>
+      `Hi! This is The Sweet Tooth 🍫 — someone sent you a chocolate gift and our driver is on the way but is having trouble with the address. Can you confirm your full address or drop a pin? Please call or text us at ${p}. We want to make sure your gift gets to you!`,
+  },
+  {
+    id: 'running_late',
+    label: '🚗 Running Late',
+    build: (n: string, p: string, _a: string) =>
+      `Hi! This is The Sweet Tooth 🍫 — someone sent you a chocolate gift and our driver is on the way but running a bit behind due to traffic. We'll be there in about 15–20 minutes. Will someone be available to receive it? If not, please let us know the best time to come back. Call or text ${p}. Thank you!`,
+  },
+  {
+    id: 'perishable_warning',
+    label: '🌡️ Perishable — Need to Coordinate',
+    build: (n: string, p: string, _a: string) =>
+      `Hi! This is The Sweet Tooth 🍫 — someone sent you a chocolate gift! We've tried to reach you a couple of times. Since it's perishable, we can't leave it outside. Please call or text us at ${p} so we can arrange delivery. We'd hate for your gift to go to waste!`,
+  },
 ];
 
 const ContactCallReveal: React.FC<{ phone: string; label: string; showTemplates?: boolean; driverName?: string; driverPhone?: string; address?: string }> = ({ phone, label, showTemplates, driverName, driverPhone, address }) => {
@@ -119,9 +156,9 @@ const ContactCallReveal: React.FC<{ phone: string; label: string; showTemplates?
 
       {/* SMS sent toast */}
       {smsSent && (
-        <div className="flex items-center justify-center gap-2 bg-green-500 text-white rounded-xl px-3 py-2.5 animate-pulse">
+        <div className="flex items-center justify-center gap-2 bg-green-500 text-white rounded-xl px-3 py-2.5">
           <CheckCircle2 size={16} />
-          <span className="text-sm font-black">Message opened in Messages app!</span>
+          <span className="text-sm font-black">Message copied — paste it in Messages!</span>
         </div>
       )}
 
@@ -129,13 +166,21 @@ const ContactCallReveal: React.FC<{ phone: string; label: string; showTemplates?
         <div className="space-y-1.5 pt-1">
           <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest">Choose a message to send:</p>
           {SMS_TEMPLATES_DATA.map(t => {
-            const msg = encodeURIComponent(t.build(dn, dp, addr));
+            const msgText = t.build(dn, dp, addr);
             return (
-              <a key={t.id} href={`sms:${clean}?body=${msg}`} onClick={handleTemplateTap}
-                className="flex items-center justify-between w-full bg-white border border-stone-200 rounded-lg px-3 py-2.5 active:bg-green-50 active:border-green-300">
+              <button
+                key={t.id}
+                onClick={() => {
+                  // Copy to clipboard first, then open SMS blank so driver can paste
+                  // This avoids iOS "repeatedly trying to open another application" block
+                  navigator.clipboard?.writeText(msgText).catch(() => {});
+                  window.location.href = `sms:${clean}`;
+                  handleTemplateTap();
+                }}
+                className="flex items-center justify-between w-full bg-white border border-stone-200 rounded-lg px-3 py-2.5 active:bg-green-50 active:border-green-300 text-left">
                 <span className="text-xs font-bold text-stone-800">{t.label}</span>
                 <ChevronRight size={13} className="text-stone-400" />
-              </a>
+              </button>
             );
           })}
           {/* Custom message */}
@@ -148,12 +193,16 @@ const ContactCallReveal: React.FC<{ phone: string; label: string; showTemplates?
               rows={3}
               className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-black resize-none"
             />
-            <a
-              href={customMsg.trim() ? `sms:${clean}?body=${encodeURIComponent(customMsg)}` : '#'}
-              onClick={e => { if (!customMsg.trim()) { e.preventDefault(); return; } handleTemplateTap(); }}
+            <button
+              onClick={() => {
+                if (!customMsg.trim()) return;
+                navigator.clipboard?.writeText(customMsg).catch(() => {});
+                window.location.href = `sms:${clean}`;
+                handleTemplateTap();
+              }}
               className={`flex items-center justify-center gap-2 w-full py-2.5 rounded-lg font-black uppercase text-xs transition-all ${customMsg.trim() ? 'bg-green-500 text-white active:bg-green-600' : 'bg-stone-200 text-stone-400 cursor-not-allowed'}`}>
-              💬 Send Custom Message
-            </a>
+              💬 Open Messages
+            </button>
           </div>
         </div>
       )}
@@ -1966,38 +2015,11 @@ const DriversView: React.FC<{
 
   const drivers = allUsers.filter(u => u.role === 'DRIVER' || u.role === 'MANAGER');
 
-  const SMS_TEMPLATES = [
-    {
-      id: 'no_one_home',
-      label: '🚪 No One Home',
-      build: (driverName: string, driverPhone: string) =>
-        `Hi, this is ${driverName} from The Sweet Tooth 🍫 Someone sent you a gift and I'm here to deliver it! I can't leave chocolate outside. Please call/text me back ASAP: ${driverPhone}`,
-    },
-    {
-      id: 'cant_find_unit',
-      label: '🏢 Can\'t Find Unit/Apt',
-      build: (driverName: string, driverPhone: string, address?: string) =>
-        `Hi, Sweet Tooth delivery 🍫 Someone sent you a gift! I'm at ${address || 'your address'} but can't find your unit. Can you call/text me at ${driverPhone} to help me get to you?`,
-    },
-    {
-      id: 'gated',
-      label: '🔒 Gated / No Access',
-      build: (driverName: string, driverPhone: string) =>
-        `Hi, Sweet Tooth delivery 🍫 Someone sent you a gift! I'm at your gate/building and need the access code or to be buzzed in. Please call/text ${driverPhone} right away!`,
-    },
-    {
-      id: 'wrong_address',
-      label: '📍 Wrong / Incomplete Address',
-      build: (driverName: string, driverPhone: string) =>
-        `Hi, Sweet Tooth delivery 🍫 Someone sent you a gift but I'm having trouble finding you! Can you confirm your full address? Call/text me at ${driverPhone}.`,
-    },
-    {
-      id: 'running_late',
-      label: '🚗 Running Late / Traffic',
-      build: (driverName: string, driverPhone: string) =>
-        `Hi, Sweet Tooth delivery 🍫 Someone sent you a gift and I'm on my way — just hitting some traffic. Will someone be home in the next 15-20 mins? If not, what's the best time to come back? Call/text ${driverPhone}.`,
-    },
-  ];
+  const SMS_TEMPLATES = SMS_TEMPLATES_DATA.map(t => ({
+    id: t.id,
+    label: t.label,
+    preview: t.build('[Driver Name]', '[Driver Phone]', '[Address]'),
+  }));
 
   const handleAddDriver = async () => {
     setAddError(''); setAddSuccess('');
@@ -2082,7 +2104,7 @@ const DriversView: React.FC<{
                 <div className="px-4 pb-3">
                   <div className="bg-stone-50 border border-stone-200 rounded-xl p-3">
                     <p className="text-sm text-stone-700 leading-relaxed">
-                      {t.build('[Driver Name]', '[Driver Phone]', '[Address]')}
+                      {t.preview}
                     </p>
                   </div>
                   <p className="text-[10px] text-stone-400 mt-2 italic">Brackets auto-fill with real driver info when sent from order detail</p>
