@@ -320,7 +320,7 @@ const OrderCard: React.FC<{ order: Delivery; role: AppRole; onTap: () => void; i
         </div>
         {/* Driver row — admin only */}
         {(role === 'SUPER_ADMIN' || role === 'MANAGER') && (
-          <p className="text-[10px] text-stone-400 mt-1">{order.driverName ? `Driver: ${order.driverName}` : '⚠ No driver'}</p>
+          <p className="text-[10px] text-stone-400 mt-1">{order.driverName ? `Driver: ${order.driverName}` : ''}</p>
         )}
       </div>
     </div>
@@ -1156,7 +1156,7 @@ const OrdersView: React.FC<OrdersViewProps> = ({
         {/* Stats */}
         <div className="grid grid-cols-4 border-b border-stone-200">
           {[
-            { label: 'Unassigned', val: unassignedCount, color: 'text-red-600' },
+          { label: 'Assigned', val: deliveries.filter(d => d.driverId).length, color: 'text-blue-600' },
             { label: 'Assigned', val: deliveries.filter(d => d.status === DeliveryStatus.ASSIGNED).length, color: 'text-blue-600' },
             { label: 'Out for Delivery', val: inTransitCount, color: 'text-black' },
             { label: 'Done Today', val: deliveredTodayCount, color: 'text-green-600' },
@@ -1264,7 +1264,7 @@ const OrdersView: React.FC<OrdersViewProps> = ({
                     )}
                   </div>
                   <div className="cursor-pointer" onClick={() => onSelectOrder(order)}>
-                    <p className="text-xs font-bold text-stone-700 truncate">{order.driverName || <span className="text-red-500 font-black">—</span>}</p>
+                    <p className="text-xs font-bold text-stone-700 truncate">{order.driverName || ''}</p>
                   </div>
                   <div onClick={e => e.stopPropagation()}>
                     <select
@@ -2447,13 +2447,14 @@ export default function App() {
     try {
       const fetched = await getDeliveries();
       const isMock = fetched.some((d: Delivery) => d.id === '33989');
-      // Apply default driver to any order with no driver assigned
+      // Apply default driver to any order missing a driver
       const ddRaw = await fetch('/api/config/default-driver').then(r => r.json()).catch(() => null);
       const dd = ddRaw?.driverId ? ddRaw : null;
       const withDriver = dd
         ? fetched.map((d: Delivery) => (!d.driverId || d.driverId === '') ? { ...d, driverId: dd.driverId, driverName: dd.driverName } : d)
         : fetched;
       setDeliveries(withDriver);
+      if (dd) setDefaultDriver(dd);
       setDataSource(isMock ? 'MOCK' : 'LIVE');
       setLastSync(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
     } catch (err) {
