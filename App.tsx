@@ -111,6 +111,7 @@ const ContactCallReveal: React.FC<{ phone: string; label: string; showTemplates?
   const [showTpl, setShowTpl] = React.useState(false);
   const [smsSent, setSmsSent] = React.useState(false);
   const [customMsg, setCustomMsg] = React.useState('');
+  const [previewTpl, setPreviewTpl] = React.useState<string | null>(null);
   const clean = phone.replace(/\D/g, '');
   const dn = driverName || 'your driver';
   const dp = driverPhone || '';
@@ -148,7 +149,7 @@ const ContactCallReveal: React.FC<{ phone: string; label: string; showTemplates?
           className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-black text-white rounded-lg font-black uppercase text-xs active:bg-stone-800">
           <Phone size={13} /> Call
         </a>
-        <button onClick={() => { setRevealed(false); setShowTpl(false); }}
+        <button onClick={() => { setRevealed(false); setShowTpl(false); setPreviewTpl(null); }}
           className="px-3 py-2.5 bg-stone-200 text-stone-600 rounded-lg font-black uppercase text-xs active:bg-stone-300">
           Hide
         </button>
@@ -164,38 +165,74 @@ const ContactCallReveal: React.FC<{ phone: string; label: string; showTemplates?
 
       {showTpl && (
         <div className="space-y-1.5 pt-1">
-          <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest">Tap a message — it opens pre-written in Messages:</p>
-          {SMS_TEMPLATES_DATA.map(t => {
-            const msgText = t.build(dn, dp, addr);
-            const smsUrl = `sms:${clean}?body=${encodeURIComponent(msgText)}`;
-            return (
-              <a
-                key={t.id}
-                href={smsUrl}
-                onClick={handleTemplateTap}
-                className="flex items-center justify-between w-full bg-white border border-stone-200 rounded-lg px-3 py-2.5 active:bg-green-50 active:border-green-300 text-left">
-                <span className="text-xs font-bold text-stone-800">{t.label}</span>
-                <ChevronRight size={13} className="text-stone-400" />
-              </a>
-            );
-          })}
-          {/* Custom message */}
-          <div className="bg-white border border-stone-200 rounded-lg px-3 py-2.5 space-y-2">
-            <p className="text-xs font-bold text-stone-800">✏️ Write your own</p>
-            <textarea
-              value={customMsg}
-              onChange={e => setCustomMsg(e.target.value)}
-              placeholder="Type your message here..."
-              rows={3}
-              className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-black resize-none"
-            />
-            <a
-              href={customMsg.trim() ? `sms:${clean}?body=${encodeURIComponent(customMsg)}` : '#'}
-              onClick={e => { if (!customMsg.trim()) { e.preventDefault(); return; } handleTemplateTap(); }}
-              className={`flex items-center justify-center gap-2 w-full py-2.5 rounded-lg font-black uppercase text-xs transition-all ${customMsg.trim() ? 'bg-green-500 text-white active:bg-green-600' : 'bg-stone-200 text-stone-400 cursor-not-allowed'}`}>
-              💬 Open in Messages
-            </a>
-          </div>
+          {!previewTpl ? (
+            <>
+              <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest">Tap to preview before sending:</p>
+              {SMS_TEMPLATES_DATA.map(t => (
+                <button
+                  key={t.id}
+                  onClick={() => setPreviewTpl(t.id)}
+                  className="flex items-center justify-between w-full bg-white border border-stone-200 rounded-lg px-3 py-2.5 active:bg-stone-50 text-left">
+                  <span className="text-xs font-bold text-stone-800">{t.label}</span>
+                  <ChevronRight size={13} className="text-stone-400" />
+                </button>
+              ))}
+              {/* Custom message */}
+              <div className="bg-white border border-stone-200 rounded-lg px-3 py-2.5 space-y-2">
+                <p className="text-xs font-bold text-stone-800">✏️ Write your own</p>
+                <textarea
+                  value={customMsg}
+                  onChange={e => setCustomMsg(e.target.value)}
+                  placeholder="Type your message here..."
+                  rows={3}
+                  className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-black resize-none"
+                />
+                {customMsg.trim() && (
+                  <button
+                    onClick={() => setPreviewTpl('__custom__')}
+                    className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg font-black uppercase text-xs bg-stone-800 text-white active:bg-black">
+                    Preview Before Sending
+                  </button>
+                )}
+              </div>
+            </>
+          ) : (
+            /* ── PREVIEW SCREEN ── */
+            <div className="bg-white border-2 border-green-400 rounded-xl overflow-hidden">
+              <div className="bg-green-500 px-3 py-2 flex items-center justify-between">
+                <span className="text-white text-xs font-black uppercase tracking-widest">📋 Message Preview</span>
+                <button onClick={() => setPreviewTpl(null)} className="text-white/80 text-xs font-black">← Back</button>
+              </div>
+              {/* iPhone-style bubble */}
+              <div className="px-4 py-4 bg-stone-50">
+                <div className="bg-green-500 rounded-2xl rounded-br-sm px-4 py-3 max-w-[90%] ml-auto">
+                  <p className="text-white text-sm leading-relaxed">
+                    {previewTpl === '__custom__'
+                      ? customMsg
+                      : SMS_TEMPLATES_DATA.find(t => t.id === previewTpl)?.build(dn, dp, addr)}
+                  </p>
+                </div>
+                <p className="text-[10px] text-stone-400 text-right mt-1">To: {phone}</p>
+              </div>
+              <div className="px-3 pb-3 space-y-2">
+                <a
+                  href={`sms:${clean}?body=${encodeURIComponent(
+                    previewTpl === '__custom__'
+                      ? customMsg
+                      : SMS_TEMPLATES_DATA.find(t => t.id === previewTpl)?.build(dn, dp, addr) || ''
+                  )}`}
+                  onClick={handleTemplateTap}
+                  className="flex items-center justify-center gap-2 w-full py-3.5 bg-green-500 text-white rounded-xl font-black uppercase text-sm active:bg-green-600">
+                  ✅ Looks Good — Send It
+                </a>
+                <button
+                  onClick={() => setPreviewTpl(null)}
+                  className="flex items-center justify-center w-full py-2.5 bg-stone-100 text-stone-600 rounded-xl font-black uppercase text-xs active:bg-stone-200">
+                  ← Choose Different Message
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
