@@ -158,29 +158,25 @@ const ContactCallReveal: React.FC<{ phone: string; label: string; showTemplates?
       {smsSent && (
         <div className="flex items-center justify-center gap-2 bg-green-500 text-white rounded-xl px-3 py-2.5">
           <CheckCircle2 size={16} />
-          <span className="text-sm font-black">Message copied — paste it in Messages!</span>
+          <span className="text-sm font-black">✅ Message is pre-written — just hit Send!</span>
         </div>
       )}
 
       {showTpl && (
         <div className="space-y-1.5 pt-1">
-          <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest">Choose a message to send:</p>
+          <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest">Tap a message — it opens pre-written in Messages:</p>
           {SMS_TEMPLATES_DATA.map(t => {
             const msgText = t.build(dn, dp, addr);
+            const smsUrl = `sms:${clean}?body=${encodeURIComponent(msgText)}`;
             return (
-              <button
+              <a
                 key={t.id}
-                onClick={() => {
-                  // Copy to clipboard first, then open SMS blank so driver can paste
-                  // This avoids iOS "repeatedly trying to open another application" block
-                  navigator.clipboard?.writeText(msgText).catch(() => {});
-                  window.location.href = `sms:${clean}`;
-                  handleTemplateTap();
-                }}
+                href={smsUrl}
+                onClick={handleTemplateTap}
                 className="flex items-center justify-between w-full bg-white border border-stone-200 rounded-lg px-3 py-2.5 active:bg-green-50 active:border-green-300 text-left">
                 <span className="text-xs font-bold text-stone-800">{t.label}</span>
                 <ChevronRight size={13} className="text-stone-400" />
-              </button>
+              </a>
             );
           })}
           {/* Custom message */}
@@ -193,16 +189,12 @@ const ContactCallReveal: React.FC<{ phone: string; label: string; showTemplates?
               rows={3}
               className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-black resize-none"
             />
-            <button
-              onClick={() => {
-                if (!customMsg.trim()) return;
-                navigator.clipboard?.writeText(customMsg).catch(() => {});
-                window.location.href = `sms:${clean}`;
-                handleTemplateTap();
-              }}
+            <a
+              href={customMsg.trim() ? `sms:${clean}?body=${encodeURIComponent(customMsg)}` : '#'}
+              onClick={e => { if (!customMsg.trim()) { e.preventDefault(); return; } handleTemplateTap(); }}
               className={`flex items-center justify-center gap-2 w-full py-2.5 rounded-lg font-black uppercase text-xs transition-all ${customMsg.trim() ? 'bg-green-500 text-white active:bg-green-600' : 'bg-stone-200 text-stone-400 cursor-not-allowed'}`}>
-              💬 Open Messages
-            </button>
+              💬 Open in Messages
+            </a>
           </div>
         </div>
       )}
