@@ -639,20 +639,16 @@ const OrderDetail: React.FC<{
       {/* ── SCROLLABLE CONTENT ── */}
       <div className="flex-1 overflow-y-auto">
 
-        {/* ── DELIVERY INSTRUCTIONS — always visible ── */}
-        <div className={`mx-3 mt-3 rounded-xl px-4 py-4 flex gap-3 items-start ${order.deliveryInstructions ? 'bg-amber-400' : 'bg-stone-100 border border-stone-200'}`}>
-          <AlertTriangle size={22} className={`shrink-0 mt-0.5 ${order.deliveryInstructions ? 'text-amber-900' : 'text-stone-400'}`} />
-          <div>
-            <p className={`text-[9px] font-black uppercase tracking-widest mb-1 ${order.deliveryInstructions ? 'text-amber-800' : 'text-stone-400'}`}>
-              Delivery Instructions
-            </p>
-            {order.deliveryInstructions ? (
+        {/* ── DELIVERY INSTRUCTIONS — only shows when present ── */}
+        {order.deliveryInstructions && (
+          <div className="mx-3 mt-3 bg-amber-400 rounded-xl px-4 py-4 flex gap-3 items-start">
+            <AlertTriangle size={22} className="text-amber-900 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-[9px] font-black uppercase text-amber-800 tracking-widest mb-1">Delivery Instructions</p>
               <p className="font-black text-amber-950 text-base leading-snug">{order.deliveryInstructions}</p>
-            ) : (
-              <p className="text-sm text-stone-400 italic">No special instructions</p>
-            )}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* ── MAIN DETAIL CARD — Lionwheel style ── */}
         <div className="mx-3 mt-3 bg-white rounded-xl border border-stone-200 overflow-hidden">
