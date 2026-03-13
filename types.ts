@@ -75,6 +75,8 @@ export interface Delivery {
   };
   address: {
     street: string;
+    unit?: string;
+    company?: string;
     city: string;
     zip: string;
     lat: number;

@@ -599,7 +599,7 @@ const OrderDetail: React.FC<{
   const senderPhone = editingContact ? editFields.senderPhone : (order.giftSenderPhone || '');
   const recipientName = editingContact ? editFields.recipientName : (order.giftReceiverName || order.customer?.name || '');
   const senderName = editingContact ? editFields.senderName : (order.giftSenderName || '');
-  const mapsUrl = `https://maps.google.com/?q=${encodeURIComponent((order.address?.street || '') + ' ' + (order.address?.city || '') + ' FL ' + (order.address?.zip || ''))}`;
+  const mapsUrl = `https://maps.google.com/?q=${encodeURIComponent([order.address?.street, order.address?.unit, order.address?.city, 'FL', order.address?.zip].filter(Boolean).join(' '))}`;
   const cleanOrderNum = order.orderNumber?.replace(/^#+/, '') || order.id;
 
 
@@ -667,42 +667,44 @@ const OrderDetail: React.FC<{
 
           {/* Info rows — Lionwheel table style */}
           <div className="border-t border-stone-100 divide-y divide-stone-100">
-            <div className="flex px-4 py-2.5"><span className="w-36 text-sm font-bold text-stone-900 shrink-0">Status:</span><span className="text-sm text-stone-700 font-bold">{STATUS_CONFIG[order.status]?.label || order.status}</span></div>
-            <div className="flex px-4 py-2.5"><span className="w-36 text-sm font-bold text-stone-900 shrink-0">Order ID:</span><span className="text-sm text-stone-700">#{cleanOrderNum}</span></div>
-            <div className="flex flex-col px-4 py-2.5 gap-0.5">
-              <span className="w-36 text-sm font-bold text-stone-900 shrink-0">Address:</span>
-              <span className="text-sm text-stone-700">{order.address.street.split(' ').slice(0,4).join(' ')}</span>
-              {order.address.street.match(/\b(apt|unit|ste|suite|#|fl|floor)\b/i) && (
-                <span className="inline-flex items-center gap-1 self-start bg-amber-100 border border-amber-300 text-amber-800 text-xs font-black px-2 py-0.5 rounded-md mt-0.5">
-                  🏢 {order.address.street.replace(/^[^,]*/, '').replace(/^,?\s*/, '') || order.address.street.split(/\s+/).slice(-2).join(' ')}
+
+            {/* ADDRESS — large and prominent */}
+            <div className="px-4 py-3">
+              <span className="text-xs font-black uppercase text-stone-400 tracking-widest">Address</span>
+              <p className="text-xl font-black text-stone-900 mt-1 leading-snug">{order.address.street}</p>
+              {order.address.unit && (
+                <span className="inline-flex items-center gap-1 mt-1 bg-amber-100 border border-amber-300 text-amber-900 text-sm font-black px-2.5 py-0.5 rounded-md">
+                  🏢 {order.address.unit}
                 </span>
               )}
-              <span className="text-xs text-stone-500">{order.address.city}</span>
+              {order.address.company && (
+                <p className="text-sm font-bold text-blue-700 mt-1">📍 {order.address.company}</p>
+              )}
+              <p className="text-base font-bold text-stone-600 mt-0.5">{order.address.city}, {order.address.zip}</p>
             </div>
-            <div className="flex px-4 py-2.5"><span className="w-36 text-sm font-bold text-stone-900 shrink-0">Zip code:</span><span className="text-sm text-stone-700">{order.address.zip}</span></div>
+
             <div className="flex px-4 py-2.5"><span className="w-36 text-sm font-bold text-stone-900 shrink-0">Parcels:</span><span className="text-sm font-black text-stone-900">{order.items?.reduce((s,i) => s + i.quantity, 0) || 1}</span></div>
             <div className="flex px-4 py-2.5"><span className="w-36 text-sm font-bold text-stone-900 shrink-0">Delivery Method:</span><span className="text-sm text-stone-700">Local Delivery</span></div>
             <div className="flex px-4 py-2.5"><span className="w-36 text-sm font-bold text-stone-900 shrink-0">Gift Receiver:</span><span className="text-sm text-stone-700">{recipientName}</span></div>
             {order.orderTotal != null && <div className="flex px-4 py-2.5"><span className="w-36 text-sm font-bold text-stone-900 shrink-0">Order Total:</span><span className="text-sm font-black text-stone-900">${Number(order.orderTotal).toFixed(2)}</span></div>}
-            {order.createdAt && <div className="flex px-4 py-2.5"><span className="w-36 text-sm font-bold text-stone-900 shrink-0">Created at:</span><span className="text-sm text-stone-700">{order.createdAt.split('T')[0]}</span></div>}
           </div>
 
-          {/* Items table */}
+          {/* Items table — larger, bold, grey background */}
           {order.items?.length > 0 && (
-            <div className="border-t border-stone-200">
-              <div className="flex px-4 py-2 bg-stone-50">
-                <span className="flex-1 text-xs font-black uppercase text-stone-500">Item Name</span>
+            <div className="border-t-2 border-stone-200">
+              <div className="flex px-4 py-2.5 bg-stone-100">
+                <span className="flex-1 text-xs font-black uppercase text-stone-500 tracking-widest">📦 Item Name</span>
                 <span className="w-10 text-xs font-black uppercase text-stone-500 text-center">Qty</span>
-                <span className="w-14 text-xs font-black uppercase text-stone-500 text-right">Price</span>
+                <span className="w-16 text-xs font-black uppercase text-stone-500 text-right">Price</span>
               </div>
               {order.items.map((item, i) => (
-                <div key={i} className="flex items-center px-4 py-3 border-t border-stone-100">
+                <div key={i} className="flex items-start px-4 py-4 border-t border-stone-100 bg-stone-50">
                   <div className="flex-1 min-w-0 pr-2">
-                    <p className="text-sm font-bold text-stone-900 leading-tight">{item.name}</p>
-                    {item.sku && <p className="text-[10px] text-stone-400 italic mt-0.5">SKU: {item.sku}</p>}
+                    <p className="text-base font-black text-stone-900 leading-snug">{item.name}</p>
+                    {item.sku && <p className="text-[11px] text-stone-400 italic mt-1">SKU: {item.sku}</p>}
                   </div>
-                  <span className="w-10 text-sm text-stone-700 text-center">{item.quantity}</span>
-                  <span className="w-14 text-sm font-bold text-stone-900 text-right">${item.price.toFixed(1)}</span>
+                  <span className="w-10 text-base font-black text-stone-900 text-center">{item.quantity}</span>
+                  <span className="w-16 text-base font-black text-stone-900 text-right">${item.price.toFixed(2)}</span>
                 </div>
               ))}
             </div>

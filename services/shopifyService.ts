@@ -105,11 +105,13 @@ const mapShopifyOrder = (order: any): Delivery => {
     orderNumber: order.name,
     customer: {
       name: `${shipping.first_name || ''} ${shipping.last_name || ''}`.trim() || 'Recipient',
-      phone: shipping.phone || buyer.phone || '',
+      phone: shipping.phone || '',
       email: buyer.email || ''
     },
     address: {
-      street: [shipping.address1, shipping.address2].filter(Boolean).join(' ') || 'No Address',
+      street: shipping.address1 || 'No Address',
+      unit: shipping.address2 || '',
+      company: shipping.company || '',
       city: shipping.city || 'Miami',
       zip: shipping.zip || '33179',
       lat: 25.946, lng: -80.155
@@ -131,7 +133,7 @@ const mapShopifyOrder = (order: any): Delivery => {
     internalNotes: [],
     giftMessage: attributes['gift message'] || attributes['giftmessage'] || attributes['message'] || order.note || '',
     giftSenderName: `${buyer.first_name || ''} ${buyer.last_name || ''}`.trim() || 'Customer',
-    giftSenderPhone: billing.phone || buyer.phone || '',
+    giftSenderPhone: buyer.phone || billing.phone || '',
     giftSenderEmail: buyer.email || '',
     giftReceiverName: `${shipping.first_name || ''} ${shipping.last_name || ''}`.trim() || ''
   };
