@@ -78,10 +78,15 @@ async function initDB() {
   }
 
   // Seed Katie as default driver if not already set
-  const defaultDriver = await getKV('default_driver');
-  if (!defaultDriver) {
+  try {
+    const defaultDriver = await getKV('default_driver');
+    const parsed = defaultDriver ? JSON.parse(defaultDriver) : null;
+    if (!parsed || !parsed.driverId) {
+      await setKV('default_driver', JSON.stringify({ driverId: 'manager_1', driverName: 'Katie' }));
+      console.log('Default driver set to Katie');
+    }
+  } catch {
     await setKV('default_driver', JSON.stringify({ driverId: 'manager_1', driverName: 'Katie' }));
-    console.log('Default driver set to Katie');
   }
 }
 

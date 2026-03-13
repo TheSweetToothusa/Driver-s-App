@@ -2462,10 +2462,11 @@ export default function App() {
       const isMock = fetched.some((d: Delivery) => d.id === '33989');
       // Apply default driver to any order missing a driver
       const ddRaw = await fetch('/api/config/default-driver').then(r => r.json()).catch(() => null);
-      const dd = ddRaw?.driverId ? ddRaw : null;
-      const withDriver = dd
-        ? fetched.map((d: Delivery) => (!d.driverId || d.driverId === '') ? { ...d, driverId: dd.driverId, driverName: dd.driverName } : d)
-        : fetched;
+      // Fall back to Katie if nothing is configured yet
+      const dd = ddRaw?.driverId ? ddRaw : { driverId: 'manager_1', driverName: 'Katie' };
+      const withDriver = fetched.map((d: Delivery) =>
+        (!d.driverId || d.driverId === '') ? { ...d, driverId: dd.driverId, driverName: dd.driverName } : d
+      );
       setDeliveries(withDriver);
       if (dd) setDefaultDriver(dd);
       setDataSource(isMock ? 'MOCK' : 'LIVE');
