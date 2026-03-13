@@ -73,10 +73,16 @@ const SMS_TEMPLATES_DATA = [
 const ContactCallReveal: React.FC<{ phone: string; label: string; showTemplates?: boolean; driverName?: string; driverPhone?: string; address?: string }> = ({ phone, label, showTemplates, driverName, driverPhone, address }) => {
   const [revealed, setRevealed] = React.useState(false);
   const [showTpl, setShowTpl] = React.useState(false);
+  const [smsSent, setSmsSent] = React.useState(false);
   const clean = phone.replace(/\D/g, '');
   const dn = driverName || 'your driver';
   const dp = driverPhone || '';
   const addr = address || 'your address';
+
+  const handleTemplateTap = () => {
+    setSmsSent(true);
+    setTimeout(() => setSmsSent(false), 2500);
+  };
 
   if (!revealed) {
     return (
@@ -110,13 +116,22 @@ const ContactCallReveal: React.FC<{ phone: string; label: string; showTemplates?
           Hide
         </button>
       </div>
+
+      {/* SMS sent toast */}
+      {smsSent && (
+        <div className="flex items-center justify-center gap-2 bg-green-500 text-white rounded-xl px-3 py-2.5 animate-pulse">
+          <CheckCircle2 size={16} />
+          <span className="text-sm font-black">Message opened in Messages app!</span>
+        </div>
+      )}
+
       {showTpl && (
         <div className="space-y-1.5 pt-1">
           <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest">Choose a message to send:</p>
           {SMS_TEMPLATES_DATA.map(t => {
             const msg = encodeURIComponent(t.build(dn, dp, addr));
             return (
-              <a key={t.id} href={`sms:${clean}?body=${msg}`}
+              <a key={t.id} href={`sms:${clean}?body=${msg}`} onClick={handleTemplateTap}
                 className="flex items-center justify-between w-full bg-white border border-stone-200 rounded-lg px-3 py-2.5 active:bg-green-50 active:border-green-300">
                 <span className="text-xs font-bold text-stone-800">{t.label}</span>
                 <ChevronRight size={13} className="text-stone-400" />
@@ -532,11 +547,16 @@ const OrderDetail: React.FC<{
     const r = new FileReader(); r.onloadend = () => setPhotoData(r.result as string); r.readAsDataURL(f);
   };
 
+  const [showDeliveredConfirm, setShowDeliveredConfirm] = useState(false);
+
   const handleComplete = async () => {
     const now = new Date().toISOString();
     const updates: Partial<Delivery> = { status: DeliveryStatus.DELIVERED, confirmationPhoto: photoData || undefined, confirmationSignature: sigData || undefined, driverNotes: driverNote, completedAt: now, submittedAt: now };
     onUpdate(order.id, updates);
     await fetch('/api/pod', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orderId: order.id, photo: photoData, signature: sigData, notes: driverNote, completedAt: now, status: 'DELIVERED', driverId: currentUser.id, driverName: currentUser.name }) });
+    // Show full-screen delivery confirmation, then go back
+    setShowDeliveredConfirm(true);
+    setTimeout(() => { setShowDeliveredConfirm(false); onBack(); }, 2500);
   };
 
   const handleFailSubmit = async (reason: FailureReason, notes: string, photo: string | null) => {
@@ -640,6 +660,19 @@ const OrderDetail: React.FC<{
 
   return (
     <div className="flex flex-col h-screen bg-gray-50">
+
+      {/* ── DELIVERY CONFIRMED OVERLAY ── */}
+      {showDeliveredConfirm && (
+        <div className="fixed inset-0 z-[999] bg-green-500 flex flex-col items-center justify-center">
+          <div className="flex flex-col items-center gap-4">
+            <div className="w-28 h-28 rounded-full bg-white flex items-center justify-center shadow-xl">
+              <CheckCircle2 size={64} className="text-green-500" />
+            </div>
+            <p className="text-white text-3xl font-black uppercase tracking-widest">Delivered!</p>
+            <p className="text-white/70 text-sm font-bold">#{order.orderNumber?.replace(/^#+/, '') || order.id}</p>
+          </div>
+        </div>
+      )}
 
       {/* ── HEADER: black bar, order#, status, back button ── */}
       <div className="bg-black text-white px-4 py-3 flex items-center gap-3 shrink-0">
@@ -769,7 +802,14 @@ const OrderDetail: React.FC<{
             </div>
             <p className="text-base font-black text-stone-900 mb-2">{recipientName}</p>
             {recipientPhone ? (
-              <ContactCallReveal phone={recipientPhone} label="Receiver" />
+              <ContactCallReveal
+                phone={recipientPhone}
+                label="Receiver"
+                showTemplates={true}
+                driverName={currentUser.name}
+                driverPhone={currentUser.phone || ''}
+                address={[order.address?.street, order.address?.unit].filter(Boolean).join(', ')}
+              />
             ) : (
               <div className="flex items-center gap-2 bg-amber-50 border border-amber-300 rounded-xl px-3 py-2.5">
                 <span className="text-lg">⚠️</span>
@@ -790,7 +830,12 @@ const OrderDetail: React.FC<{
               </div>
               <p className="text-base font-black text-stone-900 mb-2">{senderName}</p>
               {senderPhone ? (
-                <ContactCallReveal phone={senderPhone} label="Gift Sender" />
+                <ContactCallReveal
+                  phone={senderPhone}
+                  label="Gift Sender"
+                  driverName={currentUser.name}
+                  driverPhone={currentUser.phone || ''}
+                />
               ) : (
                 <p className="text-xs text-stone-400 italic">No phone number on file</p>
               )}
