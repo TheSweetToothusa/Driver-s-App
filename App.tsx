@@ -62,9 +62,22 @@ function StatusBadge({ status }: { status: string }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Tap to reveal number, then confirm to call — no pocket dials
-const ContactCallReveal: React.FC<{ phone: string; label: string }> = ({ phone, label }) => {
+const SMS_TEMPLATES_DATA = [
+  { id: 'no_one_home', label: '🚪 No One Home', build: (n: string, p: string, _a: string) => `Hi, this is ${n} from The Sweet Tooth 🍫 Someone sent you a gift and I'm here to deliver it! I can't leave chocolate outside. Please call/text me back ASAP: ${p}` },
+  { id: 'cant_find_unit', label: '🏢 Can\'t Find Unit', build: (n: string, p: string, a: string) => `Hi, Sweet Tooth delivery 🍫 Someone sent you a gift! I'm at ${a} but can't find your unit. Can you call/text me at ${p} to help me get to you?` },
+  { id: 'gated', label: '🔒 Gated / No Access', build: (n: string, p: string, _a: string) => `Hi, Sweet Tooth delivery 🍫 Someone sent you a gift! I'm at your gate/building and need the access code or to be buzzed in. Please call/text ${p} right away!` },
+  { id: 'wrong_address', label: '📍 Wrong Address', build: (n: string, p: string, _a: string) => `Hi, Sweet Tooth delivery 🍫 Someone sent you a gift but I'm having trouble finding you! Can you confirm your full address? Call/text me at ${p}.` },
+  { id: 'running_late', label: '🚗 Running Late', build: (n: string, p: string, _a: string) => `Hi, Sweet Tooth delivery 🍫 Someone sent you a gift and I'm on my way — just hitting some traffic. Will someone be home in the next 15-20 mins? If not, what's the best time to come back? Call/text ${p}.` },
+];
+
+const ContactCallReveal: React.FC<{ phone: string; label: string; showTemplates?: boolean; driverName?: string; driverPhone?: string; address?: string }> = ({ phone, label, showTemplates, driverName, driverPhone, address }) => {
   const [revealed, setRevealed] = React.useState(false);
+  const [showTpl, setShowTpl] = React.useState(false);
   const clean = phone.replace(/\D/g, '');
+  const dn = driverName || 'your driver';
+  const dp = driverPhone || '';
+  const addr = address || 'your address';
+
   if (!revealed) {
     return (
       <button onClick={() => setRevealed(true)}
@@ -77,19 +90,41 @@ const ContactCallReveal: React.FC<{ phone: string; label: string }> = ({ phone, 
     <div className="bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 space-y-2">
       <span className="block font-black text-stone-900 text-sm tracking-widest">{phone}</span>
       <div className="flex items-center gap-2">
-        <a href={`sms:${clean}`}
-          className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-green-500 text-white rounded-lg font-black uppercase text-xs active:bg-green-600">
-          💬 Text
-        </a>
+        {showTemplates && dp ? (
+          <button onClick={() => setShowTpl(s => !s)}
+            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-green-500 text-white rounded-lg font-black uppercase text-xs active:bg-green-600">
+            💬 Text {showTpl ? '▲' : '▼'}
+          </button>
+        ) : (
+          <a href={`sms:${clean}`}
+            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-green-500 text-white rounded-lg font-black uppercase text-xs active:bg-green-600">
+            💬 Text
+          </a>
+        )}
         <a href={`tel:${clean}`}
           className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-black text-white rounded-lg font-black uppercase text-xs active:bg-stone-800">
           <Phone size={13} /> Call
         </a>
-        <button onClick={() => setRevealed(false)}
+        <button onClick={() => { setRevealed(false); setShowTpl(false); }}
           className="px-3 py-2.5 bg-stone-200 text-stone-600 rounded-lg font-black uppercase text-xs active:bg-stone-300">
           Hide
         </button>
       </div>
+      {showTpl && (
+        <div className="space-y-1.5 pt-1">
+          <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest">Choose a message to send:</p>
+          {SMS_TEMPLATES_DATA.map(t => {
+            const msg = encodeURIComponent(t.build(dn, dp, addr));
+            return (
+              <a key={t.id} href={`sms:${clean}?body=${msg}`}
+                className="flex items-center justify-between w-full bg-white border border-stone-200 rounded-lg px-3 py-2.5 active:bg-green-50 active:border-green-300">
+                <span className="text-xs font-bold text-stone-800">{t.label}</span>
+                <ChevronRight size={13} className="text-stone-400" />
+              </a>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 };
@@ -1137,74 +1172,83 @@ const OrdersView: React.FC<OrdersViewProps> = ({
           <p className="text-[9px] font-black uppercase text-stone-600 text-right">Status</p>
         </div>
 
-        {/* Rows */}
+        {/* Rows with day separators */}
         <div className="flex-1 overflow-y-auto">
           {filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20">
               <Package size={32} className="text-stone-200 mb-2" />
               <p className="text-xs font-black uppercase text-stone-300">No orders found</p>
             </div>
-          ) : filtered.map((order, idx) => {
-            const statusDot: Record<string, string> = {
-              PENDING: 'bg-stone-400', SCHEDULED: 'bg-violet-500', ASSIGNED: 'bg-blue-500', IN_TRANSIT: 'bg-black',
-              DELIVERED: 'bg-green-500', FAILED: 'bg-red-500',
-              SECOND_ATTEMPT: 'bg-stone-700', PENDING_RESCHEDULE: 'bg-amber-500',
-            };
-            const dot = statusDot[order.status] || 'bg-stone-300';
-            const label = STATUS_CONFIG[order.status]?.label || order.status;
-            const statusCfg = STATUSES_FOR_DROPDOWN.find(s => s.value === order.status) || STATUSES_FOR_DROPDOWN[0];
-            return (
-              <div key={order.id}
-                className={`grid grid-cols-[90px_1fr_90px_130px] px-3 py-3 border-b border-stone-100 transition-all ${idx % 2 === 0 ? 'bg-white' : 'bg-stone-50/40'}`}>
-                {/* Order # — tap to open */}
-                <div className="cursor-pointer" onClick={() => onSelectOrder(order)}>
-                  <p className="text-sm font-black text-black">#{order.orderNumber?.replace(/^#+/, '') || order.id}</p>
-                  <p className="text-xs font-bold text-stone-700 mt-0.5">{order.deliveryDate ? fmtDate(order.deliveryDate) : '—'}</p>
-                </div>
-                {/* Customer + address — tap to open */}
-                <div className="pr-2 min-w-0 cursor-pointer" onClick={() => onSelectOrder(order)}>
-                  <p className="text-sm font-bold text-stone-900 truncate">{order.giftReceiverName || order.customer?.name}</p>
-                  <p className="text-[10px] text-stone-400 truncate">{order.address?.street}, {order.address?.city}</p>
-                  {order.items?.[0] && (
-                    <p className="text-[10px] font-black text-stone-600 truncate">{order.items[0].name} — ${order.items[0].price.toFixed(2)}</p>
-                  )}
-                  {order.deliveryInstructions && (
-                    <div className="flex items-center gap-1 mt-0.5 bg-amber-100 rounded px-1.5 py-0.5">
-                      <AlertTriangle size={9} className="text-amber-700 shrink-0" />
-                      <p className="text-[9px] text-amber-800 font-black leading-tight">{order.deliveryInstructions}</p>
-                    </div>
-                  )}
-                </div>
-                {/* Driver */}
-                <div className="cursor-pointer" onClick={() => onSelectOrder(order)}>
-                  <p className="text-xs font-bold text-stone-700 truncate">{order.driverName || <span className="text-red-500 font-black">—</span>}</p>
-                </div>
-                {/* Status dropdown — inline change, no navigation */}
-                <div onClick={e => e.stopPropagation()}>
-                  <select
-                    value={order.status}
-                    onChange={e => {
-                      const newStatus = e.target.value as DeliveryStatus;
-                      onUpdateOrder(order.id, { status: newStatus });
-                      fetch(`/api/orders/${order.id}/status`, {
-                        method: 'PATCH',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ status: newStatus })
-                      }).catch(() => {});
-                    }}
-                    style={{ backgroundColor: statusCfg.color, color: 'white' }}
-                    className="w-full text-[10px] font-black rounded-lg px-2 py-1.5 outline-none border-0 appearance-none cursor-pointer"
-                  >
-                    {STATUSES_FOR_DROPDOWN.map(s => (
-                      <option key={s.value} value={s.value} style={{ backgroundColor: s.color, color: 'white' }}>
-                        {s.label}
+          ) : (() => {
+            // Group orders by delivery date for day separators
+            const rows: React.ReactNode[] = [];
+            let lastDate = '';
+            filtered.forEach((order, idx) => {
+              const dateKey = (order.deliveryDate || '').split('T')[0];
+              if (dateKey && dateKey !== lastDate) {
+                lastDate = dateKey;
+                const d = new Date(dateKey + 'T12:00:00');
+                const dayLabel = d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+                const isToday = dateKey === adminToday;
+                rows.push(
+                  <div key={`sep-${dateKey}`} className={`flex items-center gap-3 px-3 py-2 sticky top-0 z-10 ${isToday ? 'bg-black' : 'bg-stone-700'}`}>
+                    <span className={`text-xs font-black uppercase tracking-widest ${isToday ? 'text-white' : 'text-stone-200'}`}>
+                      {isToday ? '📅 Today — ' : ''}{dayLabel}
+                    </span>
+                  </div>
+                );
+              }
+              const statusCfg = STATUSES_FOR_DROPDOWN.find(s => s.value === order.status) || STATUSES_FOR_DROPDOWN[0];
+              rows.push(
+                <div key={order.id}
+                  className={`grid grid-cols-[90px_1fr_90px_130px] px-3 py-3 border-b border-stone-100 transition-all ${idx % 2 === 0 ? 'bg-white' : 'bg-stone-50/40'}`}>
+                  <div className="cursor-pointer" onClick={() => onSelectOrder(order)}>
+                    <p className="text-sm font-black text-black">#{order.orderNumber?.replace(/^#+/, '') || order.id}</p>
+                    <p className="text-xs font-bold text-stone-700 mt-0.5">{order.deliveryDate ? fmtDate(order.deliveryDate) : '—'}</p>
+                  </div>
+                  <div className="pr-2 min-w-0 cursor-pointer" onClick={() => onSelectOrder(order)}>
+                    <p className="text-sm font-bold text-stone-900 truncate">{order.giftReceiverName || order.customer?.name}</p>
+                    <p className="text-[10px] text-stone-400 truncate">{order.address?.street}, {order.address?.city}</p>
+                    {order.items?.[0] && (
+                      <p className="text-[10px] font-black text-stone-600 truncate">{order.items[0].name} — ${order.items[0].price.toFixed(2)}</p>
+                    )}
+                    {order.deliveryInstructions && (
+                      <div className="flex items-center gap-1 mt-0.5 bg-amber-100 rounded px-1.5 py-0.5">
+                        <AlertTriangle size={9} className="text-amber-700 shrink-0" />
+                        <p className="text-[9px] text-amber-800 font-black leading-tight">{order.deliveryInstructions}</p>
+                      </div>
+                    )}
+                  </div>
+                  <div className="cursor-pointer" onClick={() => onSelectOrder(order)}>
+                    <p className="text-xs font-bold text-stone-700 truncate">{order.driverName || <span className="text-red-500 font-black">—</span>}</p>
+                  </div>
+                  <div onClick={e => e.stopPropagation()}>
+                    <select
+                      value={order.status}
+                      onChange={e => {
+                        const newStatus = e.target.value as DeliveryStatus;
+                        onUpdateOrder(order.id, { status: newStatus });
+                        fetch(`/api/orders/${order.id}/status`, {
+                          method: 'PATCH',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ status: newStatus })
+                        }).catch(() => {});
+                      }}
+                      style={{ backgroundColor: statusCfg.color, color: 'white' }}
+                      className="w-full text-[10px] font-black rounded-lg px-2 py-1.5 outline-none border-0 appearance-none cursor-pointer"
+                    >
+                      {STATUSES_FOR_DROPDOWN.map(s => (
+                        <option key={s.value} value={s.value} style={{ backgroundColor: s.color, color: 'white' }}>
+                          {s.label}
                       </option>
                     ))}
                   </select>
                 </div>
               </div>
-            );
-          })}
+              );
+            });
+            return rows;
+          })()}
         </div>
       </div>
     );
@@ -1403,7 +1447,7 @@ const ScheduleView: React.FC<{
       if (!map[date]) map[date] = [];
       map[date].push(d);
     });
-    return Object.entries(map).sort(([a], [b]) => a.localeCompare(b));
+    return Object.entries(map).sort(([a], [b]) => b.localeCompare(a));
   }, [filteredForStatus]);
 
   return (
@@ -1845,6 +1889,209 @@ const MessagesPanel: React.FC = () => {
 // ADMIN PANEL
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ─── DRIVERS VIEW ────────────────────────────────────────────────────────────
+const DriversView: React.FC<{
+  allUsers: UserAccount[];
+  setAllUsers: React.Dispatch<React.SetStateAction<UserAccount[]>>;
+  currentUser: UserAccount;
+}> = ({ allUsers, setAllUsers, currentUser }) => {
+  const [newDriver, setNewDriver] = useState({ name: '', pin: '', phone: '', vehicle: '' });
+  const [addError, setAddError] = useState('');
+  const [addSuccess, setAddSuccess] = useState('');
+  const [resetPinId, setResetPinId] = useState<string | null>(null);
+  const [newPinVal, setNewPinVal] = useState('');
+  const [expandedSms, setExpandedSms] = useState<string | null>(null);
+
+  const drivers = allUsers.filter(u => u.role === 'DRIVER' || u.role === 'MANAGER');
+
+  const SMS_TEMPLATES = [
+    {
+      id: 'no_one_home',
+      label: '🚪 No One Home',
+      build: (driverName: string, driverPhone: string) =>
+        `Hi, this is ${driverName} from The Sweet Tooth 🍫 Someone sent you a gift and I'm here to deliver it! I can't leave chocolate outside. Please call/text me back ASAP: ${driverPhone}`,
+    },
+    {
+      id: 'cant_find_unit',
+      label: '🏢 Can\'t Find Unit/Apt',
+      build: (driverName: string, driverPhone: string, address?: string) =>
+        `Hi, Sweet Tooth delivery 🍫 Someone sent you a gift! I'm at ${address || 'your address'} but can't find your unit. Can you call/text me at ${driverPhone} to help me get to you?`,
+    },
+    {
+      id: 'gated',
+      label: '🔒 Gated / No Access',
+      build: (driverName: string, driverPhone: string) =>
+        `Hi, Sweet Tooth delivery 🍫 Someone sent you a gift! I'm at your gate/building and need the access code or to be buzzed in. Please call/text ${driverPhone} right away!`,
+    },
+    {
+      id: 'wrong_address',
+      label: '📍 Wrong / Incomplete Address',
+      build: (driverName: string, driverPhone: string) =>
+        `Hi, Sweet Tooth delivery 🍫 Someone sent you a gift but I'm having trouble finding you! Can you confirm your full address? Call/text me at ${driverPhone}.`,
+    },
+    {
+      id: 'running_late',
+      label: '🚗 Running Late / Traffic',
+      build: (driverName: string, driverPhone: string) =>
+        `Hi, Sweet Tooth delivery 🍫 Someone sent you a gift and I'm on my way — just hitting some traffic. Will someone be home in the next 15-20 mins? If not, what's the best time to come back? Call/text ${driverPhone}.`,
+    },
+  ];
+
+  const handleAddDriver = async () => {
+    setAddError(''); setAddSuccess('');
+    if (!newDriver.name.trim()) { setAddError('Name is required'); return; }
+    if (!newDriver.phone.trim()) { setAddError('Phone number is required'); return; }
+    if (!newDriver.pin || newDriver.pin.length !== 4) { setAddError('PIN must be exactly 4 digits'); return; }
+    const res = await fetch('/api/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...newDriver, role: 'DRIVER' }) });
+    const data = await res.json();
+    if (!res.ok) { setAddError(data.error || 'Error adding driver'); return; }
+    setAllUsers(prev => [...prev, data.user]);
+    setNewDriver({ name: '', pin: '', phone: '', vehicle: '' });
+    setAddSuccess(`✅ ${data.user.name} added successfully!`);
+    setTimeout(() => setAddSuccess(''), 4000);
+  };
+
+  const toggleActive = async (user: UserAccount) => {
+    const res = await fetch(`/api/users/${user.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ isActive: !user.isActive }) });
+    const data = await res.json();
+    setAllUsers(prev => prev.map(u => u.id === user.id ? data.user : u));
+  };
+
+  const handleResetPin = async (userId: string) => {
+    if (newPinVal.length !== 4) { alert('Must be exactly 4 digits'); return; }
+    await fetch(`/api/users/${userId}/reset-pin`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ newPin: newPinVal }) });
+    setResetPinId(null); setNewPinVal('');
+    alert('✅ PIN updated!');
+  };
+
+  return (
+    <div className="flex flex-col h-full bg-stone-50 overflow-y-auto pb-28">
+
+      {/* Header */}
+      <div className="bg-black text-white px-4 py-4">
+        <p className="text-lg font-black">👥 Driver Management</p>
+        <p className="text-xs text-white/50 mt-0.5">{drivers.length} driver{drivers.length !== 1 ? 's' : ''} · Name + phone required</p>
+      </div>
+
+      {/* Add new driver */}
+      <div className="mx-4 mt-4 bg-white rounded-2xl border border-stone-200 overflow-hidden">
+        <div className="px-4 py-3 bg-stone-900">
+          <p className="text-xs font-black uppercase text-white tracking-widest">➕ Add New Driver</p>
+        </div>
+        <div className="p-4 space-y-3">
+          <input value={newDriver.name} onChange={e => setNewDriver(p => ({ ...p, name: e.target.value }))}
+            placeholder="Full name *"
+            className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-black" />
+          <input value={newDriver.phone} onChange={e => setNewDriver(p => ({ ...p, phone: e.target.value }))}
+            placeholder="Phone number * (used in SMS templates)"
+            type="tel"
+            className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-black" />
+          <input value={newDriver.pin} onChange={e => setNewDriver(p => ({ ...p, pin: e.target.value.replace(/\D/g,'').slice(0,4) }))}
+            placeholder="4-digit PIN to login *"
+            type="password" inputMode="numeric" maxLength={4}
+            className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-black" />
+          <input value={newDriver.vehicle} onChange={e => setNewDriver(p => ({ ...p, vehicle: e.target.value }))}
+            placeholder="Vehicle (optional)"
+            className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-black" />
+          {addError && <p className="text-red-600 text-xs font-bold">⚠️ {addError}</p>}
+          {addSuccess && <p className="text-green-600 text-xs font-bold">{addSuccess}</p>}
+          <button onClick={handleAddDriver}
+            className="w-full py-3.5 bg-black text-white rounded-xl font-black uppercase text-sm active:scale-95 transition-all">
+            Add Driver
+          </button>
+        </div>
+      </div>
+
+      {/* SMS Templates preview */}
+      <div className="mx-4 mt-4 bg-white rounded-2xl border border-stone-200 overflow-hidden">
+        <div className="px-4 py-3 bg-stone-900">
+          <p className="text-xs font-black uppercase text-white tracking-widest">💬 Driver SMS Templates</p>
+          <p className="text-[10px] text-white/50 mt-0.5">Auto-filled with driver name & number when sent</p>
+        </div>
+        <div className="divide-y divide-stone-100">
+          {SMS_TEMPLATES.map(t => (
+            <div key={t.id}>
+              <button onClick={() => setExpandedSms(expandedSms === t.id ? null : t.id)}
+                className="w-full flex items-center justify-between px-4 py-3 active:bg-stone-50">
+                <span className="text-sm font-bold text-stone-900">{t.label}</span>
+                <ChevronRight size={16} className={`text-stone-400 transition-transform ${expandedSms === t.id ? 'rotate-90' : ''}`} />
+              </button>
+              {expandedSms === t.id && (
+                <div className="px-4 pb-3">
+                  <div className="bg-stone-50 border border-stone-200 rounded-xl p-3">
+                    <p className="text-sm text-stone-700 leading-relaxed">
+                      {t.build('[Driver Name]', '[Driver Phone]', '[Address]')}
+                    </p>
+                  </div>
+                  <p className="text-[10px] text-stone-400 mt-2 italic">Brackets auto-fill with real driver info when sent from order detail</p>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Driver list */}
+      <div className="mx-4 mt-4 bg-white rounded-2xl border border-stone-200 overflow-hidden mb-4">
+        <div className="px-4 py-3 bg-stone-900">
+          <p className="text-xs font-black uppercase text-white tracking-widest">🚗 Active Drivers</p>
+        </div>
+        {drivers.length === 0 ? (
+          <div className="text-center py-10">
+            <Users size={28} className="mx-auto text-stone-200 mb-2" />
+            <p className="text-xs text-stone-400 font-bold">No drivers yet</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-stone-100">
+            {drivers.map(driver => (
+              <div key={driver.id} className="px-4 py-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-9 h-9 rounded-full flex items-center justify-center font-black text-sm ${driver.isActive ? 'bg-green-100 text-green-700' : 'bg-stone-100 text-stone-400'}`}>
+                      {driver.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="text-sm font-black text-stone-900">{driver.name}</p>
+                      <p className="text-xs text-stone-500">{driver.phone || <span className="text-red-400 font-bold">No phone — add one!</span>}</p>
+                      {driver.vehicle && <p className="text-[10px] text-stone-400">{driver.vehicle}</p>}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-[9px] font-black uppercase px-2 py-1 rounded-full ${driver.isActive ? 'bg-green-100 text-green-700' : 'bg-stone-100 text-stone-400'}`}>
+                      {driver.isActive ? 'Active' : 'Off'}
+                    </span>
+                    <button onClick={() => toggleActive(driver)}
+                      className="text-[9px] font-black uppercase px-2 py-1 bg-stone-100 text-stone-600 rounded-full active:bg-stone-200">
+                      {driver.isActive ? 'Deactivate' : 'Activate'}
+                    </button>
+                  </div>
+                </div>
+                {/* Reset PIN inline */}
+                {resetPinId === driver.id ? (
+                  <div className="flex gap-2 mt-2">
+                    <input value={newPinVal} onChange={e => setNewPinVal(e.target.value.replace(/\D/g,'').slice(0,4))}
+                      placeholder="New 4-digit PIN" type="password" inputMode="numeric" maxLength={4}
+                      className="flex-1 bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-black" />
+                    <button onClick={() => handleResetPin(driver.id)}
+                      className="px-3 py-2 bg-black text-white rounded-lg text-xs font-black">Save</button>
+                    <button onClick={() => { setResetPinId(null); setNewPinVal(''); }}
+                      className="px-3 py-2 bg-stone-100 text-stone-600 rounded-lg text-xs font-black">Cancel</button>
+                  </div>
+                ) : (
+                  <button onClick={() => { setResetPinId(driver.id); setNewPinVal(''); }}
+                    className="mt-2 text-[10px] font-black uppercase text-blue-500 active:text-blue-700">
+                    🔑 Change Login PIN
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: UserAccount[]; setAllUsers: React.Dispatch<React.SetStateAction<UserAccount[]>>; }> = ({ role, deliveries, allUsers, setAllUsers }) => {
   const [activeTab, setActiveTab] = useState<'DRIVERS' | 'RESCHEDULE' | 'MESSAGES' | 'FEES'>('DRIVERS');
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
@@ -2095,7 +2342,7 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [dataSource, setDataSource] = useState<'LIVE' | 'MOCK' | 'ERROR'>('MOCK');
-  const [tab, setTab] = useState<'ORDERS' | 'SCHEDULE' | 'ADMIN'>('SCHEDULE');
+  const [tab, setTab] = useState<'ORDERS' | 'SCHEDULE' | 'ADMIN' | 'DRIVERS'>('SCHEDULE');
   const isAdmin = currentUser?.role === 'SUPER_ADMIN' || currentUser?.role === 'MANAGER';
   const [zipQuery, setZipQuery] = useState('');
   const [zipRate, setZipRate] = useState<number | null | undefined>(undefined);
@@ -2241,6 +2488,13 @@ export default function App() {
           <span className="text-[9px] font-black uppercase">Schedule</span>
         </button>
         {isAdmin && (
+          <button onClick={() => setTab('DRIVERS')}
+            className={`flex-1 py-3 flex flex-col items-center gap-0.5 transition-all ${tab === 'DRIVERS' ? 'text-black' : 'text-stone-300'}`}>
+            <Users size={20} />
+            <span className="text-[9px] font-black uppercase">Drivers</span>
+          </button>
+        )}
+        {isAdmin && (
           <button onClick={() => setTab('ADMIN')}
             className={`flex-1 py-3 flex flex-col items-center gap-0.5 transition-all ${tab === 'ADMIN' ? 'text-black' : 'text-stone-300'}`}>
             <Settings size={20} />
@@ -2276,6 +2530,11 @@ export default function App() {
             allUsers={allUsers}
             onSelectOrder={setSelectedOrder}
           />
+        )}
+
+        {/* ── DRIVERS TAB ── */}
+        {tab === 'DRIVERS' && isAdmin && (
+          <DriversView allUsers={allUsers} setAllUsers={setAllUsers} currentUser={currentUser} />
         )}
 
         {/* ── ADMIN TAB ── */}
