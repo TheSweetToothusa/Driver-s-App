@@ -613,8 +613,14 @@ const OrderDetail: React.FC<{
         </button>
         <div className="flex-1 min-w-0">
           <p className="text-xl font-black tracking-tight">#{cleanOrderNum}</p>
-          <p className="text-xs text-stone-400">{order.deliveryDate ? new Date(order.deliveryDate + 'T12:00:00').toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric', year:'numeric' }) : 'Today'}</p>
+          <p className="text-xs text-white font-bold">{order.deliveryDate ? new Date(order.deliveryDate + 'T12:00:00').toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric', year:'numeric' }) : 'Today'}</p>
         </div>
+        {/* Status pill — green when delivered, white otherwise */}
+        {!isAdmin && (
+          <span className={`text-xs font-black px-3 py-1.5 rounded-full border ${order.status === DeliveryStatus.DELIVERED ? 'bg-green-500 border-green-400 text-white' : 'bg-white/10 border-white/20 text-white'}`}>
+            {STATUS_CONFIG[order.status]?.label || order.status}
+          </span>
+        )}
         {/* Admin only: status change dropdown in header */}
         {isAdmin && (
           <select
@@ -664,9 +670,15 @@ const OrderDetail: React.FC<{
           {/* Info rows — Lionwheel table style */}
           <div className="border-t border-stone-100 divide-y divide-stone-100">
 
-            {/* ADDRESS — large and prominent */}
-            <div className="px-4 py-3">
-              <span className="text-xs font-black uppercase text-stone-400 tracking-widest">Address</span>
+            {/* ADDRESS — large, prominent, fully clickable to open maps */}
+            <a href={mapsUrl} target="_blank" rel="noopener noreferrer"
+              className="block px-4 py-3 active:bg-stone-50">
+              <div className="flex items-start justify-between gap-2">
+                <span className="text-xs font-black uppercase text-stone-400 tracking-widest">Address</span>
+                <span className="flex items-center gap-1 text-[10px] font-black text-blue-500 uppercase tracking-wide shrink-0 mt-0.5">
+                  <Navigation size={11} /> Get Directions
+                </span>
+              </div>
               <p className="text-xl font-black text-stone-900 mt-1 leading-snug">{order.address.street}</p>
               {order.address.unit && (
                 <span className="inline-flex items-center gap-1 mt-1 bg-amber-100 border border-amber-300 text-amber-900 text-sm font-black px-2.5 py-0.5 rounded-md">
@@ -677,7 +689,7 @@ const OrderDetail: React.FC<{
                 <p className="text-sm font-bold text-blue-700 mt-1">📍 {order.address.company}</p>
               )}
               <p className="text-base font-bold text-stone-600 mt-0.5">{order.address.city}, {order.address.zip}</p>
-            </div>
+            </a>
 
             <div className="flex px-4 py-2.5"><span className="w-36 text-sm font-bold text-stone-900 shrink-0">Parcels:</span><span className="text-sm font-black text-stone-900">{order.items?.reduce((s,i) => s + i.quantity, 0) || 1}</span></div>
             <div className="flex px-4 py-2.5"><span className="w-36 text-sm font-bold text-stone-900 shrink-0">Delivery Method:</span><span className="text-sm text-stone-700">Local Delivery</span></div>
@@ -706,11 +718,6 @@ const OrderDetail: React.FC<{
             </div>
           )}
 
-          {/* Navigate button */}
-          <a href={mapsUrl} target="_blank" rel="noopener noreferrer"
-            className="flex items-center justify-center gap-2 py-3.5 bg-black text-white font-black uppercase text-sm active:bg-stone-800 w-full border-t border-stone-200">
-            <Navigation size={15} /> Open in Maps
-          </a>
         </div>
 
         {/* ── CONTACT SECTION: Receiver first, Sender as backup ── */}
