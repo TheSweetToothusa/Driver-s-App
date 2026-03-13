@@ -545,6 +545,20 @@ async function startServer() {
     });
   });
 
+  // ── DEFAULT DRIVER SETTING ───────────────────────────────────────────────
+  app.get("/api/config/default-driver", async (_req, res) => {
+    try {
+      const val = await getKV('default_driver');
+      res.json(val ? JSON.parse(val) : { driverId: null, driverName: null });
+    } catch { res.json({ driverId: null, driverName: null }); }
+  });
+
+  app.post("/api/config/default-driver", async (req, res) => {
+    const { driverId, driverName } = req.body;
+    await setKV('default_driver', JSON.stringify({ driverId, driverName }));
+    res.json({ ok: true, driverId, driverName });
+  });
+
   // ── TEST NOTIFICATION ────────────────────────────────────────────────────
   app.post("/api/notify/test", async (req, res) => {
     const { to } = req.body;

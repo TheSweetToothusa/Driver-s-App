@@ -22,7 +22,6 @@ const BRAND_LOGO = "https://cdn.shopify.com/s/files/1/0559/8498/0141/files/The_S
 
 const isWithinSendingHours = () => { const h = new Date().getHours(); return h >= 9 && h < 20; };
 const STATUSES_FOR_DROPDOWN = [
-  { value: 'PENDING',            label: 'Not Assigned',       color: '#6b7280' },
   { value: 'SCHEDULED',          label: 'Scheduled',          color: '#7c3aed' },
   { value: 'ASSIGNED',           label: 'Driver Assigned',    color: '#2563eb' },
   { value: 'IN_TRANSIT',         label: 'Out for Delivery',   color: '#000000' },
@@ -760,7 +759,7 @@ const OrderDetail: React.FC<{
             </a>
 
             <div className="flex px-4 py-2.5"><span className="w-36 text-sm font-bold text-stone-900 shrink-0">Parcels:</span><span className="text-sm font-black text-stone-900">{order.items?.reduce((s,i) => s + i.quantity, 0) || 1}</span></div>
-            <div className="flex px-4 py-2.5"><span className="w-36 text-sm font-bold text-stone-900 shrink-0">Delivery Method:</span><span className="text-sm text-stone-700">Local Delivery</span></div>
+
             <div className="flex px-4 py-2.5"><span className="w-36 text-sm font-bold text-stone-900 shrink-0">Gift Receiver:</span><span className="text-sm text-stone-700">{recipientName}</span></div>
             {order.orderTotal != null && <div className="flex px-4 py-2.5"><span className="w-36 text-sm font-bold text-stone-900 shrink-0">Order Total:</span><span className="text-sm font-black text-stone-900">${Number(order.orderTotal).toFixed(2)}</span></div>}
           </div>
@@ -2154,10 +2153,21 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
   const [feeCalculated, setFeeCalculated] = useState(false);
   const [calcStart, setCalcStart] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 7); return d.toISOString().split('T')[0]; });
   const [calcEnd, setCalcEnd] = useState(() => new Date().toISOString().split('T')[0]);
+  const [defaultDriverId, setDefaultDriverId] = useState<string>('');
+  const [defaultDriverSaved, setDefaultDriverSaved] = useState(false);
 
   useEffect(() => {
     fetch('/api/templates').then(r => r.json()).then(d => setTemplates(d.templates || []));
+    fetch('/api/config/default-driver').then(r => r.json()).then(d => { if (d.driverId) setDefaultDriverId(d.driverId); });
   }, []);
+
+  const handleSaveDefaultDriver = async () => {
+    const driver = allUsers.find(u => u.id === defaultDriverId);
+    if (!driver) return;
+    await fetch('/api/config/default-driver', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ driverId: driver.id, driverName: driver.name }) });
+    setDefaultDriverSaved(true);
+    setTimeout(() => setDefaultDriverSaved(false), 3000);
+  };
 
   const drivers = allUsers.filter(u => u.role === 'DRIVER');
 
@@ -2213,6 +2223,34 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
 
         {activeTab === 'DRIVERS' && (
           <div className="space-y-5">
+
+            {/* Default Driver Setting */}
+            <div className="p-5 bg-white border border-stone-100 rounded-[28px] shadow-sm space-y-3">
+              <div>
+                <p className="font-black uppercase text-sm text-stone-800 flex items-center gap-2">⭐ Default Driver</p>
+                <p className="text-xs text-stone-400 mt-0.5">All new incoming orders are automatically assigned to this driver</p>
+              </div>
+              <select
+                value={defaultDriverId}
+                onChange={e => setDefaultDriverId(e.target.value)}
+                className="w-full bg-stone-50 border border-stone-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:border-black appearance-none"
+              >
+                <option value="">— Select a driver —</option>
+                {allUsers.filter(u => (u.role === 'DRIVER' || u.role === 'MANAGER') && u.isActive).map(u => (
+                  <option key={u.id} value={u.id}>{u.name}</option>
+                ))}
+              </select>
+              {defaultDriverSaved && <p className="text-xs font-black text-green-600">✅ Default driver saved!</p>}
+              <button
+                onClick={handleSaveDefaultDriver}
+                disabled={!defaultDriverId}
+                className={`w-full py-4 rounded-[24px] font-black uppercase tracking-widest text-sm transition-all ${defaultDriverId ? 'bg-black text-white active:scale-95' : 'bg-stone-200 text-stone-400 cursor-not-allowed'}`}
+              >
+                Save Default Driver
+              </button>
+            </div>
+
+            {/* Add New Driver */}
             <div className="p-5 bg-white border border-stone-100 rounded-[28px] shadow-sm space-y-3">
               <p className="font-black uppercase text-sm text-stone-800 flex items-center gap-2"><UserPlus size={16} /> Add Driver</p>
               <input type="text" placeholder="Name" value={newDriver.name} onChange={e => setNewDriver(p => ({ ...p, name: e.target.value }))} className="w-full bg-stone-50 border border-stone-100 rounded-2xl px-4 py-3 text-sm font-medium outline-none focus:border-black" />
@@ -2392,11 +2430,13 @@ export default function App() {
   const [zipQuery, setZipQuery] = useState('');
   const [zipRate, setZipRate] = useState<number | null | undefined>(undefined);
   const [showZipBar, setShowZipBar] = useState(false);
+  const [defaultDriver, setDefaultDriver] = useState<{ driverId: string | null; driverName: string | null }>({ driverId: null, driverName: null });
 
   useEffect(() => {
     if (currentUser) {
       fetchOrders();
       fetch('/api/users').then(r => r.json()).then(d => setAllUsers(d.users || []));
+      fetch('/api/config/default-driver').then(r => r.json()).then(d => setDefaultDriver(d));
       const iv = setInterval(fetchOrders, 300000);
       return () => clearInterval(iv);
     }
@@ -2407,7 +2447,13 @@ export default function App() {
     try {
       const fetched = await getDeliveries();
       const isMock = fetched.some((d: Delivery) => d.id === '33989');
-      setDeliveries(fetched);
+      // Apply default driver to any order with no driver assigned
+      const ddRaw = await fetch('/api/config/default-driver').then(r => r.json()).catch(() => null);
+      const dd = ddRaw?.driverId ? ddRaw : null;
+      const withDriver = dd
+        ? fetched.map((d: Delivery) => (!d.driverId || d.driverId === '') ? { ...d, driverId: dd.driverId, driverName: dd.driverName } : d)
+        : fetched;
+      setDeliveries(withDriver);
       setDataSource(isMock ? 'MOCK' : 'LIVE');
       setLastSync(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
     } catch (err) {
