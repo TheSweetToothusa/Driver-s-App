@@ -64,25 +64,32 @@ function StatusBadge({ status }: { status: string }) {
 // Tap to reveal number, then confirm to call — no pocket dials
 const ContactCallReveal: React.FC<{ phone: string; label: string }> = ({ phone, label }) => {
   const [revealed, setRevealed] = React.useState(false);
+  const clean = phone.replace(/\D/g, '');
   if (!revealed) {
     return (
       <button onClick={() => setRevealed(true)}
         className="flex items-center justify-center gap-2 w-full py-3 bg-stone-100 text-stone-700 rounded-xl font-black uppercase text-xs active:bg-stone-200">
-        <Phone size={14} /> Show Number to Call {label}
+        <Phone size={14} /> Show Number — {label}
       </button>
     );
   }
   return (
-    <div className="flex items-center gap-2 bg-stone-50 border border-stone-200 rounded-xl px-3 py-2">
-      <span className="flex-1 font-black text-stone-900 text-sm tracking-widest">{phone}</span>
-      <a href={`tel:${phone}`}
-        className="px-4 py-2 bg-black text-white rounded-lg font-black uppercase text-xs active:bg-stone-800">
-        Call
-      </a>
-      <button onClick={() => setRevealed(false)}
-        className="px-3 py-2 bg-stone-200 text-stone-600 rounded-lg font-black uppercase text-xs active:bg-stone-300">
-        Hide
-      </button>
+    <div className="bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 space-y-2">
+      <span className="block font-black text-stone-900 text-sm tracking-widest">{phone}</span>
+      <div className="flex items-center gap-2">
+        <a href={`sms:${clean}`}
+          className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-green-500 text-white rounded-lg font-black uppercase text-xs active:bg-green-600">
+          💬 Text
+        </a>
+        <a href={`tel:${clean}`}
+          className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-black text-white rounded-lg font-black uppercase text-xs active:bg-stone-800">
+          <Phone size={13} /> Call
+        </a>
+        <button onClick={() => setRevealed(false)}
+          className="px-3 py-2.5 bg-stone-200 text-stone-600 rounded-lg font-black uppercase text-xs active:bg-stone-300">
+          Hide
+        </button>
+      </div>
     </div>
   );
 };
@@ -658,11 +665,20 @@ const OrderDetail: React.FC<{
           <div className="border-t border-stone-100 divide-y divide-stone-100">
             <div className="flex px-4 py-2.5"><span className="w-36 text-sm font-bold text-stone-900 shrink-0">Status:</span><span className="text-sm text-stone-700 font-bold">{STATUS_CONFIG[order.status]?.label || order.status}</span></div>
             <div className="flex px-4 py-2.5"><span className="w-36 text-sm font-bold text-stone-900 shrink-0">Order ID:</span><span className="text-sm text-stone-700">#{cleanOrderNum}</span></div>
-            <div className="flex px-4 py-2.5"><span className="w-36 text-sm font-bold text-stone-900 shrink-0">Address:</span><span className="text-sm text-stone-700">{order.address.street}, {order.address.city}</span></div>
+            <div className="flex flex-col px-4 py-2.5 gap-0.5">
+              <span className="w-36 text-sm font-bold text-stone-900 shrink-0">Address:</span>
+              <span className="text-sm text-stone-700">{order.address.street.split(' ').slice(0,4).join(' ')}</span>
+              {order.address.street.match(/\b(apt|unit|ste|suite|#|fl|floor)\b/i) && (
+                <span className="inline-flex items-center gap-1 self-start bg-amber-100 border border-amber-300 text-amber-800 text-xs font-black px-2 py-0.5 rounded-md mt-0.5">
+                  🏢 {order.address.street.replace(/^[^,]*/, '').replace(/^,?\s*/, '') || order.address.street.split(/\s+/).slice(-2).join(' ')}
+                </span>
+              )}
+              <span className="text-xs text-stone-500">{order.address.city}</span>
+            </div>
             <div className="flex px-4 py-2.5"><span className="w-36 text-sm font-bold text-stone-900 shrink-0">Zip code:</span><span className="text-sm text-stone-700">{order.address.zip}</span></div>
             <div className="flex px-4 py-2.5"><span className="w-36 text-sm font-bold text-stone-900 shrink-0">Parcels:</span><span className="text-sm font-black text-stone-900">{order.items?.reduce((s,i) => s + i.quantity, 0) || 1}</span></div>
             <div className="flex px-4 py-2.5"><span className="w-36 text-sm font-bold text-stone-900 shrink-0">Delivery Method:</span><span className="text-sm text-stone-700">Local Delivery</span></div>
-            <div className="flex px-4 py-2.5"><span className="w-36 text-sm font-bold text-stone-900 shrink-0">Recipient Name:</span><span className="text-sm text-stone-700">{recipientName}</span></div>
+            <div className="flex px-4 py-2.5"><span className="w-36 text-sm font-bold text-stone-900 shrink-0">Gift Receiver:</span><span className="text-sm text-stone-700">{recipientName}</span></div>
             {order.orderTotal != null && <div className="flex px-4 py-2.5"><span className="w-36 text-sm font-bold text-stone-900 shrink-0">Order Total:</span><span className="text-sm font-black text-stone-900">${Number(order.orderTotal).toFixed(2)}</span></div>}
             {order.createdAt && <div className="flex px-4 py-2.5"><span className="w-36 text-sm font-bold text-stone-900 shrink-0">Created at:</span><span className="text-sm text-stone-700">{order.createdAt.split('T')[0]}</span></div>}
           </div>
@@ -695,28 +711,48 @@ const OrderDetail: React.FC<{
           </a>
         </div>
 
-        {/* ── RECIPIENT PHONE ── */}
-        {recipientPhone && (
-          <div className="mx-3 mt-3 bg-white rounded-xl border border-stone-200 px-4 py-3 space-y-2">
-            <ContactCallReveal phone={recipientPhone} label="Recipient" />
+        {/* ── CONTACT SECTION: Receiver first, Sender as backup ── */}
+        <div className="mx-3 mt-3 bg-white rounded-xl border border-stone-200 overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-2.5 bg-stone-900">
+            <span className="text-white text-xs font-black uppercase tracking-widest">💬 Need to reach someone?</span>
           </div>
-        )}
 
-        {/* ── GIFTER SECTION ── */}
-        {(senderName || senderPhone) && (
-          <div className="mx-3 mt-3 bg-white rounded-xl border border-stone-200 px-4 py-3">
+          {/* Step 1: Gift Receiver */}
+          <div className="px-4 py-3 border-b border-stone-100">
             <div className="flex items-center gap-2 mb-2">
-              <Gift size={16} className="text-stone-500" />
-              <span className="text-sm font-black uppercase text-stone-700">Gifter</span>
+              <span className="w-5 h-5 rounded-full bg-green-500 text-white text-[10px] font-black flex items-center justify-center shrink-0">1</span>
+              <span className="text-[10px] font-black uppercase text-stone-500 tracking-widest">Try Gift Receiver First</span>
             </div>
-            {senderName && <div className="flex mb-1"><span className="w-32 text-sm font-bold text-stone-900">Gifter Name:</span><span className="text-sm text-stone-700">{senderName}</span></div>}
-            {senderPhone && (
-              <div className="flex items-center mt-2"><span className="w-32 text-sm font-bold text-stone-900">Gifter Phone:</span>
-                <ContactCallReveal phone={senderPhone} label="Gifter" />
+            <p className="text-base font-black text-stone-900 mb-2">{recipientName}</p>
+            {recipientPhone ? (
+              <ContactCallReveal phone={recipientPhone} label="Receiver" />
+            ) : (
+              <div className="flex items-center gap-2 bg-amber-50 border border-amber-300 rounded-xl px-3 py-2.5">
+                <span className="text-lg">⚠️</span>
+                <div>
+                  <p className="text-xs font-black text-amber-800 uppercase">No number provided</p>
+                  <p className="text-[11px] text-amber-700 font-semibold">Contact the Gift Sender below ↓</p>
+                </div>
               </div>
             )}
           </div>
-        )}
+
+          {/* Step 2: Gift Sender backup */}
+          {(senderName || senderPhone) && (
+            <div className="px-4 py-3 bg-stone-50">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="w-5 h-5 rounded-full bg-stone-300 text-stone-600 text-[10px] font-black flex items-center justify-center shrink-0">2</span>
+                <span className="text-[10px] font-black uppercase text-stone-500 tracking-widest">Backup — Gift Sender</span>
+              </div>
+              <p className="text-base font-black text-stone-900 mb-2">{senderName}</p>
+              {senderPhone ? (
+                <ContactCallReveal phone={senderPhone} label="Gift Sender" />
+              ) : (
+                <p className="text-xs text-stone-400 italic">No phone number on file</p>
+              )}
+            </div>
+          )}
+        </div>
 
         {/* ── GIFT MESSAGE ── */}
         {order.giftMessage && (

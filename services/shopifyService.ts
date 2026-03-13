@@ -68,6 +68,7 @@ function parseDeliveryDate(raw: string | undefined): string {
 const mapShopifyOrder = (order: any): Delivery => {
   const shipping = order.shipping_address || {};
   const buyer = order.customer || {};
+  const billing = order.billing_address || {};
 
   const attributes: Record<string, string> = {};
   (order.note_attributes || []).forEach((attr: any) => {
@@ -130,7 +131,7 @@ const mapShopifyOrder = (order: any): Delivery => {
     internalNotes: [],
     giftMessage: attributes['gift message'] || attributes['giftmessage'] || attributes['message'] || order.note || '',
     giftSenderName: `${buyer.first_name || ''} ${buyer.last_name || ''}`.trim() || 'Customer',
-    giftSenderPhone: buyer.phone || '',
+    giftSenderPhone: billing.phone || buyer.phone || '',
     giftSenderEmail: buyer.email || '',
     giftReceiverName: `${shipping.first_name || ''} ${shipping.last_name || ''}`.trim() || ''
   };
