@@ -2251,13 +2251,6 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
   const [feeDriverFilter, setFeeDriverFilter] = useState<string>('ALL');
   const [defaultDriverId, setDefaultDriverId] = useState<string>('');
   const [defaultDriverSaved, setDefaultDriverSaved] = useState(false);
-  const [testPodPhoto, setTestPodPhoto] = useState<string>('');
-  const [testPodSendSms, setTestPodSendSms] = useState(true);
-  const [testPodSendEmail, setTestPodSendEmail] = useState(true);
-  const [testPodResult, setTestPodResult] = useState<string>('');
-  const [testPodSending, setTestPodSending] = useState(false);
-  const [testSigDrawing, setTestSigDrawing] = useState(false);
-  const testSigCanvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
     fetch('/api/templates').then(r => r.json()).then(d => setTemplates(d.templates || []));
@@ -2270,44 +2263,6 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
     await fetch('/api/config/default-driver', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ driverId: driver.id, driverName: driver.name }) });
     setDefaultDriverSaved(true);
     setTimeout(() => setDefaultDriverSaved(false), 3000);
-  };
-  
-  const handleSendTestPod = async () => {
-    setTestPodSending(true);
-    setTestPodResult('');
-    
-    const canvas = testSigCanvasRef.current;
-    const signature = canvas?.toDataURL('image/png') || '';
-    
-    try {
-      const res = await fetch('/api/test-pod', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          photo: testPodPhoto,
-          signature,
-          sendSms: testPodSendSms,
-          sendEmail: testPodSendEmail,
-          phone: '+17863401494',
-          email: 'MIKE@THESWEETTOOTH.COM'
-        })
-      });
-      
-      const data = await res.json();
-      
-      if (res.ok) {
-        const sent = [];
-        if (testPodSendSms) sent.push('text');
-        if (testPodSendEmail) sent.push('email');
-        setTestPodResult(`✅ POD sent via ${sent.join(' and ')}! Check your phone/email.`);
-      } else {
-        setTestPodResult(`❌ Failed: ${data.error || 'Unknown error'}`);
-      }
-    } catch (err: any) {
-      setTestPodResult(`❌ Error: ${err.message}`);
-    } finally {
-      setTestPodSending(false);
-    }
   };
   
   const drivers = allUsers.filter(u => u.role === 'DRIVER');
@@ -2364,115 +2319,6 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
 
         {activeTab === 'DRIVERS' && (
           <div className="space-y-5">
-          
-            {/* POD Testing — SUPER ADMIN ONLY */}
-            {role === 'SUPER_ADMIN' && (
-              <div className="p-5 bg-white border border-stone-200 rounded-[28px] shadow-sm space-y-3">
-                <div>
-                  <p className="font-black uppercase text-sm text-stone-900">📸 Test POD (Proof of Delivery)</p>
-                  <p className="text-xs text-stone-500 mt-0.5">Test photo + signature delivery confirmation</p>
-                </div>
-                
-                <div className="bg-stone-50 rounded-2xl p-4 space-y-3">
-                  {/* Photo Upload */}
-                  <div>
-                    <p className="text-[9px] font-black uppercase text-stone-600 tracking-widest mb-2">1. Upload Photo</p>
-                    <input 
-                      type="file" 
-                      accept="image/*"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) {
-                          const reader = new FileReader();
-                          reader.onload = () => setTestPodPhoto(reader.result as string);
-                          reader.readAsDataURL(file);
-                        }
-                      }}
-                      className="w-full text-xs bg-white border border-stone-200 rounded-xl px-3 py-2"
-                    />
-                    {testPodPhoto && (
-                      <img src={testPodPhoto} className="mt-2 w-full h-32 object-cover rounded-xl" />
-                    )}
-                  </div>
-                  
-                  {/* Signature Canvas */}
-                  <div>
-                    <p className="text-[9px] font-black uppercase text-stone-600 tracking-widest mb-2">2. Draw Signature</p>
-                    <canvas
-                      ref={testSigCanvasRef}
-                      width={400}
-                      height={150}
-                      onMouseDown={(e) => {
-                        setTestSigDrawing(true);
-                        const rect = e.currentTarget.getBoundingClientRect();
-                        const ctx = e.currentTarget.getContext('2d');
-                        if (ctx) {
-                          ctx.beginPath();
-                          ctx.moveTo(e.clientX - rect.left, e.clientY - rect.top);
-                        }
-                      }}
-                      onMouseMove={(e) => {
-                        if (!testSigDrawing) return;
-                        const rect = e.currentTarget.getBoundingClientRect();
-                        const ctx = e.currentTarget.getContext('2d');
-                        if (ctx) {
-                          ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
-                          ctx.stroke();
-                        }
-                      }}
-                      onMouseUp={() => setTestSigDrawing(false)}
-                      onMouseLeave={() => setTestSigDrawing(false)}
-                      className="w-full border-2 border-stone-300 rounded-xl bg-white cursor-crosshair"
-                    />
-                    <button
-                      onClick={() => {
-                        const canvas = testSigCanvasRef.current;
-                        if (canvas) {
-                          const ctx = canvas.getContext('2d');
-                          if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
-                        }
-                      }}
-                      className="mt-2 text-xs text-stone-500 underline"
-                    >
-                      Clear Signature
-                    </button>
-                  </div>
-                  
-                  {/* Phone/Email */}
-                  <div>
-                    <p className="text-[9px] font-black uppercase text-stone-600 tracking-widest mb-2">3. Send To</p>
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2 text-xs text-stone-700">
-                        <input type="checkbox" checked={testPodSendSms} onChange={(e) => setTestPodSendSms(e.target.checked)} />
-                        <span>📱 Text: 786-340-1494</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-xs text-stone-700">
-                        <input type="checkbox" checked={testPodSendEmail} onChange={(e) => setTestPodSendEmail(e.target.checked)} />
-                        <span>📧 Email: MIKE@THESWEETTOOTH.COM</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                
-                {testPodResult && (
-                  <div className={`rounded-2xl px-4 py-3 text-xs font-bold ${testPodResult.includes('✅') ? 'bg-green-50 border border-green-200 text-green-900' : 'bg-red-50 border border-red-200 text-red-900'}`}>
-                    {testPodResult}
-                  </div>
-                )}
-                
-                <button
-                  onClick={handleSendTestPod}
-                  disabled={testPodSending || !testPodPhoto || (!testPodSendSms && !testPodSendEmail)}
-                  className="w-full py-4 bg-black text-white rounded-[24px] font-black uppercase tracking-widest text-sm active:scale-95 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
-                >
-                  {testPodSending ? 'Sending...' : 'Send POD Test'}
-                </button>
-                
-                <p className="text-[9px] text-stone-400 italic text-center">
-                  This sends a real text/email with photo and signature
-                </p>
-              </div>
-            )}
 
             {/* Default Driver Setting */}
             <div className="p-5 bg-white border border-stone-100 rounded-[28px] shadow-sm space-y-3">

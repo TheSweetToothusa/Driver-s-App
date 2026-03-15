@@ -257,63 +257,6 @@ async function startServer() {
     res.json({ success: true });
   });
 
-  // ── TEST POD ────────────────────────────────────────────────────────────────
-  
-  app.post("/api/test-pod", async (req, res) => {
-    try {
-      const { photo, signature, sendSms, sendEmail, phone, email } = req.body;
-      
-      if (!photo) {
-        return res.status(400).json({ error: 'Photo is required' });
-      }
-      
-      const results = { sms: false, email: false };
-      
-      // Send SMS if requested
-      if (sendSms && phone) {
-        try {
-          // TODO: Implement actual SMS sending via Twilio
-          console.log(`Would send SMS POD to ${phone}`);
-          results.sms = true;
-        } catch (err) {
-          console.error('SMS send error:', err);
-        }
-      }
-      
-      // Send Email if requested
-      if (sendEmail && email && SENDGRID_API_KEY) {
-        try {
-          const sgMail = await import('@sendgrid/mail');
-          sgMail.default.setApiKey(SENDGRID_API_KEY);
-          
-          await sgMail.default.send({
-            to: email,
-            from: SENDGRID_FROM_EMAIL,
-            subject: 'TEST POD - Proof of Delivery',
-            html: `
-              <h2>TEST Proof of Delivery</h2>
-              <p>This is a test POD notification from the Sweet Tooth Driver App.</p>
-              <h3>Delivery Photo:</h3>
-              <img src="${photo}" style="max-width: 400px; border-radius: 8px;" />
-              ${signature ? `<h3>Signature:</h3><img src="${signature}" style="max-width: 300px; border: 1px solid #ccc; border-radius: 8px;" />` : ''}
-              <p style="margin-top: 20px; color: #666; font-size: 12px;">This is a TEST notification.</p>
-            `
-          });
-          
-          results.email = true;
-          console.log(`✅ Test POD email sent to ${email}`);
-        } catch (err: any) {
-          console.error('Email send error:', err);
-        }
-      }
-      
-      res.json({ success: true, sent: results });
-    } catch (err: any) {
-      console.error('Test POD error:', err);
-      res.status(500).json({ error: err.message });
-    }
-  });
-
   // ── ORDERS ──────────────────────────────────────────────────────────────────
 
   app.get("/api/orders", async (_req, res) => {
@@ -366,14 +309,7 @@ async function startServer() {
       });
 
       console.log(`Shopify: ${allOrders.length} total, ${(filtered.length > 0 ? filtered : allOrders).length} local delivery`);
-      
-      // Fetch test orders from database
-      const testOrders = await dbGet('test_orders') || [];
-      
-      // Combine Shopify orders with test orders
-      const combinedOrders = [...ordersWithTags, ...testOrders];
-      
-      res.json({ orders: combinedOrders, podData });
+      res.json({ orders: ordersWithTags, podData });
     } catch (e) {
       console.error('Orders fetch error:', e);
       res.status(500).json({ error: String(e) });
