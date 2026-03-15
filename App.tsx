@@ -1223,7 +1223,8 @@ const OrdersView: React.FC<OrdersViewProps> = ({
       ...allUsers.filter(u => (u.role === 'DRIVER' || u.role === 'MANAGER') && u.isActive).map(u => ({ id: u.id, name: u.name }))
     ];
 
-    const todayFiltered = dateFilter === 'TODAY'
+    // When actively searching, ignore date filter to show all matching results
+    const todayFiltered = (dateFilter === 'TODAY' && !search)
       ? sorted.filter(d => (d.deliveryDate || '').split('T')[0] === adminToday)
       : sorted;
 
