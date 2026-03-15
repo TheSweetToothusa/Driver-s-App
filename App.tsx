@@ -1864,7 +1864,7 @@ const DriverPayCard: React.FC<{
 // MESSAGES PANEL — templates + sent history
 // ─────────────────────────────────────────────────────────────────────────────
 
-const MessagesPanel: React.FC = () => {
+const MessagesPanel: React.FC<{ role: AppRole }> = ({ role }) => {
   const [subTab, setSubTab] = useState<'HISTORY' | 'TEMPLATES'>('HISTORY');
   const [messages, setMessages] = useState<any[]>([]);
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
@@ -1906,8 +1906,8 @@ const MessagesPanel: React.FC = () => {
   return (
     <div className="space-y-4 p-5">
 
-      {/* ── INTEGRATION STATUS BANNER ── */}
-      {configStatus && (
+      {/* ── INTEGRATION STATUS BANNER — SUPER ADMIN ONLY ── */}
+      {role === 'SUPER_ADMIN' && configStatus && (
         <div className="bg-white border border-stone-200 rounded-2xl p-4 space-y-2">
           <p className="text-[10px] font-black uppercase text-stone-500 tracking-widest mb-2">Notification Services</p>
           <div className="flex items-center justify-between">
@@ -1928,24 +1928,26 @@ const MessagesPanel: React.FC = () => {
         </div>
       )}
 
-      {/* ── TEST SEND ── */}
-      <div className="bg-white border border-stone-200 rounded-2xl p-4 space-y-3">
-        <p className="text-[10px] font-black uppercase text-stone-500 tracking-widest">Send Test Notification</p>
-        <div className="flex gap-2">
-          <button onClick={() => setTestChannel('SMS')}
-            className={`flex-1 py-2 rounded-xl font-black text-xs uppercase ${testChannel==='SMS' ? 'bg-black text-white' : 'bg-stone-100 text-stone-500'}`}>SMS</button>
-          <button onClick={() => setTestChannel('Email')}
-            className={`flex-1 py-2 rounded-xl font-black text-xs uppercase ${testChannel==='Email' ? 'bg-black text-white' : 'bg-stone-100 text-stone-500'}`}>Email</button>
+      {/* ── TEST SEND — SUPER ADMIN ONLY ── */}
+      {role === 'SUPER_ADMIN' && (
+        <div className="bg-white border border-stone-200 rounded-2xl p-4 space-y-3">
+          <p className="text-[10px] font-black uppercase text-stone-500 tracking-widest">Send Test Notification</p>
+          <div className="flex gap-2">
+            <button onClick={() => setTestChannel('SMS')}
+              className={`flex-1 py-2 rounded-xl font-black text-xs uppercase ${testChannel==='SMS' ? 'bg-black text-white' : 'bg-stone-100 text-stone-500'}`}>SMS</button>
+            <button onClick={() => setTestChannel('Email')}
+              className={`flex-1 py-2 rounded-xl font-black text-xs uppercase ${testChannel==='Email' ? 'bg-black text-white' : 'bg-stone-100 text-stone-500'}`}>Email</button>
+          </div>
+          <input value={testTo} onChange={e => setTestTo(e.target.value)}
+            placeholder={testChannel === 'SMS' ? 'Phone number (e.g. 3051234567)' : 'Email address'}
+            className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-black" />
+          <button onClick={handleTestSend} disabled={testLoading || !testTo}
+            className="w-full py-3 bg-black text-white rounded-xl font-black uppercase text-sm disabled:opacity-40">
+            {testLoading ? 'Sending...' : 'Send Test'}
+          </button>
+          {testResult && <p className="text-sm font-bold text-center">{testResult}</p>}
         </div>
-        <input value={testTo} onChange={e => setTestTo(e.target.value)}
-          placeholder={testChannel === 'SMS' ? 'Phone number (e.g. 3051234567)' : 'Email address'}
-          className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-black" />
-        <button onClick={handleTestSend} disabled={testLoading || !testTo}
-          className="w-full py-3 bg-black text-white rounded-xl font-black uppercase text-sm disabled:opacity-40">
-          {testLoading ? 'Sending...' : 'Send Test'}
-        </button>
-        {testResult && <p className="text-sm font-bold text-center">{testResult}</p>}
-      </div>
+      )}
 
       {/* Sub-tab toggle */}
       <div className="flex gap-2 bg-stone-100 rounded-2xl p-1">
@@ -2475,7 +2477,7 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
 
         {activeTab === 'RESCHEDULE' && <PendingRescheduleQueue allUsers={allUsers} />}
 
-        {activeTab === 'MESSAGES' && <MessagesPanel />}
+        {activeTab === 'MESSAGES' && <MessagesPanel role={role} />}
 
         {false && activeTab === 'TEMPLATES_REMOVED' && (
           <div className="space-y-5">
