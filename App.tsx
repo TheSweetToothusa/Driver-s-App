@@ -1320,8 +1320,60 @@ const OrdersView: React.FC<OrdersViewProps> = ({
               <Package size={32} className="text-stone-200 mb-2" />
               <p className="text-xs font-black uppercase text-stone-300">No orders found</p>
             </div>
+          ) : search ? (
+            // SEARCH MODE: Simple list, no date grouping
+            filtered.map((order, idx) => {
+              const statusCfg = STATUSES_FOR_DROPDOWN.find(s => s.value === order.status) || STATUSES_FOR_DROPDOWN[0];
+              return (
+                <div key={order.id}
+                  className={`grid grid-cols-[90px_1fr_90px_130px] px-3 py-3 border-b border-stone-100 transition-all ${idx % 2 === 0 ? 'bg-white' : 'bg-stone-50/40'}`}>
+                  <div className="cursor-pointer" onClick={() => onSelectOrder(order)}>
+                    <p className="text-sm font-black text-black">#{order.orderNumber?.replace(/^#+/, '') || order.id}</p>
+                    <p className="text-xs font-bold text-stone-700 mt-0.5">{order.deliveryDate ? fmtDate(order.deliveryDate) : '—'}</p>
+                  </div>
+                  <div className="pr-2 min-w-0 cursor-pointer" onClick={() => onSelectOrder(order)}>
+                    <p className="text-sm font-bold text-stone-900 truncate">{order.giftReceiverName || order.customer?.name}</p>
+                    <p className="text-[10px] text-stone-400 truncate">{order.address?.street}, {order.address?.city}</p>
+                    {order.items?.[0] && (
+                      <p className="text-[10px] font-black text-stone-600 truncate">{order.items[0].name} — ${order.items[0].price.toFixed(2)}</p>
+                    )}
+                    {order.deliveryInstructions && (
+                      <div className="flex items-center gap-1 mt-0.5 bg-amber-100 rounded px-1.5 py-0.5">
+                        <AlertTriangle size={9} className="text-amber-700 shrink-0" />
+                        <p className="text-[9px] text-amber-800 font-black leading-tight">{order.deliveryInstructions}</p>
+                      </div>
+                    )}
+                  </div>
+                  <div className="cursor-pointer" onClick={() => onSelectOrder(order)}>
+                    <p className="text-xs font-bold text-stone-700 truncate">{order.driverName || ''}</p>
+                  </div>
+                  <div onClick={e => e.stopPropagation()}>
+                    <select
+                      value={order.status}
+                      onChange={e => {
+                        const newStatus = e.target.value as DeliveryStatus;
+                        onUpdateOrder(order.id, { status: newStatus });
+                        fetch(`/api/orders/${order.id}/status`, {
+                          method: 'PATCH',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ status: newStatus })
+                        }).catch(() => {});
+                      }}
+                      style={{ backgroundColor: statusCfg.color, color: 'white' }}
+                      className="w-full text-[10px] font-black rounded-lg px-2 py-1.5 outline-none border-0 appearance-none cursor-pointer"
+                    >
+                      {STATUSES_FOR_DROPDOWN.map(s => (
+                        <option key={s.value} value={s.value} style={{ backgroundColor: s.color, color: 'white' }}>
+                          {s.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              );
+            })
           ) : (() => {
-            // Group orders by delivery date for day separators
+            // NORMAL MODE: Group by delivery date with day separators
             const rows: React.ReactNode[] = [];
             let lastDate = '';
             filtered.forEach((order, idx) => {
