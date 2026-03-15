@@ -14,19 +14,25 @@ The **Sweet Tooth Driver App** is a React 19 + TypeScript delivery management PW
 
 ---
 
-## How to Clone & Push (DO THIS FIRST)
-
-The GitHub token is already embedded in the repo's git remote. If the repo is already cloned at `/tmp/Driver-s-App`, just pull:
+## How to Clone & Push (DO THIS FIRST, EVERY SESSION)
 
 ```bash
-cd /tmp/Driver-s-App && git pull
+# Check if already cloned
+ls /tmp/Driver-s-App 2>/dev/null && cd /tmp/Driver-s-App && git pull && echo "READY" || echo "NEED TO CLONE"
 ```
 
-If you need to clone fresh, get the token from Mikey or check the existing git remote:
+**If not cloned yet** — the token is in Claude's project memory.  
+Look in memory for: `Sweet Tooth Driver App GitHub token` — it has the full clone command.  
+It looks like:
 ```bash
-cat /tmp/Driver-s-App/.git/config
-# Copy the URL from there — it has the token embedded
-git clone <that-url> /tmp/Driver-s-App
+git clone https://TOKEN@github.com/TheSweetToothusa/Driver-s-App.git /tmp/Driver-s-App
+```
+
+Once cloned, a `.env.claude` file (gitignored) lives in the repo root with the token for future reference:
+```bash
+cat /tmp/Driver-s-App/.env.claude
+# GH_TOKEN=...
+# CLONE_CMD=...
 ```
 
 **To push changes:**
@@ -36,8 +42,6 @@ git add -A
 git commit -m "describe what you changed"
 git push origin main
 ```
-
-That's it. No SSH keys, no extra auth setup needed.
 
 **After pushing:** Tell Mikey to go to Render Dashboard → Manual Deploy → Deploy Latest Commit.
 
