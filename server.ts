@@ -257,6 +257,82 @@ async function startServer() {
     res.json({ success: true });
   });
 
+  // ── TEST ORDER ──────────────────────────────────────────────────────────────
+  
+  app.post("/api/create-test-order", async (_req, res) => {
+    try {
+      const testOrder = {
+        id: `test_${Date.now()}`,
+        orderNumber: `TEST-${Math.floor(1000 + Math.random() * 9000)}`,
+        customer: {
+          name: "Mikey (TEST)",
+          phone: "+17863401494",
+          email: "MIKE@THESWEETTOOTH.COM"
+        },
+        address: {
+          street: "123 Test Street",
+          unit: "Suite 100",
+          city: "Miami",
+          zip: "33139",
+          lat: 25.7907,
+          lng: -80.1300
+        },
+        items: [
+          {
+            id: "test_item_1",
+            name: "Test Chocolate Box",
+            quantity: 1,
+            sku: "TEST-001",
+            price: 50.00
+          }
+        ],
+        deliveryInstructions: "This is a TEST ORDER for POD testing. Ring doorbell twice.",
+        status: "SCHEDULED",
+        deliveryDate: new Date().toISOString().split('T')[0],
+        deliveryWindow: "12:00 PM - 4:00 PM",
+        priority: "Standard",
+        deliveryFee: 15.00,
+        driverId: "",
+        driverName: "",
+        isConfirmed: false,
+        attempts: [],
+        internalNotes: ["TEST ORDER - Created via Admin Panel"],
+        giftMessage: "Enjoy this test delivery!",
+        giftSenderName: "Sweet Tooth Team",
+        giftSenderPhone: "+13059944070",
+        giftSenderEmail: "orders@thesweettooth.com",
+        giftReceiverName: "Mikey",
+        giftReceiverPhone: "+17863401494",
+        attemptNumber: 1,
+        orderTotal: 50.00,
+        createdAt: new Date().toISOString(),
+        _isTestOrder: true  // Flag to prevent Shopify sync
+      };
+      
+      // Store test order in database
+      const existingTestOrders = await dbGet('test_orders') || [];
+      existingTestOrders.push(testOrder);
+      await dbSet('test_orders', existingTestOrders);
+      
+      console.log('✅ Test order created:', testOrder.orderNumber);
+      res.json({ success: true, order: testOrder });
+    } catch (err: any) {
+      console.error('Test order creation error:', err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+  
+  app.delete("/api/clear-test-orders", async (_req, res) => {
+    try {
+      await dbSet('test_orders', []);
+      console.log('✅ All test orders cleared');
+      res.json({ success: true, message: 'All test orders deleted' });
+    } catch (err: any) {
+      console.error('Clear test orders error:', err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // ── ORDERS ──────────────────────────────────────────────────────────────────
 
   app.get("/api/orders", async (_req, res) => {
@@ -297,7 +373,14 @@ async function startServer() {
       });
 
       console.log(`Shopify: ${allOrders.length} total, ${(filtered.length > 0 ? filtered : allOrders).length} local delivery`);
-      res.json({ orders: ordersWithTags, podData });
+      
+      // Fetch test orders from database
+      const testOrders = await dbGet('test_orders') || [];
+      
+      // Combine Shopify orders with test orders
+      const combinedOrders = [...ordersWithTags, ...testOrders];
+      
+      res.json({ orders: combinedOrders, podData });
     } catch (e) {
       console.error('Orders fetch error:', e);
       res.status(500).json({ error: String(e) });

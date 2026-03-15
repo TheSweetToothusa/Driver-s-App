@@ -2228,6 +2228,9 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
   const [feeDriverFilter, setFeeDriverFilter] = useState<string>('ALL');
   const [defaultDriverId, setDefaultDriverId] = useState<string>('');
   const [defaultDriverSaved, setDefaultDriverSaved] = useState(false);
+  const [testOrderCreating, setTestOrderCreating] = useState(false);
+  const [testOrderSuccess, setTestOrderSuccess] = useState('');
+  const [testOrderClearing, setTestOrderClearing] = useState(false);
 
   useEffect(() => {
     fetch('/api/templates').then(r => r.json()).then(d => setTemplates(d.templates || []));
@@ -2241,6 +2244,40 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
     setDefaultDriverSaved(true);
     setTimeout(() => setDefaultDriverSaved(false), 3000);
   };
+  
+  const handleCreateTestOrder = async () => {
+    setTestOrderCreating(true);
+    setTestOrderSuccess('');
+    try {
+      const res = await fetch('/api/create-test-order', { method: 'POST' });
+      const data = await res.json();
+      if (res.ok) {
+        setTestOrderSuccess(`✅ Test order ${data.order.orderNumber} created! Check Schedule tab.`);
+        setTimeout(() => setTestOrderSuccess(''), 5000);
+        // Refresh page to show new order
+        setTimeout(() => window.location.reload(), 1500);
+      }
+    } catch (err) {
+      alert('Failed to create test order');
+    } finally {
+      setTestOrderCreating(false);
+    }
+  };
+  
+  const handleClearTestOrders = async () => {
+    if (!confirm('Delete ALL test orders? This cannot be undone.')) return;
+    setTestOrderClearing(true);
+    try {
+      await fetch('/api/clear-test-orders', { method: 'DELETE' });
+      alert('All test orders deleted');
+      window.location.reload();
+    } catch (err) {
+      alert('Failed to clear test orders');
+    } finally {
+      setTestOrderClearing(false);
+    }
+  };
+  
   const drivers = allUsers.filter(u => u.role === 'DRIVER');
 
   const handleAddDriver = async () => {
@@ -2295,6 +2332,46 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
 
         {activeTab === 'DRIVERS' && (
           <div className="space-y-5">
+          
+            {/* Test Order Creation — SUPER ADMIN ONLY */}
+            {role === 'SUPER_ADMIN' && (
+              <div className="p-5 bg-gradient-to-br from-purple-50 to-pink-50 border-2 border-purple-200 rounded-[28px] shadow-sm space-y-3">
+                <div>
+                  <p className="font-black uppercase text-sm text-purple-900 flex items-center gap-2">🧪 POD Testing</p>
+                  <p className="text-xs text-purple-600 mt-0.5">Create fake test orders to test proof of delivery (photo + signature) flow</p>
+                </div>
+                <div className="bg-white/80 rounded-2xl p-4 space-y-2">
+                  <p className="text-[9px] font-black uppercase text-purple-700 tracking-widest">Test Order Details:</p>
+                  <div className="text-xs text-purple-900 space-y-1">
+                    <p>📧 <strong>Email:</strong> MIKE@THESWEETTOOTH.COM</p>
+                    <p>📱 <strong>Phone:</strong> 786-340-1494</p>
+                    <p>📦 <strong>Item:</strong> Test Chocolate Box ($50.00)</p>
+                  </div>
+                </div>
+                {testOrderSuccess && (
+                  <div className="bg-green-500 text-white rounded-2xl px-4 py-3 text-xs font-black">
+                    {testOrderSuccess}
+                  </div>
+                )}
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleCreateTestOrder}
+                    disabled={testOrderCreating}
+                    className="flex-1 py-4 bg-purple-600 text-white rounded-[24px] font-black uppercase tracking-widest text-sm active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {testOrderCreating ? 'Creating...' : 'Create Test Order'}
+                  </button>
+                  <button
+                    onClick={handleClearTestOrders}
+                    disabled={testOrderClearing}
+                    className="px-6 py-4 bg-red-500 text-white rounded-[24px] font-black uppercase tracking-widest text-xs active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {testOrderClearing ? '...' : 'Clear All Tests'}
+                  </button>
+                </div>
+                <p className="text-[9px] text-purple-600 italic">💡 Test orders appear in Schedule tab just like real orders. Complete them to test POD text/email.</p>
+              </div>
+            )}
 
             {/* Default Driver Setting */}
             <div className="p-5 bg-white border border-stone-100 rounded-[28px] shadow-sm space-y-3">
