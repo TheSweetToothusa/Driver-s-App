@@ -2273,13 +2273,14 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
       const res = await fetch('/api/create-test-order', { method: 'POST' });
       const data = await res.json();
       if (res.ok) {
-        setTestOrderSuccess(`✅ Test order ${data.order.orderNumber} created! Check Schedule tab.`);
-        setTimeout(() => setTestOrderSuccess(''), 5000);
-        // Refresh page to show new order
+        setTestOrderSuccess(`✅ Test order ${data.order.orderNumber} created! Refreshing...`);
         setTimeout(() => window.location.reload(), 1500);
+      } else {
+        alert(`Failed: ${data.error || 'Unknown error'}`);
       }
-    } catch (err) {
-      alert('Failed to create test order');
+    } catch (err: any) {
+      alert(`Error creating test order: ${err.message}`);
+      console.error('Test order error:', err);
     } finally {
       setTestOrderCreating(false);
     }
@@ -2289,11 +2290,17 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
     if (!confirm('Delete ALL test orders? This cannot be undone.')) return;
     setTestOrderClearing(true);
     try {
-      await fetch('/api/clear-test-orders', { method: 'DELETE' });
-      alert('All test orders deleted');
-      window.location.reload();
-    } catch (err) {
-      alert('Failed to clear test orders');
+      const res = await fetch('/api/clear-test-orders', { method: 'DELETE' });
+      if (res.ok) {
+        alert('✅ All test orders deleted');
+        window.location.reload();
+      } else {
+        const data = await res.json();
+        alert(`Failed: ${data.error || 'Unknown error'}`);
+      }
+    } catch (err: any) {
+      alert(`Error clearing test orders: ${err.message}`);
+      console.error('Clear test orders error:', err);
     } finally {
       setTestOrderClearing(false);
     }
@@ -2356,21 +2363,20 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
           
             {/* Test Order Creation — SUPER ADMIN ONLY */}
             {role === 'SUPER_ADMIN' && (
-              <div className="p-5 bg-gradient-to-br from-purple-50 to-pink-50 border-2 border-purple-200 rounded-[28px] shadow-sm space-y-3">
+              <div className="p-5 bg-white border border-stone-200 rounded-[28px] shadow-sm space-y-3">
                 <div>
-                  <p className="font-black uppercase text-sm text-purple-900 flex items-center gap-2">🧪 POD Testing</p>
-                  <p className="text-xs text-purple-600 mt-0.5">Create fake test orders to test proof of delivery (photo + signature) flow</p>
+                  <p className="font-black uppercase text-sm text-stone-900 flex items-center gap-2">🧪 Test POD</p>
+                  <p className="text-xs text-stone-500 mt-0.5">Create fake orders to test proof of delivery</p>
                 </div>
-                <div className="bg-white/80 rounded-2xl p-4 space-y-2">
-                  <p className="text-[9px] font-black uppercase text-purple-700 tracking-widest">Test Order Details:</p>
-                  <div className="text-xs text-purple-900 space-y-1">
-                    <p>📧 <strong>Email:</strong> MIKE@THESWEETTOOTH.COM</p>
-                    <p>📱 <strong>Phone:</strong> 786-340-1494</p>
-                    <p>📦 <strong>Item:</strong> Test Chocolate Box ($50.00)</p>
+                <div className="bg-stone-50 rounded-2xl p-4 space-y-2">
+                  <p className="text-[9px] font-black uppercase text-stone-600 tracking-widest">Will send to:</p>
+                  <div className="text-xs text-stone-900 space-y-1">
+                    <p>📧 MIKE@THESWEETTOOTH.COM</p>
+                    <p>📱 786-340-1494</p>
                   </div>
                 </div>
                 {testOrderSuccess && (
-                  <div className="bg-green-500 text-white rounded-2xl px-4 py-3 text-xs font-black">
+                  <div className="bg-green-50 border border-green-200 text-green-900 rounded-2xl px-4 py-3 text-xs font-bold">
                     {testOrderSuccess}
                   </div>
                 )}
@@ -2378,19 +2384,18 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
                   <button
                     onClick={handleCreateTestOrder}
                     disabled={testOrderCreating}
-                    className="flex-1 py-4 bg-purple-600 text-white rounded-[24px] font-black uppercase tracking-widest text-sm active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex-1 py-4 bg-black text-white rounded-[24px] font-black uppercase tracking-widest text-sm active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {testOrderCreating ? 'Creating...' : 'Create Test Order'}
                   </button>
                   <button
                     onClick={handleClearTestOrders}
                     disabled={testOrderClearing}
-                    className="px-6 py-4 bg-red-500 text-white rounded-[24px] font-black uppercase tracking-widest text-xs active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-6 py-4 bg-stone-200 text-stone-700 rounded-[24px] font-black uppercase tracking-widest text-xs active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {testOrderClearing ? '...' : 'Clear All Tests'}
+                    {testOrderClearing ? '...' : 'Clear Tests'}
                   </button>
                 </div>
-                <p className="text-[9px] text-purple-600 italic">💡 Test orders appear in Schedule tab just like real orders. Complete them to test POD text/email.</p>
               </div>
             )}
 
