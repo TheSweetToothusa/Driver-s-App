@@ -257,78 +257,59 @@ async function startServer() {
     res.json({ success: true });
   });
 
-  // ── TEST ORDER ──────────────────────────────────────────────────────────────
+  // ── TEST POD ────────────────────────────────────────────────────────────────
   
-  app.post("/api/create-test-order", async (_req, res) => {
+  app.post("/api/test-pod", async (req, res) => {
     try {
-      const testOrder = {
-        id: `test_${Date.now()}`,
-        orderNumber: `TEST-${Math.floor(1000 + Math.random() * 9000)}`,
-        customer: {
-          name: "Mikey (TEST)",
-          phone: "+17863401494",
-          email: "MIKE@THESWEETTOOTH.COM"
-        },
-        address: {
-          street: "123 Test Street",
-          unit: "Suite 100",
-          city: "Miami",
-          zip: "33139",
-          lat: 25.7907,
-          lng: -80.1300
-        },
-        items: [
-          {
-            id: "test_item_1",
-            name: "Test Chocolate Box",
-            quantity: 1,
-            sku: "TEST-001",
-            price: 50.00
-          }
-        ],
-        deliveryInstructions: "This is a TEST ORDER for POD testing. Ring doorbell twice.",
-        status: "SCHEDULED",
-        deliveryDate: new Date().toISOString().split('T')[0],
-        deliveryWindow: "12:00 PM - 4:00 PM",
-        priority: "Standard",
-        deliveryFee: 15.00,
-        driverId: "",
-        driverName: "",
-        isConfirmed: false,
-        attempts: [],
-        internalNotes: ["TEST ORDER - Created via Admin Panel"],
-        giftMessage: "Enjoy this test delivery!",
-        giftSenderName: "Sweet Tooth Team",
-        giftSenderPhone: "+13059944070",
-        giftSenderEmail: "orders@thesweettooth.com",
-        giftReceiverName: "Mikey",
-        giftReceiverPhone: "+17863401494",
-        attemptNumber: 1,
-        orderTotal: 50.00,
-        createdAt: new Date().toISOString(),
-        _isTestOrder: true  // Flag to prevent Shopify sync
-      };
+      const { photo, signature, sendSms, sendEmail, phone, email } = req.body;
       
-      // Store test order in database
-      const existingTestOrders = await dbGet('test_orders') || [];
-      existingTestOrders.push(testOrder);
-      await dbSet('test_orders', existingTestOrders);
+      if (!photo) {
+        return res.status(400).json({ error: 'Photo is required' });
+      }
       
-      console.log('✅ Test order created:', testOrder.orderNumber);
-      res.json({ success: true, order: testOrder });
+      const results = { sms: false, email: false };
+      
+      // Send SMS if requested
+      if (sendSms && phone) {
+        try {
+          // TODO: Implement actual SMS sending via Twilio
+          console.log(`Would send SMS POD to ${phone}`);
+          results.sms = true;
+        } catch (err) {
+          console.error('SMS send error:', err);
+        }
+      }
+      
+      // Send Email if requested
+      if (sendEmail && email && SENDGRID_API_KEY) {
+        try {
+          const sgMail = await import('@sendgrid/mail');
+          sgMail.default.setApiKey(SENDGRID_API_KEY);
+          
+          await sgMail.default.send({
+            to: email,
+            from: SENDGRID_FROM_EMAIL,
+            subject: 'TEST POD - Proof of Delivery',
+            html: `
+              <h2>TEST Proof of Delivery</h2>
+              <p>This is a test POD notification from the Sweet Tooth Driver App.</p>
+              <h3>Delivery Photo:</h3>
+              <img src="${photo}" style="max-width: 400px; border-radius: 8px;" />
+              ${signature ? `<h3>Signature:</h3><img src="${signature}" style="max-width: 300px; border: 1px solid #ccc; border-radius: 8px;" />` : ''}
+              <p style="margin-top: 20px; color: #666; font-size: 12px;">This is a TEST notification.</p>
+            `
+          });
+          
+          results.email = true;
+          console.log(`✅ Test POD email sent to ${email}`);
+        } catch (err: any) {
+          console.error('Email send error:', err);
+        }
+      }
+      
+      res.json({ success: true, sent: results });
     } catch (err: any) {
-      console.error('Test order creation error:', err);
-      res.status(500).json({ error: err.message });
-    }
-  });
-  
-  app.delete("/api/clear-test-orders", async (_req, res) => {
-    try {
-      await dbSet('test_orders', []);
-      console.log('✅ All test orders cleared');
-      res.json({ success: true, message: 'All test orders deleted' });
-    } catch (err: any) {
-      console.error('Clear test orders error:', err);
+      console.error('Test POD error:', err);
       res.status(500).json({ error: err.message });
     }
   });

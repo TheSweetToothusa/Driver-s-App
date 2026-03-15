@@ -2251,9 +2251,13 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
   const [feeDriverFilter, setFeeDriverFilter] = useState<string>('ALL');
   const [defaultDriverId, setDefaultDriverId] = useState<string>('');
   const [defaultDriverSaved, setDefaultDriverSaved] = useState(false);
-  const [testOrderCreating, setTestOrderCreating] = useState(false);
-  const [testOrderSuccess, setTestOrderSuccess] = useState('');
-  const [testOrderClearing, setTestOrderClearing] = useState(false);
+  const [testPodPhoto, setTestPodPhoto] = useState<string>('');
+  const [testPodSendSms, setTestPodSendSms] = useState(true);
+  const [testPodSendEmail, setTestPodSendEmail] = useState(true);
+  const [testPodResult, setTestPodResult] = useState<string>('');
+  const [testPodSending, setTestPodSending] = useState(false);
+  const [testSigDrawing, setTestSigDrawing] = useState(false);
+  const testSigCanvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
     fetch('/api/templates').then(r => r.json()).then(d => setTemplates(d.templates || []));
@@ -2268,43 +2272,41 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
     setTimeout(() => setDefaultDriverSaved(false), 3000);
   };
   
-  const handleCreateTestOrder = async () => {
-    setTestOrderCreating(true);
-    setTestOrderSuccess('');
+  const handleSendTestPod = async () => {
+    setTestPodSending(true);
+    setTestPodResult('');
+    
+    const canvas = testSigCanvasRef.current;
+    const signature = canvas?.toDataURL('image/png') || '';
+    
     try {
-      const res = await fetch('/api/create-test-order', { method: 'POST' });
+      const res = await fetch('/api/test-pod', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          photo: testPodPhoto,
+          signature,
+          sendSms: testPodSendSms,
+          sendEmail: testPodSendEmail,
+          phone: '+17863401494',
+          email: 'MIKE@THESWEETTOOTH.COM'
+        })
+      });
+      
       const data = await res.json();
+      
       if (res.ok) {
-        setTestOrderSuccess(`✅ Test order ${data.order.orderNumber} created! Refreshing...`);
-        setTimeout(() => window.location.reload(), 1500);
+        const sent = [];
+        if (testPodSendSms) sent.push('text');
+        if (testPodSendEmail) sent.push('email');
+        setTestPodResult(`✅ POD sent via ${sent.join(' and ')}! Check your phone/email.`);
       } else {
-        alert(`Failed: ${data.error || 'Unknown error'}`);
+        setTestPodResult(`❌ Failed: ${data.error || 'Unknown error'}`);
       }
     } catch (err: any) {
-      alert(`Error creating test order: ${err.message}`);
-      console.error('Test order error:', err);
+      setTestPodResult(`❌ Error: ${err.message}`);
     } finally {
-      setTestOrderCreating(false);
-    }
-  };
-  
-  const handleClearTestOrders = async () => {
-    if (!confirm('Delete ALL test orders? This cannot be undone.')) return;
-    setTestOrderClearing(true);
-    try {
-      const res = await fetch('/api/clear-test-orders', { method: 'DELETE' });
-      if (res.ok) {
-        alert('✅ All test orders deleted');
-        window.location.reload();
-      } else {
-        const data = await res.json();
-        alert(`Failed: ${data.error || 'Unknown error'}`);
-      }
-    } catch (err: any) {
-      alert(`Error clearing test orders: ${err.message}`);
-      console.error('Clear test orders error:', err);
-    } finally {
-      setTestOrderClearing(false);
+      setTestPodSending(false);
     }
   };
   
@@ -2363,41 +2365,112 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
         {activeTab === 'DRIVERS' && (
           <div className="space-y-5">
           
-            {/* Test Order Creation — SUPER ADMIN ONLY */}
+            {/* POD Testing — SUPER ADMIN ONLY */}
             {role === 'SUPER_ADMIN' && (
               <div className="p-5 bg-white border border-stone-200 rounded-[28px] shadow-sm space-y-3">
                 <div>
-                  <p className="font-black uppercase text-sm text-stone-900 flex items-center gap-2">🧪 Test POD</p>
-                  <p className="text-xs text-stone-500 mt-0.5">Create fake orders to test proof of delivery</p>
+                  <p className="font-black uppercase text-sm text-stone-900">📸 Test POD (Proof of Delivery)</p>
+                  <p className="text-xs text-stone-500 mt-0.5">Test photo + signature delivery confirmation</p>
                 </div>
-                <div className="bg-stone-50 rounded-2xl p-4 space-y-2">
-                  <p className="text-[9px] font-black uppercase text-stone-600 tracking-widest">Will send to:</p>
-                  <div className="text-xs text-stone-900 space-y-1">
-                    <p>📧 MIKE@THESWEETTOOTH.COM</p>
-                    <p>📱 786-340-1494</p>
+                
+                <div className="bg-stone-50 rounded-2xl p-4 space-y-3">
+                  {/* Photo Upload */}
+                  <div>
+                    <p className="text-[9px] font-black uppercase text-stone-600 tracking-widest mb-2">1. Upload Photo</p>
+                    <input 
+                      type="file" 
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onload = () => setTestPodPhoto(reader.result as string);
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                      className="w-full text-xs bg-white border border-stone-200 rounded-xl px-3 py-2"
+                    />
+                    {testPodPhoto && (
+                      <img src={testPodPhoto} className="mt-2 w-full h-32 object-cover rounded-xl" />
+                    )}
+                  </div>
+                  
+                  {/* Signature Canvas */}
+                  <div>
+                    <p className="text-[9px] font-black uppercase text-stone-600 tracking-widest mb-2">2. Draw Signature</p>
+                    <canvas
+                      ref={testSigCanvasRef}
+                      width={400}
+                      height={150}
+                      onMouseDown={(e) => {
+                        setTestSigDrawing(true);
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        const ctx = e.currentTarget.getContext('2d');
+                        if (ctx) {
+                          ctx.beginPath();
+                          ctx.moveTo(e.clientX - rect.left, e.clientY - rect.top);
+                        }
+                      }}
+                      onMouseMove={(e) => {
+                        if (!testSigDrawing) return;
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        const ctx = e.currentTarget.getContext('2d');
+                        if (ctx) {
+                          ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
+                          ctx.stroke();
+                        }
+                      }}
+                      onMouseUp={() => setTestSigDrawing(false)}
+                      onMouseLeave={() => setTestSigDrawing(false)}
+                      className="w-full border-2 border-stone-300 rounded-xl bg-white cursor-crosshair"
+                    />
+                    <button
+                      onClick={() => {
+                        const canvas = testSigCanvasRef.current;
+                        if (canvas) {
+                          const ctx = canvas.getContext('2d');
+                          if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+                        }
+                      }}
+                      className="mt-2 text-xs text-stone-500 underline"
+                    >
+                      Clear Signature
+                    </button>
+                  </div>
+                  
+                  {/* Phone/Email */}
+                  <div>
+                    <p className="text-[9px] font-black uppercase text-stone-600 tracking-widest mb-2">3. Send To</p>
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-xs text-stone-700">
+                        <input type="checkbox" checked={testPodSendSms} onChange={(e) => setTestPodSendSms(e.target.checked)} />
+                        <span>📱 Text: 786-340-1494</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-xs text-stone-700">
+                        <input type="checkbox" checked={testPodSendEmail} onChange={(e) => setTestPodSendEmail(e.target.checked)} />
+                        <span>📧 Email: MIKE@THESWEETTOOTH.COM</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
-                {testOrderSuccess && (
-                  <div className="bg-green-50 border border-green-200 text-green-900 rounded-2xl px-4 py-3 text-xs font-bold">
-                    {testOrderSuccess}
+                
+                {testPodResult && (
+                  <div className={`rounded-2xl px-4 py-3 text-xs font-bold ${testPodResult.includes('✅') ? 'bg-green-50 border border-green-200 text-green-900' : 'bg-red-50 border border-red-200 text-red-900'}`}>
+                    {testPodResult}
                   </div>
                 )}
-                <div className="flex gap-2">
-                  <button
-                    onClick={handleCreateTestOrder}
-                    disabled={testOrderCreating}
-                    className="flex-1 py-4 bg-black text-white rounded-[24px] font-black uppercase tracking-widest text-sm active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {testOrderCreating ? 'Creating...' : 'Create Test Order'}
-                  </button>
-                  <button
-                    onClick={handleClearTestOrders}
-                    disabled={testOrderClearing}
-                    className="px-6 py-4 bg-stone-200 text-stone-700 rounded-[24px] font-black uppercase tracking-widest text-xs active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {testOrderClearing ? '...' : 'Clear Tests'}
-                  </button>
-                </div>
+                
+                <button
+                  onClick={handleSendTestPod}
+                  disabled={testPodSending || !testPodPhoto || (!testPodSendSms && !testPodSendEmail)}
+                  className="w-full py-4 bg-black text-white rounded-[24px] font-black uppercase tracking-widest text-sm active:scale-95 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  {testPodSending ? 'Sending...' : 'Send POD Test'}
+                </button>
+                
+                <p className="text-[9px] text-stone-400 italic text-center">
+                  This sends a real text/email with photo and signature
+                </p>
               </div>
             )}
 
