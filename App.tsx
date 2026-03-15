@@ -1583,7 +1583,10 @@ const ScheduleView: React.FC<{
   const groupedForStatus = useMemo(() => {
     const map: Record<string, Delivery[]> = {};
     filteredForStatus.forEach(d => {
-      const date = (d.deliveryDate || new Date().toISOString()).split('T')[0];
+      // For completed orders, group by completedAt; otherwise use deliveryDate
+      const isCompleted = d.status === 'DELIVERED' || d.status === 'FAILED' || d.status === 'SECOND_ATTEMPT';
+      const dateToUse = isCompleted && d.completedAt ? d.completedAt : d.deliveryDate;
+      const date = (dateToUse || new Date().toISOString()).split('T')[0];
       if (!map[date]) map[date] = [];
       map[date].push(d);
     });
