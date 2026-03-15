@@ -2594,7 +2594,21 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
             if (d.status !== DeliveryStatus.DELIVERED) return false;
             const dateToCheck = (d.completedAt || d.submittedAt || d.deliveryDate || '').split('T')[0];
             if (!dateToCheck) return true; // include if no date info — show all delivered
-            return dateToCheck >= calcStart && dateToCheck <= calcEnd;
+            const isInRange = dateToCheck >= calcStart && dateToCheck <= calcEnd;
+            
+            // DEBUG: Log each order being considered
+            if (isInRange) {
+              console.log('FEE CALC - Including:', {
+                order: d.orderNumber,
+                driver: d.driverName || 'Unassigned',
+                driverId: d.driverId || 'none',
+                fee: d.deliveryFee,
+                date: dateToCheck,
+                zip: d.address.zip
+              });
+            }
+            
+            return isInRange;
           }) : [];
 
           // group by driver
@@ -2606,12 +2620,22 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
             byDriver[key].stops.push(d);
           });
 
-          const driverRows = Object.entries(byDriver).map(([id, { name, stops }]) => ({
-            id, name,
-            count: stops.length,
-            total: stops.reduce((s, d) => s + (d.deliveryFee || 0), 0),
-            stops
-          })).sort((a, b) => b.total - a.total);
+          const driverRows = Object.entries(byDriver).map(([id, { name, stops }]) => {
+            const total = stops.reduce((s, d) => s + (d.deliveryFee || 0), 0);
+            console.log('DRIVER TOTALS:', {
+              id,
+              name,
+              count: stops.length,
+              total,
+              fees: stops.map(d => d.deliveryFee)
+            });
+            return {
+              id, name,
+              count: stops.length,
+              total,
+              stops
+            };
+          }).sort((a, b) => b.total - a.total);
 
 
           const filteredRows = feeDriverFilter === 'ALL' ? driverRows : driverRows.filter(r => r.id === feeDriverFilter);
