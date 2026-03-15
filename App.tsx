@@ -1583,10 +1583,24 @@ const ScheduleView: React.FC<{
   const groupedForStatus = useMemo(() => {
     const map: Record<string, Delivery[]> = {};
     filteredForStatus.forEach(d => {
-      // For completed orders, group by completedAt; otherwise use deliveryDate
+      let date: string;
+      
+      // For completed orders, try completedAt first
       const isCompleted = d.status === 'DELIVERED' || d.status === 'FAILED' || d.status === 'SECOND_ATTEMPT';
-      const dateToUse = isCompleted && d.completedAt ? d.completedAt : d.deliveryDate;
-      const date = (dateToUse || new Date().toISOString()).split('T')[0];
+      if (isCompleted && d.completedAt) {
+        const completedDate = d.completedAt.split('T')[0];
+        // Validate it's a proper date format (YYYY-MM-DD)
+        if (/^\d{4}-\d{2}-\d{2}$/.test(completedDate) && !isNaN(new Date(completedDate).getTime())) {
+          date = completedDate;
+        } else {
+          // completedAt is malformed, fall back to deliveryDate
+          date = (d.deliveryDate || new Date().toISOString()).split('T')[0];
+        }
+      } else {
+        // Not completed or no completedAt - use deliveryDate
+        date = (d.deliveryDate || new Date().toISOString()).split('T')[0];
+      }
+      
       if (!map[date]) map[date] = [];
       map[date].push(d);
     });
@@ -1684,18 +1698,25 @@ const ScheduleView: React.FC<{
             <Calendar size={36} className="text-stone-200 mb-3" />
             <p className="text-[11px] font-black uppercase text-stone-300">No deliveries in this range</p>
           </div>
-        ) : groupedForStatus.map(([date, orders]) => (
-          <div key={date}>
-            {/* Bold dark date header — easy to scan */}
-            <div className="px-4 py-2.5 bg-stone-900 flex items-center justify-between sticky top-0 z-[5]">
-              <p className="text-sm font-black text-white">
-                {new Date(date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
-              </p>
-              <span className="text-[10px] font-black text-stone-400 bg-stone-800 px-2 py-0.5 rounded-full">{orders.length}</span>
+        ) : groupedForStatus.map(([date, orders]) => {
+          const parsedDate = new Date(date + 'T12:00:00');
+          const isValidDate = !isNaN(parsedDate.getTime());
+          
+          return (
+            <div key={date}>
+              {/* Bold dark date header — easy to scan */}
+              <div className="px-4 py-2.5 bg-stone-900 flex items-center justify-between sticky top-0 z-[5]">
+                <p className="text-sm font-black text-white">
+                  {isValidDate 
+                    ? parsedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+                    : date}
+                </p>
+                <span className="text-[10px] font-black text-stone-400 bg-stone-800 px-2 py-0.5 rounded-full">{orders.length}</span>
+              </div>
+              {orders.map(order => <OrderCard key={order.id} order={order} role={role} onTap={() => onSelectOrder(order)} />)}
             </div>
-            {orders.map(order => <OrderCard key={order.id} order={order} role={role} onTap={() => onSelectOrder(order)} />)}
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
