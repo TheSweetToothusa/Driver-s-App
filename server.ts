@@ -366,7 +366,19 @@ async function startServer() {
         const driverTag = tagsList.find((t: string) => t.startsWith('st_driver:'));
         const driverNameTag = tagsList.find((t: string) => t.startsWith('st_drivername:'));
         if (statusTag) o._st_status = statusTag.replace('st_status:', '');
-        if (completedTag) o._st_completedAt = completedTag.replace('st_completed:', '').replace(/-(?=\d{2}-\d{2}[T ])/g, ':');
+        if (completedTag) {
+          // Convert st_completed:2026-03-13T18-30-45.123Z back to 2026-03-13T18:30:45.123Z
+          // The time portion (after T) has dashes that need to become colons
+          const rawTimestamp = completedTag.replace('st_completed:', '');
+          const [datePart, timePart] = rawTimestamp.split('T');
+          if (timePart) {
+            // Replace only the first two dashes in the time part (HH-MM-SS becomes HH:MM:SS)
+            const fixedTime = timePart.replace('-', ':').replace('-', ':');
+            o._st_completedAt = `${datePart}T${fixedTime}`;
+          } else {
+            o._st_completedAt = rawTimestamp; // Malformed, use as-is (will be caught by validation)
+          }
+        }
         if (driverTag) o._st_driverId = driverTag.replace('st_driver:', '');
         if (driverNameTag) o._st_driverName = driverNameTag.replace('st_drivername:', '');
         return o;
