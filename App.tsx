@@ -241,19 +241,32 @@ const ContactCallReveal: React.FC<{ phone: string; label: string; showTemplates?
 
 const SignaturePad: React.FC<{ onSave: (d: string) => void; onCancel: () => void }> = ({ onSave, onCancel }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const isDrawing = useRef(false);
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    const container = containerRef.current;
+    if (!canvas || !container) return;
+
+    // Size canvas to actual display pixels (fixes blank signature bug)
+    const rect = container.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    canvas.style.width = rect.width + 'px';
+    canvas.style.height = rect.height + 'px';
+
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    ctx.strokeStyle = '#000'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+    ctx.scale(dpr, dpr);
+    ctx.strokeStyle = '#000'; ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+
     const pos = (e: MouseEvent | TouchEvent) => {
       const r = canvas.getBoundingClientRect();
       const cx = 'touches' in e ? e.touches[0].clientX : e.clientX;
       const cy = 'touches' in e ? e.touches[0].clientY : e.clientY;
-      return { x: cx - r.left, y: cy - r.top };
+      return { x: (cx - r.left), y: (cy - r.top) };
     };
     const start = (e: MouseEvent | TouchEvent) => { isDrawing.current = true; const p = pos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); };
     const move = (e: MouseEvent | TouchEvent) => { if (!isDrawing.current) return; e.preventDefault(); const p = pos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); };
@@ -273,13 +286,18 @@ const SignaturePad: React.FC<{ onSave: (d: string) => void; onCancel: () => void
         <button onClick={onCancel} className="text-white/50"><X size={22} /></button>
       </div>
       <p className="text-white/40 text-xs mb-4">Optional — skip if not available</p>
-      <div className="flex-1 bg-white rounded-3xl overflow-hidden border-4 border-white">
-        <canvas ref={canvasRef} width={400} height={600} className="w-full h-full touch-none" />
+      <div ref={containerRef} className="flex-1 bg-white rounded-3xl overflow-hidden border-4 border-white">
+        <canvas ref={canvasRef} className="touch-none" />
       </div>
       <div className="mt-4 flex gap-3">
-        <button onClick={() => { const c = canvasRef.current; if (c) c.getContext('2d')?.clearRect(0,0,c.width,c.height); }} className="flex-1 py-5 bg-white/10 text-white rounded-2xl font-black uppercase text-[10px]">Clear</button>
+        <button onClick={() => {
+          const c = canvasRef.current;
+          if (!c) return;
+          const ctx = c.getContext('2d');
+          if (ctx) { ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,c.width,c.height); const dpr = window.devicePixelRatio||1; ctx.scale(dpr,dpr); ctx.strokeStyle='#000'; ctx.lineWidth=3; ctx.lineCap='round'; ctx.lineJoin='round'; }
+        }} className="flex-1 py-5 bg-white/10 text-white rounded-2xl font-black uppercase text-[10px]">Clear</button>
         <button onClick={onCancel} className="flex-1 py-5 bg-white/20 text-white rounded-2xl font-black uppercase text-[10px]">Skip</button>
-        <button onClick={() => canvasRef.current && onSave(canvasRef.current.toDataURL())} className="flex-2 py-5 bg-white text-black rounded-2xl font-black uppercase text-[10px] px-6">Confirm</button>
+        <button onClick={() => canvasRef.current && onSave(canvasRef.current.toDataURL())} className="flex-2 py-5 bg-white text-black rounded-2xl font-black uppercase text-[10px] px-6">Save Signature</button>
       </div>
     </div>
   );
@@ -449,28 +467,67 @@ const FailedDeliveryFlow: React.FC<FailedFlowProps> = ({ order, currentUser, onS
     reader.readAsDataURL(file);
   };
 
-  const canSubmit = notes.trim().length > 0;
+  const canSubmit = notes.trim().length > 0 && photo !== null;
 
-  // Step 1: just show the big red FAILED button — this component is shown after tap 1
-  // so we start at step 2 (reason selection)
   return (
     <div className="fixed inset-0 bg-black/75 z-[200] flex items-end">
       <div className="w-full bg-white rounded-t-[40px] animate-in slide-in-from-bottom max-h-[90vh] overflow-y-auto">
         {/* Handle */}
-        <div className="w-12 h-1 bg-stone-200 rounded-full mx-auto mt-4 mb-6" />
+        <div className="w-12 h-1 bg-stone-200 rounded-full mx-auto mt-4 mb-4" />
+
+        {/* Step 1: What happens next — clear explanation */}
+        {step === 1 && (
+          <div className="px-6 pb-8 space-y-5">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xl font-black uppercase text-stone-900">Couldn't Deliver?</h3>
+              <button onClick={onCancel}><X size={22} className="text-stone-400" /></button>
+            </div>
+            <p className="text-sm font-bold text-stone-500">Order #{order.orderNumber?.replace(/^#+/, '') || order.id} — {order.giftReceiverName || order.customer.name}</p>
+
+            {/* What happens next callout */}
+            <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl px-5 py-4 space-y-2">
+              <p className="text-sm font-black text-amber-900 uppercase tracking-wide">Here's what happens next:</p>
+              <div className="flex items-start gap-2">
+                <span className="text-amber-700 font-black text-base mt-0.5">1.</span>
+                <p className="text-sm font-bold text-amber-800">Select a reason why you couldn't deliver</p>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="text-amber-700 font-black text-base mt-0.5">2.</span>
+                <p className="text-sm font-bold text-amber-800">Take a photo of the property (required — proof you were there)</p>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="text-amber-700 font-black text-base mt-0.5">3.</span>
+                <p className="text-sm font-bold text-amber-800">Add a short note about what happened</p>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="text-green-700 font-black text-base mt-0.5">✓</span>
+                <p className="text-sm font-bold text-green-800">Order automatically reschedules for next business day</p>
+              </div>
+            </div>
+
+            <button onClick={() => setStep(2)} className="w-full py-6 bg-stone-900 text-white rounded-[28px] font-black uppercase tracking-widest text-sm active:scale-95 transition-all">
+              Continue — Report This Attempt →
+            </button>
+            <button onClick={onCancel} className="w-full py-4 text-stone-400 font-bold text-sm">Cancel — Go Back</button>
+          </div>
+        )}
 
         {/* Step 2: Reason */}
         {step === 2 && (
           <div className="px-6 pb-8 space-y-5">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xl font-black uppercase text-red-600">Why did it fail?</h3>
-              <button onClick={onCancel}><X size={22} className="text-stone-400" /></button>
+            <div className="flex items-center gap-3">
+              <button onClick={() => setStep(1)} className="p-2 bg-stone-100 rounded-full"><ChevronLeft size={18} /></button>
+              <div>
+                <h3 className="text-xl font-black uppercase text-stone-900">Why couldn't you deliver?</h3>
+                <p className="text-xs text-stone-400 font-bold">Step 1 of 2</p>
+              </div>
+              <button onClick={onCancel} className="ml-auto"><X size={22} className="text-stone-400" /></button>
             </div>
             <p className="text-xs text-stone-500 font-medium">Order #{order.orderNumber?.replace(/^#+/, '') || order.id} — {order.giftReceiverName || order.customer.name}</p>
             <div className="space-y-2">
               {(Object.entries(FAILURE_REASON_LABELS) as [FailureReason, string][]).map(([key, label]) => (
                 <button key={key} onClick={() => setReason(key)}
-                  className={`w-full py-5 px-5 rounded-[20px] font-black text-sm text-left flex items-center gap-3 transition-all active:scale-98 ${reason === key ? 'bg-red-500 text-white' : 'bg-stone-100 text-stone-700'}`}
+                  className={`w-full py-5 px-5 rounded-[20px] font-black text-sm text-left flex items-center gap-3 transition-all active:scale-98 ${reason === key ? 'bg-stone-900 text-white' : 'bg-stone-100 text-stone-700'}`}
                 >
                   <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${reason === key ? 'border-white' : 'border-stone-300'}`}>
                     {reason === key && <div className="w-2.5 h-2.5 bg-white rounded-full" />}
@@ -479,21 +536,37 @@ const FailedDeliveryFlow: React.FC<FailedFlowProps> = ({ order, currentUser, onS
                 </button>
               ))}
             </div>
-            <button onClick={() => setStep(3)} className="w-full py-6 bg-red-500 text-white rounded-[28px] font-black uppercase tracking-widest text-sm active:scale-95 transition-all">
-              Next — Add Proof
+            <button onClick={() => setStep(3)} className="w-full py-6 bg-stone-900 text-white rounded-[28px] font-black uppercase tracking-widest text-sm active:scale-95 transition-all">
+              Next — Add Photo &amp; Notes →
             </button>
           </div>
         )}
 
-        {/* Step 3: Notes + Photo + Submit */}
+        {/* Step 3: Photo (required) + Notes + Submit */}
         {step === 3 && (
           <div className="px-6 pb-8 space-y-4">
             <div className="flex items-center gap-3">
               <button onClick={() => setStep(2)} className="p-2 bg-stone-100 rounded-full"><ChevronLeft size={18} /></button>
               <div>
-                <h3 className="text-lg font-black uppercase">Add Proof</h3>
-                <p className="text-[10px] font-black text-stone-400 uppercase">{FAILURE_REASON_LABELS[reason]}</p>
+                <h3 className="text-lg font-black uppercase">Photo &amp; Notes</h3>
+                <p className="text-[10px] font-black text-stone-400 uppercase">Step 2 of 2 · {FAILURE_REASON_LABELS[reason]}</p>
               </div>
+            </div>
+
+            {/* Photo — REQUIRED */}
+            <input type="file" accept="image/*" capture="environment" ref={fileRef} onChange={handlePhoto} className="hidden" />
+            <div>
+              <label className="text-[10px] font-black uppercase text-stone-500 tracking-widest block mb-2">
+                📷 Photo of Property <span className="text-red-500">*Required</span>
+              </label>
+              <button onClick={() => fileRef.current?.click()}
+                className={`w-full py-5 rounded-[24px] font-black uppercase text-sm flex items-center justify-center gap-3 active:scale-95 transition-all ${photo ? 'bg-green-50 text-green-700 border-2 border-green-400' : 'bg-red-50 text-red-700 border-2 border-red-300'}`}
+              >
+                <Camera size={20} />
+                {photo ? '✓ Photo Taken — Retake' : 'TAKE PHOTO NOW (Required)'}
+              </button>
+              {!photo && <p className="text-[10px] font-black text-red-500 mt-1 text-center">You must take a photo before submitting</p>}
+              {photo && <img src={photo} className="w-full rounded-[18px] max-h-40 object-cover border border-stone-100 mt-2" alt="Proof" />}
             </div>
 
             {/* Notes — mandatory */}
@@ -504,47 +577,35 @@ const FailedDeliveryFlow: React.FC<FailedFlowProps> = ({ order, currentUser, onS
               <textarea
                 value={notes}
                 onChange={e => setNotes(e.target.value)}
-                placeholder="e.g. Gate code 1234 didn't work. Rang bell twice, no answer."
-                className="w-full bg-stone-50 border-2 border-stone-200 rounded-[20px] px-5 py-4 text-sm font-medium outline-none focus:border-red-400 transition-all resize-none"
-                style={{ minHeight: '100px' }}
+                placeholder="e.g. Rang bell twice, no answer. Left notice at door."
+                className="w-full bg-stone-50 border-2 border-stone-200 rounded-[20px] px-5 py-4 text-sm font-medium outline-none focus:border-stone-400 transition-all resize-none"
+                style={{ minHeight: '90px' }}
               />
               {notes.trim().length === 0 && <p className="text-[10px] font-black text-red-400 mt-1">Notes are required before submitting</p>}
             </div>
-
-            {/* Photo */}
-            <input type="file" accept="image/*" capture="environment" ref={fileRef} onChange={handlePhoto} className="hidden" />
-            <button onClick={() => fileRef.current?.click()}
-              className={`w-full py-5 rounded-[24px] font-black uppercase text-sm flex items-center justify-center gap-3 active:scale-95 transition-all ${photo ? 'bg-green-50 text-green-700 border-2 border-green-200' : 'bg-stone-100 text-stone-700'}`}
-            >
-              <Camera size={20} />
-              {photo ? '✓ Photo Taken — Retake' : 'Take Photo of Location'}
-            </button>
-            {photo && <img src={photo} className="w-full rounded-[18px] max-h-40 object-cover border border-stone-100" alt="Proof" />}
 
             {/* Submit */}
             <button
               onClick={() => canSubmit && onSubmit(reason, notes, photo)}
               disabled={!canSubmit}
-              className="w-full py-7 bg-red-500 text-white rounded-[32px] font-black uppercase tracking-widest text-base flex items-center justify-center gap-3 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-xl mt-2"
+              className="w-full py-7 bg-stone-900 text-white rounded-[32px] font-black uppercase tracking-widest text-base flex items-center justify-center gap-3 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-xl mt-2"
             >
-              <XCircle size={24} /> SUBMIT FAILED DELIVERY
+              <XCircle size={24} /> SUBMIT — ORDER WILL RESCHEDULE
             </button>
+            {!canSubmit && (
+              <p className="text-center text-[11px] font-bold text-stone-400">
+                {!photo && !notes.trim() ? 'Photo + notes required' : !photo ? 'Photo required' : 'Notes required'}
+              </p>
+            )}
           </div>
         )}
 
-        {/* Show step indicator at bottom of step 2 */}
-        {step === 2 && (
-          <div className="flex justify-center gap-2 pb-6">
-            <div className="w-8 h-1 bg-red-400 rounded-full" />
-            <div className="w-8 h-1 bg-stone-200 rounded-full" />
-          </div>
-        )}
-        {step === 3 && (
-          <div className="flex justify-center gap-2 pb-2">
-            <div className="w-8 h-1 bg-stone-200 rounded-full" />
-            <div className="w-8 h-1 bg-red-400 rounded-full" />
-          </div>
-        )}
+        {/* Step indicator dots */}
+        <div className="flex justify-center gap-2 pb-4">
+          {[1,2,3].map(s => (
+            <div key={s} className={`h-1 rounded-full transition-all ${step === s ? 'w-8 bg-stone-800' : 'w-4 bg-stone-200'}`} />
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -1074,21 +1135,22 @@ const OrderDetail: React.FC<{
               </button>
             </div>
             {photoData && <img src={photoData} className="w-full rounded-xl max-h-36 object-cover" alt="POD" />}
-            {/* DELIVERED — requires photo */}
+            {/* CONFIRM DELIVERY — requires photo */}
             <button
               onClick={photoData ? handleComplete : () => alert('Please add a delivery photo first.')}
               disabled={!photoData}
               className={'w-full py-5 rounded-2xl font-black uppercase text-xl tracking-wide flex items-center justify-center gap-2 shadow-lg transition-all ' + (photoData ? 'bg-green-600 text-white active:scale-95 cursor-pointer' : 'bg-stone-300 text-stone-400 cursor-not-allowed opacity-60')}>
-              <CheckCircle2 size={24} /> DELIVERED
+              <CheckCircle2 size={24} /> {photoData ? 'CONFIRM DELIVERY' : 'CONFIRM DELIVERY'}
             </button>
             {!photoData && (
-              <p className="text-center text-xs font-bold text-red-500 uppercase tracking-wide -mt-1">📷 Add a photo to enable delivery confirmation</p>
+              <p className="text-center text-xs font-bold text-red-500 uppercase tracking-wide -mt-1">📷 Add a photo to confirm delivery</p>
             )}
-            {/* FAILED */}
+            {/* COULDN'T DELIVER */}
             <button onClick={() => setShowFailFlow(true)}
               className="w-full py-4 border-2 border-stone-800 text-stone-900 rounded-2xl font-black uppercase text-sm flex items-center justify-center gap-2 active:scale-95">
-              <XCircle size={18} /> FAILED DELIVERY
+              <XCircle size={18} /> COULDN'T DELIVER — REPORT ATTEMPT
             </button>
+            <p className="text-center text-[10px] text-stone-400 font-bold uppercase tracking-wide -mt-1">No one home? Take a photo &amp; the order auto-reschedules</p>
           </div>
         )}
 
