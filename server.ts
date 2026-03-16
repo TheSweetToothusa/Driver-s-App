@@ -365,6 +365,29 @@ async function startServer() {
     res.json({ success: true });
   });
 
+  // ── REVERT accidental delivery confirmation ─────────────────────────────────
+  app.post("/api/orders/:id/revert", async (req, res) => {
+    const id = req.params.id;
+    try {
+      // Clear POD data for this order from file fallback
+      const pod = JSON.parse(fs.readFileSync(POD_STORAGE_PATH, 'utf-8'));
+      if (!pod[id]) pod[id] = {};
+      delete pod[id].photo;
+      delete pod[id].signature;
+      delete pod[id].completedAt;
+      delete pod[id].submittedAt;
+      delete pod[id].successNotificationSent;
+      pod[id].status = 'ASSIGNED';
+      pod[id].revertedAt = new Date().toISOString();
+      fs.writeFileSync(POD_STORAGE_PATH, JSON.stringify(pod, null, 2));
+      // Also persist to DB kv_store
+      await dbSet(`pod_${id}`, pod[id]);
+      res.json({ success: true });
+    } catch (e) {
+      res.status(500).json({ error: String(e) });
+    }
+  });
+
   // ── DEBUG: see raw order statuses ──────────────────────────────────────────
   app.get('/api/debug/orders', async (req, res) => {
     try {
@@ -561,7 +584,7 @@ async function startServer() {
         sentAt: new Date().toISOString(),
         type,
         channel,
-        to: phone || email || '',
+        to: email || '',
         customerName: order.customer?.name || '',
         orderNumber: order.orderNumber || '',
         driverName: order.driverName || '',
