@@ -2655,9 +2655,22 @@ export default function App() {
       const ddRaw = await fetch('/api/config/default-driver').then(r => r.json()).catch(() => null);
       // Fall back to Katie if nothing is configured yet
       const dd = ddRaw?.driverId ? ddRaw : { driverId: 'manager_1', driverName: 'Katie' };
-      const withDriver = fetched.map((d: Delivery) =>
-        (!d.driverId || d.driverId === '') ? { ...d, driverId: dd.driverId, driverName: dd.driverName } : d
-      );
+      const withDriver = fetched.map((d: Delivery) => {
+        if (!d.driverId || d.driverId === '') {
+          return {
+            ...d,
+            driverId: dd.driverId,
+            driverName: dd.driverName,
+            // If status is still PENDING (meaning no tag has set it yet), bump to ASSIGNED
+            status: d.status === DeliveryStatus.PENDING ? DeliveryStatus.ASSIGNED : d.status,
+          };
+        }
+        // Order already has a driver — if still showing PENDING, correct it to ASSIGNED
+        if (d.status === DeliveryStatus.PENDING) {
+          return { ...d, status: DeliveryStatus.ASSIGNED };
+        }
+        return d;
+      });
       setDeliveries(withDriver);
       if (dd) setDefaultDriver(dd);
       setDataSource(isMock ? 'MOCK' : 'LIVE');
