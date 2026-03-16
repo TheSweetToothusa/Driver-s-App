@@ -395,7 +395,17 @@ const LoginGate: React.FC<{ onAuthorized: (user: UserAccount) => void }> = ({ on
 // ORDER CARD
 // ─────────────────────────────────────────────────────────────────────────────
 
-const OrderCard: React.FC<{ order: Delivery; role: AppRole; onTap: () => void; isSelected?: boolean }> = ({ order, role, onTap }) => {
+const OrderCard: React.FC<{ order: Delivery; role: AppRole; onTap: () => void; isSelected?: boolean; allUsers?: UserAccount[]; onUpdate?: (id: string, updates: Partial<Delivery>) => void }> = ({ order, role, onTap, allUsers, onUpdate }) => {
+  const [reassignTo, setReassignTo] = useState('');
+  const isAdmin = role === 'SUPER_ADMIN' || role === 'MANAGER';
+  const handleReassign = async () => {
+    if (!reassignTo || !allUsers || !onUpdate) return;
+    const driver = allUsers.find(u => u.id === reassignTo);
+    if (!driver) return;
+    await fetch(`/api/orders/${order.id}/assign`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ driverId: driver.id, driverName: driver.name }) });
+    onUpdate(order.id, { driverId: driver.id, driverName: driver.name });
+    setReassignTo('');
+  };
   const product = order.items?.[0];
   const recipientName = order.giftReceiverName || order.customer?.name || '—';
   const statusCfg = STATUS_CONFIG[order.status] || STATUS_CONFIG.PENDING;
@@ -433,8 +443,25 @@ const OrderCard: React.FC<{ order: Delivery; role: AppRole; onTap: () => void; i
           </div>
         </div>
         {/* Driver row — admin only */}
-        {(role === 'SUPER_ADMIN' || role === 'MANAGER') && (
-          <p className="text-[10px] text-stone-400 mt-1">{order.driverName ? `Driver: ${order.driverName}` : ''}</p>
+        {isAdmin && (
+          <div className="mt-1.5">
+            <p className="text-[10px] text-stone-400">{order.driverName ? `Driver: ${order.driverName}` : 'No driver assigned'}</p>
+            {isAdmin && allUsers && onUpdate && (
+              <div className="flex gap-1.5 mt-1" onClick={e => e.stopPropagation()}>
+                <select value={reassignTo} onChange={e => setReassignTo(e.target.value)}
+                  className="flex-1 bg-stone-50 border border-stone-200 rounded-lg px-2 py-1 text-[10px] font-bold outline-none">
+                  <option value="">Reassign driver...</option>
+                  {allUsers.filter(u => (u.role === 'DRIVER' || u.role === 'MANAGER') && u.isActive).map(u => (
+                    <option key={u.id} value={u.id}>{u.name}</option>
+                  ))}
+                </select>
+                <button onClick={handleReassign} disabled={!reassignTo}
+                  className="px-3 py-1 bg-black text-white rounded-lg font-black text-[10px] uppercase disabled:opacity-30 shrink-0">
+                  Set
+                </button>
+              </div>
+            )}
+          </div>
         )}
       </div>
     </div>
@@ -1167,16 +1194,8 @@ const OrderDetail: React.FC<{
             )}
 
             <div className="px-4 py-3 border-b border-stone-100">
-              <p className="text-xs font-black text-stone-500 mb-2">Driver: <span className="text-stone-900">{order.driverName || 'Not assigned'}</span></p>
-              <div className="flex gap-2">
-                <select value={reassignTo} onChange={e => setReassignTo(e.target.value)} className="flex-1 bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm font-bold outline-none">
-                  <option value="">Change driver...</option>
-                  {allUsers.filter(u => (u.role === 'DRIVER' || u.role === 'MANAGER') && u.isActive).map(u => (
-                    <option key={u.id} value={u.id}>{u.name}</option>
-                  ))}
-                </select>
-                <button onClick={handleReassign} disabled={!reassignTo} className="px-4 py-2 bg-black text-white rounded-lg font-black text-xs uppercase disabled:opacity-30">Assign</button>
-              </div>
+              <p className="text-xs font-black text-stone-500">Driver: <span className="text-stone-900 font-black">{order.driverName || 'Not assigned'}</span></p>
+              <p className="text-[10px] text-stone-400 mt-0.5">To reassign, use the Schedule or Orders list view</p>
             </div>
 
             <div className="px-4 py-3">
@@ -1218,7 +1237,6 @@ const OrderDetail: React.FC<{
       )}
     </div>
   );
-};
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1599,7 +1617,8 @@ const ScheduleView: React.FC<{
   currentUserId: string;
   allUsers: UserAccount[];
   onSelectOrder: (order: Delivery) => void;
-}> = ({ deliveries, role, currentUserId, allUsers, onSelectOrder }) => {
+  onUpdateOrder: (id: string, updates: Partial<Delivery>) => void;
+}> = ({ deliveries, role, currentUserId, allUsers, onSelectOrder, onUpdateOrder }) => {
   const [viewMode, setViewMode] = useState<ViewMode>('DAY');
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [customStart, setCustomStart] = useState(new Date().toISOString().split('T')[0]);
@@ -1816,7 +1835,7 @@ const ScheduleView: React.FC<{
                 </p>
                 <span className="text-[10px] font-black text-stone-400 bg-stone-800 px-2 py-0.5 rounded-full">{orders.length}</span>
               </div>
-              {orders.map(order => <OrderCard key={order.id} order={order} role={role} onTap={() => onSelectOrder(order)} />)}
+              {orders.map(order => <OrderCard key={order.id} order={order} role={role} onTap={() => onSelectOrder(order)} allUsers={allUsers} onUpdate={onUpdateOrder} />)}
             </div>
           );
         })}
@@ -2889,6 +2908,7 @@ export default function App() {
             currentUserId={currentUser.id}
             allUsers={allUsers}
             onSelectOrder={setSelectedOrder}
+            onUpdateOrder={handleUpdateOrder}
           />
         )}
 
