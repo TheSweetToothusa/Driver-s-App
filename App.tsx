@@ -700,7 +700,7 @@ const OrderDetail: React.FC<{
 
   const handlePhoto = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]; if (!f) return;
-    const r = new FileReader(); r.onloadend = () => setPhotoData(r.result as string); r.readAsDataURL(f);
+    const r = new FileReader(); r.onloadend = () => { setPhotoData(r.result as string); setPhotoTimestamp(new Date().toISOString()); }; r.readAsDataURL(f);
   };
 
   const [showDeliveredConfirm, setShowDeliveredConfirm] = useState(false);
@@ -774,6 +774,8 @@ const OrderDetail: React.FC<{
   };
 
   const [showGiftMsg, setShowGiftMsg] = useState(false);
+  const [showContactSection, setShowContactSection] = useState(false);
+  const [photoTimestamp, setPhotoTimestamp] = useState<string | null>(null);
   const [editingContact, setEditingContact] = useState(false);
   const [editFields, setEditFields] = useState({
     recipientName: order.giftReceiverName || order.customer?.name || '',
@@ -830,7 +832,7 @@ const OrderDetail: React.FC<{
         </div>
       )}
 
-      {/* ── HEADER: black bar, order#, status, back button ── */}
+      {/* ── HEADER ── */}
       <div className="bg-black text-white px-4 py-3 flex items-center gap-3 shrink-0">
         <button onClick={onBack} className="w-9 h-9 flex items-center justify-center bg-white/10 rounded-full active:bg-white/20">
           <ChevronLeft size={20} />
@@ -839,23 +841,18 @@ const OrderDetail: React.FC<{
           <p className="text-xl font-black tracking-tight">#{cleanOrderNum}</p>
           <p className="text-xs text-white font-bold">{order.deliveryDate ? new Date(order.deliveryDate + 'T12:00:00').toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric', year:'numeric' }) : 'Today'}</p>
         </div>
-        {/* Status pill — green when delivered, white otherwise */}
         {!isAdmin && (
           <span className={`text-xs font-black px-3 py-1.5 rounded-full border ${order.status === DeliveryStatus.DELIVERED ? 'bg-green-500 border-green-400 text-white' : 'bg-white/10 border-white/20 text-white'}`}>
             {STATUS_CONFIG[order.status]?.label || order.status}
           </span>
         )}
-        {/* Admin only: status change dropdown in header */}
         {isAdmin && (
           <select
             value={order.status}
             onChange={async e => {
               const s = e.target.value as DeliveryStatus;
               onUpdate(order.id, { status: s });
-              fetch(`/api/orders/${order.id}/status`, {
-                method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ status: s })
-              }).catch(() => {});
+              fetch(`/api/orders/${order.id}/status`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: s }) }).catch(() => {});
             }}
             className="bg-white/10 text-white text-[11px] font-black border border-white/20 rounded-lg px-2 py-1.5 outline-none max-w-[130px]"
           >
@@ -867,9 +864,9 @@ const OrderDetail: React.FC<{
       </div>
 
       {/* ── SCROLLABLE CONTENT ── */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto pb-6">
 
-        {/* ── DELIVERY INSTRUCTIONS — only shows when present ── */}
+        {/* ── DELIVERY INSTRUCTIONS — amber banner when present ── */}
         {order.deliveryInstructions && (
           <div className="mx-3 mt-3 bg-amber-400 rounded-xl px-4 py-4 flex gap-3 items-start">
             <AlertTriangle size={22} className="text-amber-900 shrink-0 mt-0.5" />
@@ -880,25 +877,19 @@ const OrderDetail: React.FC<{
           </div>
         )}
 
-        {/* ── MAIN DETAIL CARD — Lionwheel style ── */}
+        {/* ── ZONE 1: ORDER INFO CARD ── */}
         <div className="mx-3 mt-3 bg-white rounded-xl border border-stone-200 overflow-hidden">
-
-          {/* Recipient name + delivery badge */}
+          {/* Recipient name */}
           <div className="px-4 pt-4 pb-3">
-            <p className="text-2xl font-black text-stone-900 leading-tight">{recipientName}</p>
-            <span className="inline-flex items-center gap-1 mt-1.5 px-3 py-1 rounded-full border border-stone-300 text-xs font-bold text-stone-600">
-              🚚 Local Delivery
-            </span>
+            <p className="text-[10px] font-black uppercase text-stone-400 tracking-widest mb-1">Delivering To</p>
+            <p className="text-3xl font-black text-stone-900 leading-tight">{recipientName}</p>
           </div>
 
-          {/* Info rows — Lionwheel table style */}
           <div className="border-t border-stone-100 divide-y divide-stone-100">
-
-            {/* ADDRESS — large, prominent, fully clickable to open maps */}
-            <a href={mapsUrl} target="_blank" rel="noopener noreferrer"
-              className="block px-4 py-3 active:bg-stone-50">
+            {/* Address — tappable to open maps */}
+            <a href={mapsUrl} target="_blank" rel="noopener noreferrer" className="block px-4 py-3 active:bg-stone-50">
               <div className="flex items-start justify-between gap-2">
-                <span className="text-xs font-black uppercase text-stone-400 tracking-widest">Address</span>
+                <span className="text-[10px] font-black uppercase text-stone-400 tracking-widest">Address</span>
                 <span className="flex items-center gap-1 text-[10px] font-black text-blue-500 uppercase tracking-wide shrink-0 mt-0.5">
                   <Navigation size={11} /> Get Directions
                 </span>
@@ -909,109 +900,218 @@ const OrderDetail: React.FC<{
                   🏢 {order.address.unit}
                 </span>
               )}
-              {order.address.company && (
-                <p className="text-sm font-bold text-blue-700 mt-1">📍 {order.address.company}</p>
-              )}
+              {order.address.company && <p className="text-sm font-bold text-blue-700 mt-1">📍 {order.address.company}</p>}
               <p className="text-base font-bold text-stone-600 mt-0.5">{order.address.city}, {order.address.zip}</p>
             </a>
 
-            <div className="flex px-4 py-2.5"><span className="w-36 text-sm font-bold text-stone-900 shrink-0">Parcels:</span><span className="text-sm font-black text-stone-900">{order.items?.reduce((s,i) => s + i.quantity, 0) || 1}</span></div>
-
-            <div className="flex px-4 py-2.5"><span className="w-36 text-sm font-bold text-stone-900 shrink-0">Gift Receiver:</span><span className="text-sm text-stone-700">{recipientName}</span></div>
-            {order.orderTotal != null && <div className="flex px-4 py-2.5"><span className="w-36 text-sm font-bold text-stone-900 shrink-0">Order Total:</span><span className="text-sm font-black text-stone-900">${Number(order.orderTotal).toFixed(2)}</span></div>}
-          </div>
-
-          {/* Items table — larger, bold, grey background */}
-          {order.items?.length > 0 && (
-            <div className="border-t-2 border-stone-200">
-              <div className="flex px-4 py-2.5 bg-stone-100">
-                <span className="flex-1 text-xs font-black uppercase text-stone-500 tracking-widest">📦 Item Name</span>
-                <span className="w-10 text-xs font-black uppercase text-stone-500 text-center">Qty</span>
-                <span className="w-16 text-xs font-black uppercase text-stone-500 text-right">Price</span>
-              </div>
-              {order.items.map((item, i) => (
-                <div key={i} className="flex items-start px-4 py-4 border-t border-stone-100 bg-stone-50">
-                  <div className="flex-1 min-w-0 pr-2">
-                    <p className="text-base font-black text-stone-900 leading-snug">{item.name}</p>
-                    {item.sku && <p className="text-[11px] text-stone-400 italic mt-1">SKU: {item.sku}</p>}
+            {/* Items — compact */}
+            {order.items?.length > 0 && (
+              <div className="px-4 py-3">
+                {order.items.map((item, i) => (
+                  <div key={i} className="flex items-start justify-between gap-2 py-1">
+                    <p className="text-sm font-black text-stone-900 flex-1 leading-snug">{item.name}</p>
+                    <span className="text-sm font-black text-stone-500 shrink-0">×{item.quantity}</span>
                   </div>
-                  <span className="w-10 text-base font-black text-stone-900 text-center">{item.quantity}</span>
-                  <span className="w-16 text-base font-black text-stone-900 text-right">${item.price.toFixed(2)}</span>
-                </div>
-              ))}
-            </div>
-          )}
-
-        </div>
-
-        {/* ── CONTACT SECTION: Receiver first, Sender as backup ── */}
-        <div className="mx-3 mt-3 bg-white rounded-xl border border-stone-200 overflow-hidden">
-          <div className="flex items-center gap-2 px-4 py-2.5 bg-stone-900">
-            <span className="text-white text-xs font-black uppercase tracking-widest">💬 Need to reach someone?</span>
-          </div>
-
-          {/* Step 1: Gift Receiver */}
-          <div className="px-4 py-3 border-b border-stone-100">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="w-5 h-5 rounded-full bg-green-500 text-white text-[10px] font-black flex items-center justify-center shrink-0">1</span>
-              <span className="text-[10px] font-black uppercase text-stone-500 tracking-widest">Try Gift Receiver First</span>
-            </div>
-            <p className="text-base font-black text-stone-900 mb-2">{recipientName}</p>
-            {recipientPhone ? (
-              <ContactCallReveal
-                phone={recipientPhone}
-                label="Receiver"
-                showTemplates={true}
-                driverName={currentUser.name}
-                driverPhone={currentUser.phone || ''}
-                address={[order.address?.street, order.address?.unit].filter(Boolean).join(', ')}
-              />
-            ) : (
-              <div className="flex items-center gap-2 bg-amber-50 border border-amber-300 rounded-xl px-3 py-2.5">
-                <span className="text-lg">⚠️</span>
-                <div>
-                  <p className="text-xs font-black text-amber-800 uppercase">No number provided</p>
-                  <p className="text-[11px] text-amber-700 font-semibold">Contact the Gift Sender below ↓</p>
-                </div>
+                ))}
               </div>
             )}
           </div>
-
-          {/* Step 2: Gift Sender backup */}
-          {(senderName || senderPhone) && (
-            <div className="px-4 py-3 bg-stone-50">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="w-5 h-5 rounded-full bg-stone-300 text-stone-600 text-[10px] font-black flex items-center justify-center shrink-0">2</span>
-                <span className="text-[10px] font-black uppercase text-stone-500 tracking-widest">Backup — Gift Sender</span>
-              </div>
-              <p className="text-base font-black text-stone-900 mb-2">{senderName}</p>
-              {senderPhone ? (
-                <ContactCallReveal
-                  phone={senderPhone}
-                  label="Gift Sender"
-                  driverName={currentUser.name}
-                  driverPhone={currentUser.phone || ''}
-                />
-              ) : (
-                <p className="text-xs text-stone-400 italic">No phone number on file</p>
-              )}
-            </div>
-          )}
         </div>
 
-        {/* ── GIFT MESSAGE ── */}
-        {order.giftMessage && (
-          <button onClick={() => setShowGiftMsg(g => !g)}
-            className="mx-3 mt-3 w-[calc(100%-1.5rem)] bg-white border border-stone-200 rounded-xl px-4 py-3 text-left active:bg-stone-50">
-            <div className="flex justify-between items-center">
-              <p className="text-[10px] font-black uppercase text-stone-400 tracking-widest">Gift Message</p>
-              <ChevronRight size={14} className={`text-stone-400 transition-transform ${showGiftMsg ? 'rotate-90' : ''}`} />
-            </div>
-            {showGiftMsg && <p className="text-sm text-stone-600 italic mt-2 leading-relaxed">"{order.giftMessage}"</p>}
-          </button>
+        {/* ── ZONE 2: CONTACT — collapsed by default ── */}
+        {!isCompleted && (
+          <div className="mx-3 mt-3">
+            <button
+              onClick={() => setShowContactSection(s => !s)}
+              className="w-full flex items-center justify-between px-4 py-3 bg-white rounded-xl border border-stone-200 active:bg-stone-50"
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-base">📞</span>
+                <span className="text-sm font-black text-stone-700">Need to call someone?</span>
+              </div>
+              <ChevronRight size={16} className={`text-stone-400 transition-transform ${showContactSection ? 'rotate-90' : ''}`} />
+            </button>
+
+            {showContactSection && (
+              <div className="bg-white rounded-b-xl border border-t-0 border-stone-200 overflow-hidden">
+                {/* Try Recipient First */}
+                <div className="px-4 py-3 border-b border-stone-100">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="w-5 h-5 rounded-full bg-green-500 text-white text-[10px] font-black flex items-center justify-center shrink-0">1</span>
+                    <span className="text-[10px] font-black uppercase text-stone-500 tracking-widest">Try Recipient First</span>
+                  </div>
+                  <p className="text-base font-black text-stone-900 mb-2">{recipientName}</p>
+                  {recipientPhone ? (
+                    <ContactCallReveal phone={recipientPhone} label="Receiver" showTemplates={true} driverName={currentUser.name} driverPhone={currentUser.phone || ''} address={[order.address?.street, order.address?.unit].filter(Boolean).join(', ')} />
+                  ) : (
+                    <div className="flex items-center gap-2 bg-amber-50 border border-amber-300 rounded-xl px-3 py-2.5">
+                      <span className="text-lg">⚠️</span>
+                      <p className="text-xs font-black text-amber-800">No number — try Gift Sender below</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Sender Backup */}
+                {(senderName || senderPhone) && (
+                  <div className="px-4 py-3 bg-stone-50">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="w-5 h-5 rounded-full bg-stone-300 text-stone-600 text-[10px] font-black flex items-center justify-center shrink-0">2</span>
+                      <span className="text-[10px] font-black uppercase text-stone-500 tracking-widest">Backup — Gift Sender</span>
+                    </div>
+                    <p className="text-base font-black text-stone-900 mb-2">{senderName}</p>
+                    {senderPhone ? (
+                      <ContactCallReveal phone={senderPhone} label="Gift Sender" driverName={currentUser.name} driverPhone={currentUser.phone || ''} />
+                    ) : (
+                      <p className="text-xs text-stone-400 italic">No phone number on file</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         )}
 
-        {/* ── FAILED ATTEMPTS (if any) ── */}
+        {/* ── ZONE 3: PROOF OF DELIVERY (main action zone) ── */}
+        {!isCompleted && (
+          <div className="mx-3 mt-4 bg-white rounded-xl border border-stone-200 overflow-hidden">
+            <div className="px-4 py-3 bg-stone-900">
+              <p className="text-white font-black uppercase text-xs tracking-widest">📋 Proof of Delivery</p>
+              <p className="text-stone-400 text-[10px] font-bold mt-0.5">Required for all deliveries — successful or not</p>
+            </div>
+
+            <input type="file" accept="image/*" capture="environment" ref={fileRef} onChange={handlePhoto} className="hidden" />
+
+            <div className="p-4 space-y-3">
+              {/* PHOTO — primary, full width */}
+              <button
+                onClick={() => fileRef.current?.click()}
+                className={`w-full py-5 rounded-xl font-black uppercase text-sm flex items-center justify-center gap-3 active:scale-95 transition-all ${photoData ? 'bg-green-600 text-white' : 'bg-stone-900 text-white'}`}
+              >
+                <Camera size={20} />
+                {photoData ? '✓ Photo Taken — Tap to Retake' : '📷 TAKE PHOTO'}
+              </button>
+
+              {/* Photo preview + timestamp */}
+              {photoData && (
+                <div className="rounded-xl overflow-hidden border border-stone-200">
+                  <img src={photoData} className="w-full max-h-48 object-cover" alt="POD" />
+                  {photoTimestamp && (
+                    <div className="bg-stone-900 px-3 py-1.5 flex items-center gap-2">
+                      <span className="text-green-400 text-[10px]">●</span>
+                      <p className="text-white text-[11px] font-black">
+                        {new Date(photoTimestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} at {new Date(photoTimestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* SIGNATURE — secondary, shown after photo */}
+              <button
+                onClick={() => setIsSigning(true)}
+                className={`w-full py-4 rounded-xl font-black uppercase text-sm flex items-center justify-center gap-3 active:scale-95 transition-all ${sigData ? 'bg-green-600 text-white' : 'bg-stone-100 text-stone-700 border border-stone-200'}`}
+              >
+                <PenTool size={18} />
+                {sigData ? '✓ Signature Captured' : 'Add Recipient Signature (Optional)'}
+              </button>
+
+              {/* Signature preview */}
+              {sigData && (
+                <div className="bg-stone-50 border border-stone-200 rounded-xl p-3">
+                  <p className="text-[9px] font-black uppercase text-stone-400 mb-2">Captured Signature</p>
+                  <img src={sigData} className="w-full max-h-20 object-contain" alt="Signature" />
+                </div>
+              )}
+
+              {/* Driver note */}
+              <textarea
+                value={driverNote}
+                onChange={e => setDriverNote(e.target.value)}
+                placeholder="Optional note (e.g. left at front door, unit 4B)"
+                className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-sm outline-none resize-none"
+                style={{ minHeight: '64px' }}
+              />
+            </div>
+
+            {/* ACTION BUTTONS */}
+            <div className="px-4 pb-4 space-y-2">
+              {/* CONFIRM DELIVERY */}
+              <button
+                onClick={photoData ? handleComplete : () => alert('Please take a delivery photo first.')}
+                disabled={!photoData}
+                className={'w-full py-5 rounded-2xl font-black uppercase text-xl tracking-wide flex items-center justify-center gap-2 shadow-lg transition-all ' + (photoData ? 'bg-green-600 text-white active:scale-95' : 'bg-stone-200 text-stone-400 cursor-not-allowed')}
+              >
+                <CheckCircle2 size={24} /> CONFIRM DELIVERY
+              </button>
+              {!photoData && (
+                <p className="text-center text-[11px] font-bold text-stone-400 uppercase tracking-wide">📷 Take a photo first to confirm delivery</p>
+              )}
+
+              {/* COULDN'T DELIVER */}
+              <button
+                onClick={() => setShowFailFlow(true)}
+                className="w-full py-4 border-2 border-stone-300 text-stone-600 rounded-2xl font-black uppercase text-sm flex items-center justify-center gap-2 active:scale-95 active:border-stone-400"
+              >
+                <XCircle size={18} /> COULDN'T DELIVER — REPORT ATTEMPT
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── COMPLETED: POD summary ── */}
+        {isCompleted && (
+          <div className="mx-3 mt-3 mb-4 space-y-2">
+            <div className="bg-white rounded-xl border border-stone-200 px-4 py-3">
+              <StatusBadge status={order.status} />
+              {order.completedAt && (
+                <p className="text-xs text-stone-500 mt-1">
+                  {formatDate(order.completedAt)} at {formatTime(order.completedAt)}
+                </p>
+              )}
+              {order.driverNotes && <p className="text-sm italic text-stone-600 mt-2">"{order.driverNotes}"</p>}
+            </div>
+            {order.confirmationPhoto && (
+              <div className="rounded-xl overflow-hidden border border-stone-200">
+                <img src={order.confirmationPhoto} className="w-full max-h-48 object-cover" alt="Photo" />
+                {order.completedAt && (
+                  <div className="bg-stone-900 px-3 py-1.5 flex items-center gap-2">
+                    <span className="text-green-400 text-[10px]">●</span>
+                    <p className="text-white text-[11px] font-black">
+                      {new Date(order.completedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} at {new Date(order.completedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+            {order.confirmationSignature && (
+              <div className="bg-white border border-stone-200 rounded-xl p-3">
+                <p className="text-[9px] font-black uppercase text-stone-400 mb-1">Signature</p>
+                <img src={order.confirmationSignature} className="w-full max-h-16 object-contain" alt="Sig" />
+              </div>
+            )}
+            {/* Admin: send notification */}
+            {isAdmin && order.status === DeliveryStatus.DELIVERED && !order.successNotificationSent && (
+              <button onClick={() => loadPreview('SUCCESS')}
+                className="w-full py-3.5 bg-black text-white rounded-xl font-black uppercase text-sm flex items-center justify-center gap-2 active:scale-95">
+                <Bell size={16} /> Send Delivery Confirmation
+              </button>
+            )}
+            {isAdmin && (order.status === DeliveryStatus.FAILED || order.status === DeliveryStatus.PENDING_RESCHEDULE) && !order.failureNotificationSent && (
+              <button onClick={() => loadPreview('FAILURE')}
+                className="w-full py-3.5 bg-stone-800 text-white rounded-xl font-black uppercase text-sm flex items-center justify-center gap-2 active:scale-95">
+                <Bell size={16} /> Notify Customer of Delay
+              </button>
+            )}
+            {order.failureNotificationSent && (
+              <p className="text-center text-xs font-bold text-green-600">✓ Customer notified</p>
+            )}
+            {order.successNotificationSent && (
+              <p className="text-center text-xs font-bold text-green-600">✓ Delivery confirmation sent</p>
+            )}
+          </div>
+        )}
+
+        {/* ── PREVIOUS ATTEMPTS ── */}
         {order.attempts && order.attempts.length > 0 && (
           <div className="mx-3 mt-3 bg-white rounded-xl border border-stone-200 overflow-hidden">
             <div className="px-4 py-2 bg-stone-50 border-b border-stone-100">
@@ -1027,7 +1127,7 @@ const OrderDetail: React.FC<{
           </div>
         )}
 
-        {/* ── ADMIN SECTION: assign driver + note (ONE place, not two) ── */}
+        {/* ── ADMIN SECTION — collapsed at bottom ── */}
         {isAdmin && (
           <div className="mx-3 mt-3 bg-white rounded-xl border border-stone-200 overflow-hidden">
             <div className="px-4 py-2 bg-stone-50 border-b border-stone-100 flex items-center justify-between">
@@ -1038,36 +1138,25 @@ const OrderDetail: React.FC<{
               </button>
             </div>
 
-            {/* Edit contact/address form */}
             {editingContact && (
               <div className="px-4 py-3 border-b border-stone-100 space-y-2">
                 <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest mb-2">Recipient</p>
-                <input value={editFields.recipientName} onChange={e => setEditFields(p => ({ ...p, recipientName: e.target.value }))}
-                  placeholder="Recipient name" className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-black" />
-                <input value={editFields.recipientPhone} onChange={e => setEditFields(p => ({ ...p, recipientPhone: e.target.value }))}
-                  placeholder="Recipient phone" className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-black" />
-                <input value={editFields.recipientEmail} onChange={e => setEditFields(p => ({ ...p, recipientEmail: e.target.value }))}
-                  placeholder="Recipient email" className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-black" />
+                <input value={editFields.recipientName} onChange={e => setEditFields(p => ({ ...p, recipientName: e.target.value }))} placeholder="Recipient name" className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-black" />
+                <input value={editFields.recipientPhone} onChange={e => setEditFields(p => ({ ...p, recipientPhone: e.target.value }))} placeholder="Recipient phone" className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-black" />
+                <input value={editFields.recipientEmail} onChange={e => setEditFields(p => ({ ...p, recipientEmail: e.target.value }))} placeholder="Recipient email" className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-black" />
                 <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest mt-2 mb-2">Sender</p>
-                <input value={editFields.senderName} onChange={e => setEditFields(p => ({ ...p, senderName: e.target.value }))}
-                  placeholder="Sender name" className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-black" />
-                <input value={editFields.senderPhone} onChange={e => setEditFields(p => ({ ...p, senderPhone: e.target.value }))}
-                  placeholder="Sender phone" className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-black" />
+                <input value={editFields.senderName} onChange={e => setEditFields(p => ({ ...p, senderName: e.target.value }))} placeholder="Sender name" className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-black" />
+                <input value={editFields.senderPhone} onChange={e => setEditFields(p => ({ ...p, senderPhone: e.target.value }))} placeholder="Sender phone" className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-black" />
                 <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest mt-2 mb-2">Address</p>
-                <input value={editFields.street} onChange={e => setEditFields(p => ({ ...p, street: e.target.value }))}
-                  placeholder="Street address" className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-black" />
+                <input value={editFields.street} onChange={e => setEditFields(p => ({ ...p, street: e.target.value }))} placeholder="Street address" className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-black" />
                 <div className="grid grid-cols-2 gap-2">
-                  <input value={editFields.city} onChange={e => setEditFields(p => ({ ...p, city: e.target.value }))}
-                    placeholder="City" className="bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-black" />
-                  <input value={editFields.zip} onChange={e => setEditFields(p => ({ ...p, zip: e.target.value.replace(/\D/g,'').slice(0,5) }))}
-                    placeholder="ZIP" className="bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-black" />
+                  <input value={editFields.city} onChange={e => setEditFields(p => ({ ...p, city: e.target.value }))} placeholder="City" className="bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-black" />
+                  <input value={editFields.zip} onChange={e => setEditFields(p => ({ ...p, zip: e.target.value.replace(/\D/g,'').slice(0,5) }))} placeholder="ZIP" className="bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-black" />
                 </div>
-                {/* Rate — SUPER_ADMIN only */}
                 {role === 'SUPER_ADMIN' && (
                   <div>
-                    <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest mt-2 mb-2">Delivery Rate (Super Admin only)</p>
-                    <input value={editFields.deliveryFee} onChange={e => setEditFields(p => ({ ...p, deliveryFee: e.target.value }))}
-                      placeholder="Rate ($)" inputMode="decimal" className="w-full bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-sm font-black outline-none focus:border-amber-400" />
+                    <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest mt-2 mb-2">Delivery Fee (Super Admin only)</p>
+                    <input value={editFields.deliveryFee} onChange={e => setEditFields(p => ({ ...p, deliveryFee: e.target.value }))} placeholder="Fee ($)" inputMode="decimal" className="w-full bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-sm font-black outline-none focus:border-amber-400" />
                   </div>
                 )}
                 <div className="flex gap-2 pt-1">
@@ -1077,160 +1166,59 @@ const OrderDetail: React.FC<{
               </div>
             )}
 
-            {/* Driver assignment */}
             <div className="px-4 py-3 border-b border-stone-100">
-              <p className="text-xs font-black text-stone-500 mb-2">
-                Driver: <span className="text-stone-900">{order.driverName || 'Not assigned'}</span>
-              </p>
+              <p className="text-xs font-black text-stone-500 mb-2">Driver: <span className="text-stone-900">{order.driverName || 'Not assigned'}</span></p>
               <div className="flex gap-2">
-                <select value={reassignTo} onChange={e => setReassignTo(e.target.value)}
-                  className="flex-1 bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm font-bold outline-none">
+                <select value={reassignTo} onChange={e => setReassignTo(e.target.value)} className="flex-1 bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm font-bold outline-none">
                   <option value="">Change driver...</option>
                   {allUsers.filter(u => (u.role === 'DRIVER' || u.role === 'MANAGER') && u.isActive).map(u => (
                     <option key={u.id} value={u.id}>{u.name}</option>
                   ))}
                 </select>
-                <button onClick={handleReassign} disabled={!reassignTo}
-                  className="px-4 py-2 bg-black text-white rounded-lg font-black text-xs uppercase disabled:opacity-30">
-                  Assign
-                </button>
+                <button onClick={handleReassign} disabled={!reassignTo} className="px-4 py-2 bg-black text-white rounded-lg font-black text-xs uppercase disabled:opacity-30">Assign</button>
               </div>
             </div>
-            {/* Note — one place only */}
+
             <div className="px-4 py-3">
-              {order.adminNotes && (
-                <div className="text-xs text-stone-600 mb-2 bg-stone-50 rounded-lg p-2 whitespace-pre-line">{order.adminNotes}</div>
-              )}
+              {order.adminNotes && <div className="text-xs text-stone-600 mb-2 bg-stone-50 rounded-lg p-2 whitespace-pre-line">{order.adminNotes}</div>}
               <div className="flex gap-2">
-                <input value={adminNote} onChange={e => setAdminNote(e.target.value)}
-                  placeholder="Add admin note..."
-                  className="flex-1 bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm outline-none" />
-                <button onClick={handleAddNote}
-                  className="px-4 py-2 bg-black text-white rounded-lg font-black text-xs uppercase">
-                  Add
-                </button>
+                <input value={adminNote} onChange={e => setAdminNote(e.target.value)} placeholder="Add admin note..." className="flex-1 bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm outline-none" />
+                <button onClick={handleAddNote} className="px-4 py-2 bg-black text-white rounded-lg font-black text-xs uppercase">Add</button>
               </div>
             </div>
           </div>
         )}
 
-        {/* ── PROOF OF DELIVERY + ACTIONS ── */}
-        {!isCompleted && (
-          <div className="mx-3 mt-3 mb-4 space-y-2">
-            <input type="file" accept="image/*" capture="environment" ref={fileRef} onChange={handlePhoto} className="hidden" />
-            {/* Note */}
-            <textarea value={driverNote} onChange={e => setDriverNote(e.target.value)}
-              placeholder="Add delivery note..."
-              className="w-full bg-white border border-stone-200 rounded-xl px-4 py-3 text-sm outline-none resize-none"
-              style={{ minHeight: '72px' }} />
-            {/* Photo + Sig row */}
-            <div className="grid grid-cols-2 gap-2">
-              <button onClick={() => fileRef.current?.click()}
-                className={`flex items-center justify-center gap-2 py-3.5 rounded-xl font-black uppercase text-xs active:scale-95 ${photoData ? 'bg-green-600 text-white' : 'bg-stone-900 text-white'}`}>
-                <Camera size={15} />{photoData ? '✓ Photo' : 'Add Photo'}
-              </button>
-              <button onClick={() => setIsSigning(true)}
-                className={`flex items-center justify-center gap-2 py-3.5 rounded-xl font-black uppercase text-xs active:scale-95 ${sigData ? 'bg-green-600 text-white' : 'bg-stone-900 text-white'}`}>
-                <PenTool size={15} />{sigData ? '✓ Signed' : 'Signature'}
-              </button>
-            </div>
-            {photoData && <img src={photoData} className="w-full rounded-xl max-h-36 object-cover" alt="POD" />}
-            {/* CONFIRM DELIVERY — requires photo */}
-            <button
-              onClick={photoData ? handleComplete : () => alert('Please add a delivery photo first.')}
-              disabled={!photoData}
-              className={'w-full py-5 rounded-2xl font-black uppercase text-xl tracking-wide flex items-center justify-center gap-2 shadow-lg transition-all ' + (photoData ? 'bg-green-600 text-white active:scale-95 cursor-pointer' : 'bg-stone-300 text-stone-400 cursor-not-allowed opacity-60')}>
-              <CheckCircle2 size={24} /> {photoData ? 'CONFIRM DELIVERY' : 'CONFIRM DELIVERY'}
-            </button>
-            {!photoData && (
-              <p className="text-center text-xs font-bold text-red-500 uppercase tracking-wide -mt-1">📷 Add a photo to confirm delivery</p>
-            )}
-            {/* COULDN'T DELIVER */}
-            <button onClick={() => setShowFailFlow(true)}
-              className="w-full py-4 border-2 border-stone-800 text-stone-900 rounded-2xl font-black uppercase text-sm flex items-center justify-center gap-2 active:scale-95">
-              <XCircle size={18} /> COULDN'T DELIVER — REPORT ATTEMPT
-            </button>
-            <p className="text-center text-[10px] text-stone-400 font-bold uppercase tracking-wide -mt-1">No one home? Take a photo &amp; the order auto-reschedules</p>
-          </div>
-        )}
-
-        {/* ── COMPLETED: show POD + notification button ── */}
-        {isCompleted && (
-          <div className="mx-3 mt-3 mb-4 space-y-2">
-            <div className="bg-white rounded-xl border border-stone-200 px-4 py-3">
-              <StatusBadge status={order.status} />
-              {order.completedAt && (
-                <p className="text-xs text-stone-500 mt-1">
-                  {formatDate(order.completedAt)} at {formatTime(order.completedAt)}
-                </p>
+        {/* ── NOTIFY PREVIEW MODAL ── */}
+        {showNotifyPreview && (
+          <div className="fixed inset-0 bg-black/80 z-[300] flex items-end">
+            <div className="w-full bg-white rounded-t-[32px] p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+              <div className="flex justify-between items-center">
+                <h3 className="font-black uppercase text-sm">{showNotifyPreview === 'SUCCESS' ? 'Delivery Confirmation' : 'Delay Notification'}</h3>
+                <button onClick={() => setShowNotifyPreview(null)}><X size={20} className="text-stone-400" /></button>
+              </div>
+              <div className="bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-xs text-stone-700 whitespace-pre-line leading-relaxed">{notifyPreviewText}</div>
+              <p className="text-[10px] font-bold text-stone-400 uppercase">Sending via: {notifyChannel}</p>
+              {notifySent ? (
+                <p className="text-center font-black text-green-600">✓ Sent!</p>
+              ) : (
+                <button onClick={handleSend} disabled={isSending}
+                  className="w-full py-4 bg-black text-white rounded-2xl font-black uppercase text-sm flex items-center justify-center gap-2 disabled:opacity-50">
+                  {isSending ? 'Sending…' : <><Bell size={16} /> Send Now</>}
+                </button>
               )}
-              {order.driverNotes && <p className="text-sm italic text-stone-600 mt-2">"{order.driverNotes}"</p>}
             </div>
-            {order.confirmationPhoto && (
-              <img src={order.confirmationPhoto} className="w-full rounded-xl max-h-36 object-cover" alt="Photo" />
-            )}
-            {order.confirmationSignature && (
-              <div className="bg-white border border-stone-200 rounded-xl p-3">
-                <p className="text-[9px] font-black uppercase text-stone-400 mb-1">Signature</p>
-                <img src={order.confirmationSignature} className="w-full max-h-16 object-contain" alt="Sig" />
-              </div>
-            )}
-            {/* Send notification */}
-            {order.status === DeliveryStatus.DELIVERED && !order.successNotificationSent && (
-              <button onClick={() => loadPreview('SUCCESS')}
-                className="w-full py-3.5 bg-black text-white rounded-xl font-black uppercase text-sm flex items-center justify-center gap-2 active:scale-95">
-                <Bell size={16} /> Send Delivery Confirmation
-              </button>
-            )}
-            {order.status === DeliveryStatus.DELIVERED && order.successNotificationSent && (
-              <p className="text-center text-xs font-black text-green-600 py-2">✓ Confirmation sent to customer</p>
-            )}
-            {(order.status === DeliveryStatus.FAILED || order.status === DeliveryStatus.PENDING_RESCHEDULE) && !order.failureNotificationSent && (
-              <button onClick={() => loadPreview('FAILURE')}
-                className="w-full py-3.5 bg-black text-white rounded-xl font-black uppercase text-sm flex items-center justify-center gap-2 active:scale-95">
-                <Bell size={16} /> Send Reschedule Message
-              </button>
-            )}
-            {(order.status === DeliveryStatus.FAILED || order.status === DeliveryStatus.PENDING_RESCHEDULE) && order.failureNotificationSent && (
-              <p className="text-center text-xs font-black text-green-600 py-2">✓ Reschedule message sent</p>
-            )}
           </div>
         )}
 
-      </div>{/* end scroll */}
+      </div>
 
-      {/* ── MODALS ── */}
-      {showFailFlow && (
-        <FailedDeliveryFlow order={order} currentUser={currentUser} onSubmit={handleFailSubmit} onCancel={() => setShowFailFlow(false)} />
-      )}
-      {showReschedule && pendingFailure && (
-        <RescheduleModal order={order} failureReason={pendingFailure.reason} driverNotes={pendingFailure.notes} photo={pendingFailure.photo} onAutoReschedule={handleAutoReschedule} onManualReschedule={handleManualReschedule} />
-      )}
-      {showNotifyPreview && (
-        <div className="fixed inset-0 bg-black/80 z-[200] flex items-end p-4">
-          <div className="w-full bg-white rounded-2xl p-5 space-y-3">
-            <div className="flex items-center justify-between">
-              <p className="font-black uppercase text-sm">Preview Message</p>
-              <button onClick={() => setShowNotifyPreview(null)}><X size={20} /></button>
-            </div>
-            <div className="bg-stone-50 rounded-xl p-3">
-              <p className="text-sm text-stone-700 leading-relaxed">{notifyPreviewText}</p>
-            </div>
-            {notifySent
-              ? <p className="text-center font-black text-green-600 py-2">✓ Sent!</p>
-              : <button onClick={handleSend} disabled={isSending}
-                  className="w-full py-4 bg-black text-white rounded-xl font-black uppercase text-base flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50">
-                  {isSending ? <RefreshCw size={18} className="animate-spin" /> : <Send size={18} />} SEND
-                </button>
-            }
-          </div>
-        </div>
-      )}
       {isSigning && (
         <SignaturePad onSave={(sig) => { setSigData(sig); setIsSigning(false); }} onCancel={() => setIsSigning(false)} />
       )}
     </div>
   );
+};
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
