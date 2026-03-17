@@ -83,6 +83,8 @@ const mapShopifyOrder = (order: any): Delivery => {
       quantity: item.quantity,
       sku: item.sku || '',
       price: parseFloat(item.price || '0'),
+      variantTitle: item.variant_title || '',
+      properties: (item.properties || []).filter((p: any) => p.value && !p.name.startsWith('_')),
     }));
 
   // Look up fee from ZIP-based rate table; fall back to Shopify shipping price

@@ -959,13 +959,26 @@ const OrderDetail: React.FC<{
                   </span>
                 </div>
                 {order.items.map((item, i) => (
-                  <div key={i} className="py-1.5 border-b border-stone-50 last:border-0">
+                  <div key={i} className="py-2 border-b border-stone-50 last:border-0">
                     <div className="flex items-start justify-between gap-2">
                       <p className="text-sm font-black text-stone-900 flex-1 leading-snug">{item.name}</p>
                       <span className="text-sm font-black text-stone-500 shrink-0">×{item.quantity}</span>
                     </div>
+                    {item.variantTitle && (
+                      <p className="text-xs font-bold text-stone-600 mt-0.5">{item.variantTitle}</p>
+                    )}
                     {item.sku && (
                       <p className="text-[10px] font-bold text-stone-400 mt-0.5">SKU: {item.sku}</p>
+                    )}
+                    {item.properties && item.properties.length > 0 && (
+                      <div className="mt-1.5 space-y-0.5">
+                        {item.properties.map((prop, pi) => (
+                          <div key={pi} className="flex items-baseline gap-1.5">
+                            <span className="text-[10px] font-black uppercase text-stone-400 tracking-wide shrink-0">{prop.name}:</span>
+                            <span className="text-xs font-bold text-stone-700">{prop.value}</span>
+                          </div>
+                        ))}
+                      </div>
                     )}
                   </div>
                 ))}

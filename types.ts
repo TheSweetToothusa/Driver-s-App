@@ -63,6 +63,8 @@ export interface DeliveryItem {
   sku: string;
   price: number;
   specialInstructions?: string;
+  variantTitle?: string;
+  properties?: { name: string; value: string }[];
 }
 
 export interface Delivery {
