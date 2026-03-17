@@ -949,17 +949,66 @@ const OrderDetail: React.FC<{
               <p className="text-base font-bold text-stone-600 mt-0.5">{order.address.city}, {order.address.zip}</p>
             </a>
 
-            {/* Items — compact */}
+            {/* Items with SKU — parcels count */}
             {order.items?.length > 0 && (
               <div className="px-4 py-3">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] font-black uppercase text-stone-400 tracking-widest">Items</span>
+                  <span className="text-[10px] font-black uppercase text-stone-400 tracking-widest">
+                    {order.items.reduce((sum, it) => sum + (it.quantity || 1), 0)} Parcel{order.items.reduce((sum, it) => sum + (it.quantity || 1), 0) !== 1 ? 's' : ''}
+                  </span>
+                </div>
                 {order.items.map((item, i) => (
-                  <div key={i} className="flex items-start justify-between gap-2 py-1">
-                    <p className="text-sm font-black text-stone-900 flex-1 leading-snug">{item.name}</p>
-                    <span className="text-sm font-black text-stone-500 shrink-0">×{item.quantity}</span>
+                  <div key={i} className="py-1.5 border-b border-stone-50 last:border-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-sm font-black text-stone-900 flex-1 leading-snug">{item.name}</p>
+                      <span className="text-sm font-black text-stone-500 shrink-0">×{item.quantity}</span>
+                    </div>
+                    {item.sku && (
+                      <p className="text-[10px] font-bold text-stone-400 mt-0.5">SKU: {item.sku}</p>
+                    )}
                   </div>
                 ))}
               </div>
             )}
+
+            {/* Gift Sender */}
+            {(order.giftSenderName || order.giftSenderPhone) && (
+              <div className="px-4 py-3">
+                <p className="text-[10px] font-black uppercase text-stone-400 tracking-widest mb-1">Gift From</p>
+                <p className="text-base font-black text-stone-900">{order.giftSenderName || '—'}</p>
+                {order.giftSenderPhone && (
+                  <p className="text-sm font-bold text-stone-500 mt-0.5">{order.giftSenderPhone}</p>
+                )}
+              </div>
+            )}
+
+            {/* Gift Message */}
+            {order.giftMessage && (
+              <div className="px-4 py-3 bg-pink-50">
+                <p className="text-[10px] font-black uppercase text-pink-400 tracking-widest mb-1">🎁 Gift Message</p>
+                <p className="text-sm font-bold text-stone-800 leading-snug italic">"{order.giftMessage}"</p>
+              </div>
+            )}
+
+            {/* Order Total + Created At */}
+            <div className="px-4 py-3 flex items-center justify-between">
+              {order.orderTotal != null && (
+                <div>
+                  <p className="text-[10px] font-black uppercase text-stone-400 tracking-widest mb-0.5">Order Total</p>
+                  <p className="text-base font-black text-stone-900">${order.orderTotal.toFixed(2)}</p>
+                </div>
+              )}
+              {order.createdAt && (
+                <div className="text-right">
+                  <p className="text-[10px] font-black uppercase text-stone-400 tracking-widest mb-0.5">Order Date</p>
+                  <p className="text-sm font-black text-stone-700">
+                    {new Date(order.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                  </p>
+                </div>
+              )}
+            </div>
+
           </div>
         </div>
 
