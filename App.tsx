@@ -967,9 +967,6 @@ const OrderDetail: React.FC<{
                     {item.variantTitle && (
                       <p className="text-xs font-bold text-stone-600 mt-0.5">{item.variantTitle}</p>
                     )}
-                    {item.sku && (
-                      <p className="text-[10px] font-bold text-stone-400 mt-0.5">SKU: {item.sku}</p>
-                    )}
                     {item.properties && item.properties.length > 0 && (
                       <div className="mt-1.5 space-y-0.5">
                         {item.properties.map((prop, pi) => (
