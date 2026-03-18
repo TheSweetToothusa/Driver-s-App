@@ -8,7 +8,7 @@ import {
   UserPlus, Users,
   MessageCircle, MessageSquare, ChevronLeft, Edit3,
   Bell, Clock, XCircle, Gift, User,
-  AlertTriangle, RotateCcw, Inbox
+  AlertTriangle, RotateCcw, Inbox, Home, DollarSign, Store, Truck
 } from 'lucide-react';
 import { Delivery, DeliveryStatus, AppRole, FailureReason, FAILURE_REASON_LABELS, ViewMode, UserAccount, MessageTemplate } from './types';
 import { getDeliveries } from './services/shopifyService';
@@ -285,7 +285,7 @@ const SignaturePad: React.FC<{ onSave: (d: string) => void; onCancel: () => void
         <h3 className="text-white font-black uppercase text-xs tracking-widest">Recipient Signature</h3>
         <button onClick={onCancel} className="text-white/50"><X size={22} /></button>
       </div>
-      <p className="text-white/40 text-xs mb-4">Optional — skip if not available</p>
+      <p className="text-white/40 text-xs mb-4">Have recipient sign below</p>
       <div ref={containerRef} className="flex-1 bg-white rounded-3xl overflow-hidden border-4 border-white">
         <canvas ref={canvasRef} className="touch-none" />
       </div>
@@ -1116,7 +1116,7 @@ const OrderDetail: React.FC<{
                 className={`w-full py-4 rounded-xl font-black uppercase text-sm flex items-center justify-center gap-3 active:scale-95 transition-all ${sigData ? 'bg-green-600 text-white' : 'bg-stone-100 text-stone-700 border border-stone-200'}`}
               >
                 <PenTool size={18} />
-                {sigData ? '✓ Signature Captured' : 'Add Recipient Signature (Optional)'}
+                {sigData ? '✓ Signature Captured' : 'Add Recipient Signature'}
               </button>
 
               {/* Signature preview */}
@@ -1131,7 +1131,7 @@ const OrderDetail: React.FC<{
               <textarea
                 value={driverNote}
                 onChange={e => setDriverNote(e.target.value)}
-                placeholder="Optional note (e.g. left at front door, unit 4B)"
+                placeholder="Driver note (e.g. left at front door, unit 4B)"
                 className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-sm outline-none resize-none"
                 style={{ minHeight: '64px' }}
               />
@@ -1344,6 +1344,26 @@ const OrderDetail: React.FC<{
 
       {isSigning && (
         <SignaturePad onSave={(sig) => { setSigData(sig); setIsSigning(false); }} onCancel={() => setIsSigning(false)} />
+      )}
+
+      {showFailFlow && (
+        <FailedDeliveryFlow
+          order={order}
+          currentUser={currentUser}
+          onSubmit={handleFailSubmit}
+          onCancel={() => setShowFailFlow(false)}
+        />
+      )}
+
+      {showReschedule && pendingFailure && (
+        <RescheduleModal
+          order={order}
+          failureReason={pendingFailure.reason}
+          driverNotes={pendingFailure.notes}
+          photo={pendingFailure.photo}
+          onAutoReschedule={handleAutoReschedule}
+          onManualReschedule={handleManualReschedule}
+        />
       )}
     </div>
   );
@@ -2399,7 +2419,7 @@ const DriversView: React.FC<{
             type="password" inputMode="numeric" maxLength={4}
             className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-black" />
           <input value={newDriver.vehicle} onChange={e => setNewDriver(p => ({ ...p, vehicle: e.target.value }))}
-            placeholder="Vehicle (optional)"
+            placeholder="Vehicle"
             className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-black" />
           {addError && <p className="text-red-600 text-xs font-bold">⚠️ {addError}</p>}
           {addSuccess && <p className="text-green-600 text-xs font-bold">{addSuccess}</p>}
@@ -2635,7 +2655,7 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
               <input type="text" placeholder="Name" value={newDriver.name} onChange={e => setNewDriver(p => ({ ...p, name: e.target.value }))} className="w-full bg-stone-50 border border-stone-100 rounded-2xl px-4 py-3 text-sm font-medium outline-none focus:border-black" />
               <input type="text" placeholder="4-digit PIN" maxLength={4} inputMode="numeric" value={newDriver.pin} onChange={e => setNewDriver(p => ({ ...p, pin: e.target.value.replace(/\D/g, '').slice(0, 4) }))} className="w-full bg-stone-50 border border-stone-100 rounded-2xl px-4 py-3 text-sm font-medium outline-none focus:border-black" />
               <input type="tel" placeholder="Phone number *required*" value={newDriver.phone} onChange={e => setNewDriver(p => ({ ...p, phone: e.target.value }))} className="w-full bg-stone-50 border border-stone-100 rounded-2xl px-4 py-3 text-sm font-medium outline-none focus:border-black" />
-              <input type="text" placeholder="Vehicle (optional)" value={newDriver.vehicle} onChange={e => setNewDriver(p => ({ ...p, vehicle: e.target.value }))} className="w-full bg-stone-50 border border-stone-100 rounded-2xl px-4 py-3 text-sm font-medium outline-none focus:border-black" />
+              <input type="text" placeholder="Vehicle" value={newDriver.vehicle} onChange={e => setNewDriver(p => ({ ...p, vehicle: e.target.value }))} className="w-full bg-stone-50 border border-stone-100 rounded-2xl px-4 py-3 text-sm font-medium outline-none focus:border-black" />
               {addError && <p className="text-xs font-black text-red-500">{addError}</p>}
               {addSuccess && <p className="text-xs font-black text-green-600">{addSuccess}</p>}
               <button onClick={handleAddDriver} className="w-full py-5 bg-black text-white rounded-[24px] font-black uppercase tracking-widest active:scale-95 transition-all">Add Driver</button>
@@ -2832,6 +2852,192 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+// DRIVER HOME VIEW — Welcome screen with stats, delivery fee lookup, store info
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface DriverHomeProps {
+  currentUser: UserAccount;
+  deliveries: Delivery[];
+  onSelectOrder: (o: Delivery) => void;
+}
+
+const DriverHomeView: React.FC<DriverHomeProps> = ({ currentUser, deliveries, onSelectOrder }) => {
+  const [zipQuery, setZipQuery] = useState('');
+  const [zipRate, setZipRate] = useState<number | null | undefined>(undefined);
+
+  const todayStr = new Date().toISOString().split('T')[0];
+  const isDriver = currentUser.role === 'DRIVER';
+
+  // Filter to this driver's deliveries (or all if admin)
+  const myDeliveries = isDriver
+    ? deliveries.filter(d => d.assignedDriver === currentUser.id)
+    : deliveries;
+
+  const upcoming = myDeliveries.filter(d =>
+    d.status !== DeliveryStatus.DELIVERED &&
+    d.status !== DeliveryStatus.CLOSED &&
+    d.status !== DeliveryStatus.FAILED
+  );
+  const todayDelivered = myDeliveries.filter(d =>
+    d.status === DeliveryStatus.DELIVERED && (d.completedAt || '').startsWith(todayStr)
+  );
+  const pastCompleted = myDeliveries.filter(d =>
+    d.status === DeliveryStatus.DELIVERED
+  ).sort((a, b) => (b.completedAt || '').localeCompare(a.completedAt || '')).slice(0, 10);
+
+  const greetingHour = new Date().getHours();
+  const greeting = greetingHour < 12 ? 'Good morning' : greetingHour < 17 ? 'Good afternoon' : 'Good evening';
+  const firstName = currentUser.name.split(' ')[0];
+
+  return (
+    <div className="px-4 py-5 space-y-5">
+      {/* Welcome */}
+      <div className="bg-gradient-to-br from-stone-900 to-stone-800 rounded-[28px] px-6 py-6 text-white">
+        <p className="text-stone-400 text-xs font-black uppercase tracking-widest">{greeting}</p>
+        <h1 className="text-3xl font-black mt-1">{firstName}!</h1>
+        <div className="flex items-center gap-4 mt-4">
+          <div className="bg-white/10 rounded-2xl px-4 py-3 text-center flex-1">
+            <p className="text-2xl font-black">{upcoming.length}</p>
+            <p className="text-[9px] font-bold text-white/60 uppercase">Upcoming</p>
+          </div>
+          <div className="bg-white/10 rounded-2xl px-4 py-3 text-center flex-1">
+            <p className="text-2xl font-black text-green-400">{todayDelivered.length}</p>
+            <p className="text-[9px] font-bold text-white/60 uppercase">Delivered Today</p>
+          </div>
+          <div className="bg-white/10 rounded-2xl px-4 py-3 text-center flex-1">
+            <p className="text-2xl font-black text-amber-400">{pastCompleted.length}</p>
+            <p className="text-[9px] font-bold text-white/60 uppercase">Total Completed</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Delivery Fee Lookup */}
+      <div className="bg-white border-2 border-stone-100 rounded-[24px] px-5 py-4">
+        <div className="flex items-center gap-2 mb-3">
+          <DollarSign size={16} className="text-green-600" />
+          <h3 className="font-black uppercase text-xs tracking-widest text-stone-700">Delivery Fee by ZIP</h3>
+        </div>
+        <div className="flex gap-2 items-center">
+          <input
+            type="text" value={zipQuery} inputMode="numeric"
+            onChange={e => {
+              const v = e.target.value.replace(/\D/g, '').slice(0, 5);
+              setZipQuery(v);
+              if (v.length === 5) setZipRate(DELIVERY_FEES[v] ?? null);
+              else setZipRate(undefined);
+            }}
+            placeholder="Enter ZIP code..."
+            className="flex-1 bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-lg font-black text-center tracking-widest outline-none focus:border-black"
+          />
+        </div>
+        {zipQuery.length === 5 && zipRate !== undefined && (
+          zipRate !== null
+            ? <div className="flex items-center justify-between mt-3 px-4 py-3 bg-green-50 border border-green-100 rounded-xl">
+                <span className="font-black text-stone-700 text-sm">ZIP {zipQuery}</span>
+                <span className="text-2xl font-black text-green-700">${zipRate}</span>
+              </div>
+            : <p className="mt-3 text-xs font-black text-red-500 text-center">ZIP {zipQuery} not in delivery fee table</p>
+        )}
+      </div>
+
+      {/* Upcoming Deliveries */}
+      <div>
+        <div className="flex items-center gap-2 mb-3 px-1">
+          <Truck size={16} className="text-stone-600" />
+          <h3 className="font-black uppercase text-xs tracking-widest text-stone-700">Upcoming Deliveries</h3>
+          <span className="ml-auto bg-black text-white text-[10px] font-black px-2.5 py-0.5 rounded-full">{upcoming.length}</span>
+        </div>
+        {upcoming.length === 0 ? (
+          <div className="bg-stone-50 rounded-2xl py-8 text-center">
+            <Package size={28} className="text-stone-300 mx-auto mb-2" />
+            <p className="text-sm font-bold text-stone-400">No upcoming deliveries</p>
+            <p className="text-xs text-stone-300 mt-1">Check back soon for new assignments</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {upcoming.slice(0, 5).map(d => (
+              <button key={d.id} onClick={() => onSelectOrder(d)}
+                className="w-full bg-white border border-stone-100 rounded-2xl px-4 py-3 flex items-center gap-3 active:scale-[0.98] transition-all text-left">
+                <div className="w-10 h-10 bg-stone-900 rounded-xl flex items-center justify-center shrink-0">
+                  <Package size={16} className="text-white" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-black text-sm text-stone-900 truncate">{d.giftReceiverName || d.customer.name}</p>
+                  <p className="text-[10px] text-stone-400 font-bold truncate">{d.customer.address}</p>
+                </div>
+                <StatusBadge status={d.status} />
+                <ChevronRight size={16} className="text-stone-300 shrink-0" />
+              </button>
+            ))}
+            {upcoming.length > 5 && (
+              <p className="text-center text-[10px] font-bold text-stone-400 uppercase">+{upcoming.length - 5} more — see Orders tab</p>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Past Deliveries */}
+      <div>
+        <div className="flex items-center gap-2 mb-3 px-1">
+          <CheckCircle2 size={16} className="text-green-600" />
+          <h3 className="font-black uppercase text-xs tracking-widest text-stone-700">Recent Completed</h3>
+        </div>
+        {pastCompleted.length === 0 ? (
+          <div className="bg-stone-50 rounded-2xl py-6 text-center">
+            <p className="text-sm font-bold text-stone-400">No completed deliveries yet</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {pastCompleted.slice(0, 5).map(d => (
+              <button key={d.id} onClick={() => onSelectOrder(d)}
+                className="w-full bg-white border border-stone-100 rounded-2xl px-4 py-3 flex items-center gap-3 active:scale-[0.98] transition-all text-left">
+                <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center shrink-0">
+                  <Check size={16} className="text-green-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-black text-sm text-stone-900 truncate">{d.giftReceiverName || d.customer.name}</p>
+                  <p className="text-[10px] text-stone-400 font-bold">{d.completedAt ? formatDate(d.completedAt) : ''}</p>
+                </div>
+                <span className="text-[10px] font-black text-green-600 bg-green-50 px-2 py-0.5 rounded-full">DELIVERED</span>
+                <ChevronRight size={16} className="text-stone-300 shrink-0" />
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Store Info */}
+      <div className="bg-stone-50 border border-stone-100 rounded-[24px] px-5 py-4">
+        <div className="flex items-center gap-2 mb-3">
+          <Store size={16} className="text-stone-600" />
+          <h3 className="font-black uppercase text-xs tracking-widest text-stone-700">Store Info</h3>
+        </div>
+        <div className="space-y-2.5">
+          <div>
+            <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest">Store Name</p>
+            <p className="font-black text-stone-900 text-sm">The Sweet Tooth — Chocolate Factory</p>
+          </div>
+          <div>
+            <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest">Address</p>
+            <p className="font-bold text-stone-700 text-sm">12591 NW 107th Ave, Hialeah Gardens, FL 33018</p>
+          </div>
+          <div>
+            <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest">Phone</p>
+            <p className="font-bold text-stone-700 text-sm">(305) 814-9779</p>
+          </div>
+          <div>
+            <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest">Hours</p>
+            <p className="font-bold text-stone-700 text-sm">Mon–Fri: 9 AM – 5 PM · Same-day cutoff: 2 PM</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="h-4" />
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 // MAIN APP
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -2845,7 +3051,7 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [dataSource, setDataSource] = useState<'LIVE' | 'MOCK' | 'ERROR'>('MOCK');
-  const [tab, setTab] = useState<'ORDERS' | 'SCHEDULE' | 'ADMIN' | 'DRIVERS'>('SCHEDULE');
+  const [tab, setTab] = useState<'HOME' | 'ORDERS' | 'SCHEDULE' | 'ADMIN' | 'DRIVERS'>('HOME');
   const isAdmin = currentUser?.role === 'SUPER_ADMIN' || currentUser?.role === 'MANAGER';
   const [zipQuery, setZipQuery] = useState('');
   const [zipRate, setZipRate] = useState<number | null | undefined>(undefined);
@@ -3002,8 +3208,13 @@ export default function App() {
 
       {/* Bottom nav */}
       <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-white border-t border-stone-100 z-50 flex">
+        <button onClick={() => setTab('HOME')}
+          className={`flex-1 py-3 flex flex-col items-center gap-0.5 transition-all ${tab === 'HOME' ? 'text-black' : 'text-stone-300'}`}>
+          <Home size={20} />
+          <span className="text-[9px] font-black uppercase">Home</span>
+        </button>
         <button onClick={() => setTab('ORDERS')}
-          className={`flex-1 py-3 flex flex-col items-center gap-0.5 transition-all ${tab === 'ORDERS' ? 'text-black' : 'text-stone-300'}`}>
+          className={`flex-1 py-3 flex flex-col items-center gap-0.5 transition-all relative ${tab === 'ORDERS' ? 'text-black' : 'text-stone-300'}`}>
           <Package size={20} />
           <span className="text-[9px] font-black uppercase">Orders</span>
           {activeOrders.length > 0 && <span className="absolute top-1 right-1 w-4 h-4 bg-black text-white text-[8px] font-black rounded-full flex items-center justify-center">{activeOrders.length > 99 ? '99+' : activeOrders.length}</span>}
@@ -3030,6 +3241,15 @@ export default function App() {
       </div>
 
       <main className="flex-1 overflow-y-auto pb-20">
+
+        {/* ── HOME TAB ── */}
+        {tab === 'HOME' && (
+          <DriverHomeView
+            currentUser={currentUser}
+            deliveries={deliveries}
+            onSelectOrder={setSelectedOrder}
+          />
+        )}
 
         {/* ── ORDERS TAB ── */}
         {tab === 'ORDERS' && (
