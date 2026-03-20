@@ -3096,12 +3096,13 @@ const BulkProjectsView: React.FC<{
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [orders, setOrders] = useState<BulkOrder[]>([]);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState<'DASHBOARD' | 'ORDERS' | 'FAILED' | 'FEES'>('DASHBOARD');
+  const [view, setView] = useState<'CALENDAR' | 'ALL_ORDERS' | 'FAILED' | 'FEES'>('CALENDAR');
   const [filter, setFilter] = useState<{ status?: string; driver?: string; brand?: string; pref?: string; zip?: string; search?: string }>({});
-  const [groupBy, setGroupBy] = useState<'none' | 'zip' | 'driver' | 'preference' | 'brand'>('none');
-  const [sortBy, setSortBy] = useState<'orderNumber' | 'name' | 'zip' | 'city' | 'status'>('orderNumber');
+  const [sortBy, setSortBy] = useState<'orderNumber' | 'name' | 'zip' | 'city' | 'status' | 'driver'>('orderNumber');
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
   const [showAssignModal, setShowAssignModal] = useState(false);
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [scheduleDate, setScheduleDate] = useState('');
   const [showUpload, setShowUpload] = useState(false);
   const [detailOrder, setDetailOrder] = useState<BulkOrder | null>(null);
   const [showPOD, setShowPOD] = useState(false);
@@ -3112,27 +3113,20 @@ const BulkProjectsView: React.FC<{
   const [failReason, setFailReason] = useState('');
   const [failNotes, setFailNotes] = useState('');
   const [feeFilter, setFeeFilter] = useState<{ driver?: string; brand?: string; dateFrom?: string; dateTo?: string }>({});
+  const [calendarDate, setCalendarDate] = useState(new Date().toISOString().split('T')[0]);
+  const [showUnscheduled, setShowUnscheduled] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
 
-  // Load projects on mount
-  useEffect(() => {
-    loadProjects();
-  }, []);
-
-  // Load orders when active project changes
-  useEffect(() => {
-    if (activeProjectId) loadOrders(activeProjectId);
-  }, [activeProjectId]);
+  useEffect(() => { loadProjects(); }, []);
+  useEffect(() => { if (activeProjectId) loadOrders(activeProjectId); }, [activeProjectId]);
 
   const loadProjects = async () => {
     try {
       const r = await fetch('/api/bulk/projects');
       const d = await r.json();
       setProjects(d.projects || []);
-      if (d.projects?.length > 0 && !activeProjectId) {
-        setActiveProjectId(d.projects[0].id);
-      }
+      if (d.projects?.length > 0 && !activeProjectId) setActiveProjectId(d.projects[0].id);
     } catch (e) { console.error('Failed to load projects', e); }
     finally { setLoading(false); }
   };
@@ -3145,238 +3139,148 @@ const BulkProjectsView: React.FC<{
     } catch (e) { console.error('Failed to load orders', e); }
   };
 
-  // CSV Upload handler
+  // CSV Upload
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const text = await file.text();
     const lines = text.split('\n').filter(l => l.trim());
-    
-    // Detect if this is Berkowitz or Provenance by checking for "#" column or company name
     const rawHeaders = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
-    
-    // Skip title rows if present (Provenance has "Gift Basket Delivery Preferences" as title row)
     let headerIdx = 0;
-    if (rawHeaders.some(h => h.toLowerCase().includes('gift basket delivery preferences'))) {
-      headerIdx = 1; // second row has real headers
-    }
-    // Also check if first row has "Send Gift Basket" — that's a real header
-    if (!rawHeaders.some(h => h.toLowerCase().includes('send gift basket')) && !rawHeaders.some(h => h === '#')) {
-      headerIdx = 1;
-    }
-    
-    const headers = headerIdx > 0 
-      ? lines[headerIdx].split(',').map(h => h.trim().replace(/"/g, ''))
-      : rawHeaders;
-    
+    if (!rawHeaders.some(h => h.toLowerCase().includes('send gift basket')) && !rawHeaders.some(h => h === '#')) headerIdx = 1;
+    const headers = headerIdx > 0 ? lines[headerIdx].split(',').map(h => h.trim().replace(/"/g, '')) : rawHeaders;
     const isBerkowitz = headers.some(h => h === '#' || h === 'Worker');
     const subBrand: 'BERKOWITZ' | 'PROVENANCE' = isBerkowitz ? 'BERKOWITZ' : 'PROVENANCE';
     const prefix = isBerkowitz ? 'BRK' : 'PRV';
-    
-    // Find column indices
-    const findCol = (keywords: string[]) => headers.findIndex(h => 
-      keywords.some(k => h.toLowerCase().includes(k.toLowerCase()))
-    );
-    
-    const colName = findCol(['Recipient Name']);
-    const colPhone = findCol(['Recipient Phone']);
-    const colStreet = findCol(['Recipient Street']);
-    const colUnit = findCol(['Apt/Unit', 'Unit Number']);
-    const colCity = findCol(['Recipient City']);
-    const colState = findCol(['Recipient State']);
-    const colZip = findCol(['Recipient Zip']);
-    const colType = findCol(['Address Type']);
-    const colPref = findCol(['Delivery Preference']);
-    const colBasket = findCol(['Gift Basket Selection']);
-    const colDeliveryType = findCol(['Delivery Type', 'Local Delivery or']);
-    const colFee = findCol(['Delivery Fee']);
-    const colWorker = findCol(['Worker']);
-    const colCompany = findCol(['Company']);
-    const colNumber = findCol(['#']);
-    
-    const dataLines = lines.slice(headerIdx + 1);
-    const parsedOrders: BulkOrder[] = [];
-    let orderNum = 1;
-    
-    // Simple CSV parser that handles quoted fields
+    const findCol = (kw: string[]) => headers.findIndex(h => kw.some(k => h.toLowerCase().includes(k.toLowerCase())));
+    const colName = findCol(['Recipient Name']); const colPhone = findCol(['Recipient Phone']);
+    const colStreet = findCol(['Recipient Street']); const colUnit = findCol(['Apt/Unit', 'Unit Number']);
+    const colCity = findCol(['Recipient City']); const colState = findCol(['Recipient State']);
+    const colZip = findCol(['Recipient Zip']); const colType = findCol(['Address Type']);
+    const colPref = findCol(['Delivery Preference']); const colBasket = findCol(['Gift Basket Selection']);
+    const colDeliveryType = findCol(['Delivery Type', 'Local Delivery or']); const colFee = findCol(['Delivery Fee']);
+    const colWorker = findCol(['Worker']); const colCompany = findCol(['Company']); const colNumber = findCol(['#']);
     const parseCSVLine = (line: string): string[] => {
-      const result: string[] = [];
-      let current = '';
-      let inQuotes = false;
-      for (let i = 0; i < line.length; i++) {
-        const ch = line[i];
-        if (ch === '"') { inQuotes = !inQuotes; }
-        else if (ch === ',' && !inQuotes) { result.push(current.trim()); current = ''; }
-        else { current += ch; }
-      }
-      result.push(current.trim());
-      return result;
+      const result: string[] = []; let current = ''; let inQ = false;
+      for (let i = 0; i < line.length; i++) { const ch = line[i]; if (ch === '"') inQ = !inQ; else if (ch === ',' && !inQ) { result.push(current.trim()); current = ''; } else current += ch; }
+      result.push(current.trim()); return result;
     };
-    
+    const dataLines = lines.slice(headerIdx + 1); const parsedOrders: BulkOrder[] = []; let orderNum = 1;
     for (const line of dataLines) {
       if (!line.trim()) continue;
       const cols = parseCSVLine(line);
-      
-      // Skip if no name
-      const name = cols[colName] || '';
-      if (!name || name.toLowerCase() === 'nan') continue;
-      
-      // Check if local delivery
+      const name = cols[colName] || ''; if (!name || name.toLowerCase() === 'nan') continue;
       const deliveryType = colDeliveryType >= 0 ? (cols[colDeliveryType] || '') : '';
       if (deliveryType && !deliveryType.toLowerCase().includes('local')) continue;
-      
-      // Parse fee — remove $ sign
       const feeStr = colFee >= 0 ? (cols[colFee] || '$0') : '$0';
       const fee = parseInt(feeStr.replace(/[^0-9]/g, '')) || 0;
-      
       const num = colNumber >= 0 ? (cols[colNumber] || String(orderNum)) : String(orderNum);
-      
+      const unit = cols[colUnit] || ''; const phone = (cols[colPhone] || '').replace(/[^0-9]/g, '');
+      const zip = String(cols[colZip] || '').replace(/\.0$/, '').padStart(5, '0');
       parsedOrders.push({
-        id: `${prefix.toLowerCase()}_${Date.now()}_${orderNum}`,
-        projectId: activeProjectId || '',
-        orderNumber: `${prefix}-${String(num).padStart(3, '0')}`,
-        subBrand,
-        recipientName: name,
-        recipientPhone: (cols[colPhone] || '').replace(/[^0-9]/g, ''),
-        street: cols[colStreet] || '',
-        unit: cols[colUnit] || '',
-        city: cols[colCity] || '',
-        state: cols[colState] || '',
-        zip: String(cols[colZip] || '').replace(/\.0$/, '').padStart(5, '0'),
-        addressType: (cols[colType] || 'Residence') as any,
-        deliveryPreference: (cols[colPref] || 'Anytime') as any,
-        basketType: cols[colBasket] || 'Standard Chocolate Basket',
-        deliveryFee: fee,
-        deliveryDate: new Date().toISOString().split('T')[0],
-        workerName: colWorker >= 0 ? (cols[colWorker] || '') : '',
-        companyName: colCompany >= 0 ? (cols[colCompany] || (subBrand === 'BERKOWITZ' ? 'Berkowitz Pollack Brant' : 'Provenance')) : (subBrand === 'BERKOWITZ' ? 'Berkowitz Pollack Brant' : 'Provenance'),
-        status: 'PENDING',
-        driverId: '',
-        driverName: '',
-        attemptNumber: 1,
-        createdAt: new Date().toISOString(),
+        id: `${prefix.toLowerCase()}_${Date.now()}_${orderNum}`, projectId: activeProjectId || '',
+        orderNumber: `${prefix}-${String(num).padStart(3, '0')}`, subBrand,
+        recipientName: name, recipientPhone: phone === 'nan' ? '' : phone,
+        street: cols[colStreet] || '', unit: unit === 'nan' ? '' : unit,
+        city: cols[colCity] || '', state: cols[colState] || '', zip,
+        addressType: (cols[colType] || 'Residence'), deliveryPreference: (cols[colPref] || 'Anytime'),
+        basketType: cols[colBasket] || 'Standard Chocolate Basket', deliveryFee: fee,
+        deliveryDate: '', workerName: colWorker >= 0 ? (cols[colWorker] || '') : '',
+        companyName: colCompany >= 0 ? (cols[colCompany] || subBrand) : subBrand,
+        status: 'PENDING', driverId: '', driverName: '', attemptNumber: 1, createdAt: new Date().toISOString(),
       });
       orderNum++;
     }
-    
-    if (parsedOrders.length === 0) {
-      alert('No local delivery orders found in this file. Make sure the CSV has a "Local Delivery" column.');
-      return;
-    }
-    
-    // If no project exists yet, create one
+    if (parsedOrders.length === 0) { alert('No local delivery orders found.'); return; }
     let projectId = activeProjectId;
     if (!projectId) {
-      const r = await fetch('/api/bulk/projects', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: 'Berkowitz 2026', clientName: 'Berkowitz' }),
-      });
-      const d = await r.json();
-      projectId = d.project.id;
-      setActiveProjectId(projectId);
+      const r = await fetch('/api/bulk/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'Berkowitz 2026', clientName: 'Berkowitz' }) });
+      const d = await r.json(); projectId = d.project.id; setActiveProjectId(projectId);
     }
-    
-    // Set projectId on all orders
     parsedOrders.forEach(o => o.projectId = projectId!);
-    
-    // Import
-    const r = await fetch(`/api/bulk/projects/${projectId}/orders/import`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ orders: parsedOrders }),
-    });
+    const r = await fetch(`/api/bulk/projects/${projectId}/orders/import`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orders: parsedOrders }) });
     const d = await r.json();
-    alert(`Imported ${d.totalImported} ${subBrand} local deliveries! (${d.totalOrders} total in project)`);
-    loadOrders(projectId!);
-    loadProjects();
-    setShowUpload(false);
+    alert(`Imported ${d.totalImported} ${subBrand} local deliveries!`);
+    loadOrders(projectId!); loadProjects(); setShowUpload(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  // Assign selected orders to a driver
   const assignDriver = async (driverId: string, driverName: string) => {
     if (!activeProjectId || selectedOrders.size === 0) return;
-    await fetch(`/api/bulk/orders/${activeProjectId}/assign`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ orderIds: Array.from(selectedOrders), driverId, driverName }),
-    });
-    setSelectedOrders(new Set());
-    setShowAssignModal(false);
-    loadOrders(activeProjectId);
+    await fetch(`/api/bulk/orders/${activeProjectId}/assign`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orderIds: Array.from(selectedOrders), driverId, driverName }) });
+    setSelectedOrders(new Set()); setShowAssignModal(false); loadOrders(activeProjectId);
   };
 
-  // Update single order
+  const scheduleOrders = async (date: string) => {
+    if (!activeProjectId || selectedOrders.size === 0 || !date) return;
+    for (const oid of Array.from(selectedOrders)) {
+      await fetch(`/api/bulk/orders/${activeProjectId}/${oid}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ deliveryDate: date }) });
+    }
+    setSelectedOrders(new Set()); setShowScheduleModal(false); setScheduleDate(''); loadOrders(activeProjectId);
+  };
+
   const updateOrder = async (orderId: string, updates: Partial<BulkOrder>) => {
     if (!activeProjectId) return;
-    await fetch(`/api/bulk/orders/${activeProjectId}/${orderId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updates),
-    });
+    await fetch(`/api/bulk/orders/${activeProjectId}/${orderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updates) });
     loadOrders(activeProjectId);
   };
 
-  // Submit POD
   const submitPOD = async (orderId: string, status: string) => {
     if (!activeProjectId) return;
-    await fetch(`/api/bulk/orders/${activeProjectId}/${orderId}/pod`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        photo: podPhoto,
-        signature: podSignature,
-        status,
-        driverId: currentUser.id,
-        driverName: currentUser.name,
-        failureReason: status === 'FAILED' ? failReason : undefined,
-        notes: status === 'FAILED' ? failNotes : undefined,
-      }),
-    });
-    setPodPhoto(null);
-    setPodSignature(null);
-    setShowPOD(false);
-    setShowFailedFlow(false);
-    setFailReason('');
-    setFailNotes('');
-    setDetailOrder(null);
-    loadOrders(activeProjectId);
-    loadProjects();
+    await fetch(`/api/bulk/orders/${activeProjectId}/${orderId}/pod`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ photo: podPhoto, signature: podSignature, status, driverId: currentUser.id, driverName: currentUser.name, failureReason: status === 'FAILED' ? failReason : undefined, notes: status === 'FAILED' ? failNotes : undefined }) });
+    setPodPhoto(null); setPodSignature(null); setShowPOD(false); setShowFailedFlow(false); setFailReason(''); setFailNotes(''); setDetailOrder(null);
+    loadOrders(activeProjectId); loadProjects();
   };
 
-  // Reschedule failed order
   const rescheduleOrder = async (orderId: string, overrideDate?: string) => {
     if (!activeProjectId) return;
-    await fetch(`/api/bulk/orders/${activeProjectId}/${orderId}/reschedule`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ overrideDate }),
-    });
-    loadOrders(activeProjectId);
-    loadProjects();
+    await fetch(`/api/bulk/orders/${activeProjectId}/${orderId}/reschedule`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ overrideDate }) });
+    loadOrders(activeProjectId); loadProjects();
   };
 
-  // Photo capture
   const handlePhotoCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => setPodPhoto(reader.result as string);
-    reader.readAsDataURL(file);
+    const file = e.target.files?.[0]; if (!file) return;
+    const reader = new FileReader(); reader.onload = () => setPodPhoto(reader.result as string); reader.readAsDataURL(file);
   };
 
-  // Filtered & sorted orders
+  // Computed
+  const drivers = useMemo(() => allUsers.filter(u => (u.role === 'DRIVER' || u.role === 'MANAGER') && u.isActive), [allUsers]);
+
+  const stats = useMemo(() => {
+    const nonClosed = orders.filter(o => o.status !== 'CLOSED');
+    const delivered = nonClosed.filter(o => o.status === 'DELIVERED');
+    const failed = nonClosed.filter(o => o.status === 'FAILED' || o.status === 'SECOND_ATTEMPT' || o.status === 'PENDING_RESCHEDULE');
+    const berkowitz = nonClosed.filter(o => o.subBrand === 'BERKOWITZ');
+    const provenance = nonClosed.filter(o => o.subBrand === 'PROVENANCE');
+    const remaining = nonClosed.filter(o => o.status !== 'DELIVERED');
+    const scheduled = nonClosed.filter(o => o.deliveryDate && o.deliveryDate !== '');
+    const unscheduled = nonClosed.filter(o => !o.deliveryDate || o.deliveryDate === '');
+    return {
+      total: nonClosed.length, delivered: delivered.length, remaining: remaining.length,
+      failed: failed.length, berkowitz: berkowitz.length, provenance: provenance.length,
+      berkowitzDelivered: berkowitz.filter(o => o.status === 'DELIVERED').length,
+      provenanceDelivered: provenance.filter(o => o.status === 'DELIVERED').length,
+      scheduled: scheduled.length, unscheduled: unscheduled.length,
+      totalFees: delivered.reduce((s, o) => s + o.deliveryFee, 0),
+    };
+  }, [orders]);
+
+  // Orders for selected calendar date
+  const calendarOrders = useMemo(() => {
+    let result = orders.filter(o => o.deliveryDate === calendarDate && o.status !== 'CLOSED');
+    if (!isAdmin) result = result.filter(o => o.driverId === currentUser.id);
+    return result;
+  }, [orders, calendarDate, isAdmin, currentUser.id]);
+
+  // Unscheduled orders
+  const unscheduledOrders = useMemo(() => {
+    return orders.filter(o => (!o.deliveryDate || o.deliveryDate === '') && o.status !== 'CLOSED' && o.status !== 'DELIVERED');
+  }, [orders]);
+
+  // All orders filtered (for ALL_ORDERS view)
   const filteredOrders = useMemo(() => {
-    let result = [...orders];
-    // Drivers only see their own orders
-    if (!isAdmin) {
-      result = result.filter(o => o.driverId === currentUser.id);
-    }
-    // Hide CLOSED from default view unless specifically filtered
-    if (!filter.status) {
-      result = result.filter(o => o.status !== 'CLOSED');
-    }
+    let result = orders.filter(o => o.status !== 'CLOSED');
+    if (!isAdmin) result = result.filter(o => o.driverId === currentUser.id);
     if (filter.status) result = result.filter(o => o.status === filter.status);
     if (filter.driver) result = result.filter(o => o.driverId === filter.driver);
     if (filter.brand) result = result.filter(o => o.subBrand === filter.brand);
@@ -3384,62 +3288,21 @@ const BulkProjectsView: React.FC<{
     if (filter.zip) result = result.filter(o => o.zip.startsWith(filter.zip!));
     if (filter.search) {
       const s = filter.search.toLowerCase();
-      result = result.filter(o =>
-        o.recipientName.toLowerCase().includes(s) ||
-        o.orderNumber.toLowerCase().includes(s) ||
-        o.street.toLowerCase().includes(s) ||
-        o.city.toLowerCase().includes(s) ||
-        o.zip.includes(s)
-      );
+      result = result.filter(o => o.recipientName.toLowerCase().includes(s) || o.orderNumber.toLowerCase().includes(s) || o.street.toLowerCase().includes(s) || o.city.toLowerCase().includes(s) || o.zip.includes(s));
     }
-    // Sort
     result.sort((a, b) => {
-      if (sortBy === 'orderNumber') return a.orderNumber.localeCompare(b.orderNumber);
       if (sortBy === 'name') return a.recipientName.localeCompare(b.recipientName);
       if (sortBy === 'zip') return a.zip.localeCompare(b.zip);
       if (sortBy === 'city') return a.city.localeCompare(b.city);
       if (sortBy === 'status') return a.status.localeCompare(b.status);
-      return 0;
+      if (sortBy === 'driver') return (a.driverName || '').localeCompare(b.driverName || '');
+      return a.orderNumber.localeCompare(b.orderNumber);
     });
     return result;
   }, [orders, filter, sortBy, isAdmin, currentUser.id]);
 
-  // Grouped orders
-  const groupedOrders = useMemo(() => {
-    if (groupBy === 'none') return { 'All Orders': filteredOrders };
-    const groups: Record<string, BulkOrder[]> = {};
-    for (const o of filteredOrders) {
-      const key = groupBy === 'zip' ? o.zip
-        : groupBy === 'driver' ? (o.driverName || 'Unassigned')
-        : groupBy === 'preference' ? o.deliveryPreference
-        : groupBy === 'brand' ? o.subBrand
-        : 'Other';
-      if (!groups[key]) groups[key] = [];
-      groups[key].push(o);
-    }
-    return groups;
-  }, [filteredOrders, groupBy]);
+  const failedOrders = useMemo(() => orders.filter(o => o.status === 'FAILED' || o.status === 'SECOND_ATTEMPT' || o.status === 'PENDING_RESCHEDULE'), [orders]);
 
-  // Failed orders (for the FAILED tab)
-  const failedOrders = useMemo(() =>
-    orders.filter(o => o.status === 'FAILED' || o.status === 'SECOND_ATTEMPT' || o.status === 'PENDING_RESCHEDULE'),
-  [orders]);
-
-  // Stats
-  const stats = useMemo(() => {
-    const active = orders.filter(o => o.status !== 'CLOSED');
-    return {
-      total: active.length,
-      pending: active.filter(o => o.status === 'PENDING').length,
-      assigned: active.filter(o => o.status === 'ASSIGNED').length,
-      inTransit: active.filter(o => o.status === 'IN_TRANSIT').length,
-      delivered: active.filter(o => o.status === 'DELIVERED').length,
-      failed: active.filter(o => o.status === 'FAILED' || o.status === 'SECOND_ATTEMPT' || o.status === 'PENDING_RESCHEDULE').length,
-      totalFees: active.filter(o => o.status === 'DELIVERED').reduce((sum, o) => sum + o.deliveryFee, 0),
-    };
-  }, [orders]);
-
-  // Fee summary for admin
   const feeSummary = useMemo(() => {
     let feeable = orders.filter(o => o.status === 'DELIVERED');
     if (feeFilter.driver) feeable = feeable.filter(o => o.driverId === feeFilter.driver);
@@ -3450,30 +3313,31 @@ const BulkProjectsView: React.FC<{
     const byBrand: Record<string, { count: number; total: number }> = {};
     for (const o of feeable) {
       const dn = o.driverName || 'Unassigned';
-      if (!byDriver[dn]) byDriver[dn] = { count: 0, total: 0 };
-      byDriver[dn].count++;
-      byDriver[dn].total += o.deliveryFee;
-      if (!byBrand[o.subBrand]) byBrand[o.subBrand] = { count: 0, total: 0 };
-      byBrand[o.subBrand].count++;
-      byBrand[o.subBrand].total += o.deliveryFee;
+      if (!byDriver[dn]) byDriver[dn] = { count: 0, total: 0 }; byDriver[dn].count++; byDriver[dn].total += o.deliveryFee;
+      if (!byBrand[o.subBrand]) byBrand[o.subBrand] = { count: 0, total: 0 }; byBrand[o.subBrand].count++; byBrand[o.subBrand].total += o.deliveryFee;
     }
     return { deliveries: feeable, byDriver, byBrand, grandTotal: feeable.reduce((s, o) => s + o.deliveryFee, 0) };
   }, [orders, feeFilter]);
 
-  // Drivers list
-  const drivers = useMemo(() =>
-    allUsers.filter(u => (u.role === 'DRIVER' || u.role === 'MANAGER') && u.isActive),
-  [allUsers]);
+  // Dates that have orders scheduled
+  const scheduledDates = useMemo(() => {
+    const dates: Record<string, { total: number; delivered: number; failed: number }> = {};
+    for (const o of orders) {
+      if (!o.deliveryDate || o.status === 'CLOSED') continue;
+      if (!dates[o.deliveryDate]) dates[o.deliveryDate] = { total: 0, delivered: 0, failed: 0 };
+      dates[o.deliveryDate].total++;
+      if (o.status === 'DELIVERED') dates[o.deliveryDate].delivered++;
+      if (o.status === 'FAILED' || o.status === 'PENDING_RESCHEDULE') dates[o.deliveryDate].failed++;
+    }
+    return dates;
+  }, [orders]);
 
-  if (loading) return <div className="p-8 text-center text-stone-400 font-bold">Loading projects...</div>;
+  if (loading) return <div className="p-8 text-center text-stone-400 font-bold">Loading...</div>;
 
-  // ── ORDER DETAIL VIEW ──
+  // ── ORDER DETAIL ──
   if (detailOrder) {
-    const o = detailOrder;
-    // Refresh from orders array in case it was updated
-    const fresh = orders.find(ord => ord.id === o.id) || o;
+    const fresh = orders.find(ord => ord.id === detailOrder.id) || detailOrder;
 
-    // POD overlay
     if (showPOD) {
       return (
         <div className="min-h-screen bg-white p-4">
@@ -3484,13 +3348,10 @@ const BulkProjectsView: React.FC<{
           </div>
           <div className="bg-stone-50 rounded-2xl p-4 mb-4">
             <p className="font-black text-lg">{fresh.recipientName}</p>
-            <p className="text-stone-500 text-sm">{fresh.street}{fresh.unit ? `, ${fresh.unit}` : ''}</p>
-            <p className="text-stone-500 text-sm">{fresh.city}, {fresh.state} {fresh.zip}</p>
+            <p className="text-stone-500 text-sm">{fresh.street}{fresh.unit ? `, ${fresh.unit}` : ''}, {fresh.city} {fresh.zip}</p>
           </div>
-
-          {/* Photo */}
           <div className="mb-4">
-            <p className="font-black text-sm mb-2 uppercase text-stone-500">Photo</p>
+            <p className="font-black text-sm mb-2 uppercase text-stone-500">📸 Photo (Required)</p>
             {podPhoto ? (
               <div className="relative">
                 <img src={podPhoto} alt="POD" className="w-full rounded-xl max-h-48 object-cover" />
@@ -3498,50 +3359,40 @@ const BulkProjectsView: React.FC<{
               </div>
             ) : (
               <button onClick={() => photoInputRef.current?.click()} className="w-full py-8 border-2 border-dashed border-stone-300 rounded-xl text-stone-400 font-bold flex flex-col items-center gap-2">
-                <Camera size={28} />
-                <span>Take Photo</span>
+                <Camera size={28} /><span>Take Photo</span>
               </button>
             )}
             <input ref={photoInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handlePhotoCapture} />
           </div>
-
-          {/* Signature */}
           <div className="mb-4">
-            <p className="font-black text-sm mb-2 uppercase text-stone-500">Signature</p>
+            <p className="font-black text-sm mb-2 uppercase text-stone-500">✍️ Signature</p>
             {podSignature ? (
               <div className="relative">
-                <img src={podSignature} alt="Signature" className="w-full rounded-xl bg-white border border-stone-200" style={{ maxHeight: 120 }} />
+                <img src={podSignature} alt="Sig" className="w-full rounded-xl bg-white border border-stone-200" style={{ maxHeight: 120 }} />
                 <button onClick={() => setPodSignature(null)} className="absolute top-2 right-2 bg-red-500 text-white w-7 h-7 rounded-full flex items-center justify-center"><X size={14} /></button>
               </div>
             ) : showSigPad ? (
               <SignaturePad onSave={(d) => { setPodSignature(d); setShowSigPad(false); }} onCancel={() => setShowSigPad(false)} />
             ) : (
               <button onClick={() => setShowSigPad(true)} className="w-full py-6 border-2 border-dashed border-stone-300 rounded-xl text-stone-400 font-bold flex flex-col items-center gap-2">
-                <PenTool size={24} />
-                <span>Capture Signature</span>
+                <PenTool size={24} /><span>Capture Signature</span>
               </button>
             )}
           </div>
-
-          {/* Submit */}
-          <button
-            onClick={() => submitPOD(fresh.id, 'DELIVERED')}
-            disabled={!podPhoto}
-            className={`w-full py-4 rounded-2xl font-black text-lg uppercase tracking-wide transition-all ${podPhoto ? 'bg-green-600 text-white active:scale-95' : 'bg-stone-200 text-stone-400 cursor-not-allowed'}`}
-          >
+          <button onClick={() => submitPOD(fresh.id, 'DELIVERED')} disabled={!podPhoto}
+            className={`w-full py-4 rounded-2xl font-black text-lg uppercase tracking-wide transition-all ${podPhoto ? 'bg-green-600 text-white active:scale-95' : 'bg-stone-200 text-stone-400 cursor-not-allowed'}`}>
             {podPhoto ? '✓ CONFIRM DELIVERED' : 'Photo Required'}
           </button>
         </div>
       );
     }
 
-    // Failed delivery flow
     if (showFailedFlow) {
       return (
         <div className="min-h-screen bg-white p-4">
           <div className="flex items-center justify-between mb-4">
             <button onClick={() => setShowFailedFlow(false)} className="flex items-center gap-1 text-stone-500 font-bold text-sm"><ChevronLeft size={16} /> Back</button>
-            <p className="font-black text-lg text-red-600">Report Failed Delivery</p>
+            <p className="font-black text-lg text-red-600">Report Failed</p>
             <div className="w-16" />
           </div>
           <div className="bg-red-50 rounded-2xl p-4 mb-4 border border-red-100">
@@ -3555,36 +3406,27 @@ const BulkProjectsView: React.FC<{
               {label}
             </button>
           ))}
-          <p className="font-black text-sm mb-2 mt-4 uppercase text-stone-500">Notes</p>
-          <textarea value={failNotes} onChange={e => setFailNotes(e.target.value)} placeholder="Details about the failed attempt..." className="w-full border border-stone-200 rounded-xl p-3 text-sm min-h-[80px] mb-4" />
-          <button
-            onClick={() => { submitPOD(fresh.id, 'FAILED'); }}
-            disabled={!failReason}
-            className={`w-full py-4 rounded-2xl font-black text-lg uppercase ${failReason ? 'bg-red-600 text-white active:scale-95' : 'bg-stone-200 text-stone-400 cursor-not-allowed'}`}
-          >
+          <textarea value={failNotes} onChange={e => setFailNotes(e.target.value)} placeholder="Details..." className="w-full border border-stone-200 rounded-xl p-3 text-sm min-h-[80px] mb-4 mt-2" />
+          <button onClick={() => submitPOD(fresh.id, 'FAILED')} disabled={!failReason}
+            className={`w-full py-4 rounded-2xl font-black text-lg uppercase ${failReason ? 'bg-red-600 text-white active:scale-95' : 'bg-stone-200 text-stone-400 cursor-not-allowed'}`}>
             Submit Failed Delivery
           </button>
         </div>
       );
     }
 
-    // Order detail
+    // Order detail view
     return (
       <div className="min-h-screen bg-white">
-        {/* Sticky header */}
         <div className="sticky top-0 z-40 bg-white border-b border-stone-100 px-4 py-3 flex items-center justify-between shadow-sm">
           <button onClick={() => setDetailOrder(null)} className="flex items-center gap-1 text-stone-500 font-bold text-sm"><ChevronLeft size={16} /> Back</button>
           <p className="font-black text-sm">{fresh.orderNumber}</p>
           <BulkStatusBadge status={fresh.status} />
         </div>
-
-        <div className="p-4 space-y-4">
-          {/* Sub-brand badge */}
-          <div className={`inline-flex items-center px-3 py-1.5 rounded-xl font-black text-xs uppercase ${fresh.subBrand === 'BERKOWITZ' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'}`}>
+        <div className="p-4 space-y-3">
+          <div className={`inline-flex items-center px-3 py-1.5 rounded-xl font-black text-sm uppercase ${fresh.subBrand === 'BERKOWITZ' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'}`}>
             {fresh.subBrand}
           </div>
-
-          {/* Recipient */}
           <div className="bg-stone-50 rounded-2xl p-4">
             <p className="text-[10px] font-black uppercase text-stone-400 mb-1">Recipient</p>
             <p className="font-black text-2xl text-black leading-tight">{fresh.recipientName}</p>
@@ -3594,437 +3436,326 @@ const BulkProjectsView: React.FC<{
               <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${PREF_BADGE[fresh.deliveryPreference]?.bg || 'bg-stone-100'}`}>
                 {PREF_BADGE[fresh.deliveryPreference]?.label || fresh.deliveryPreference}
               </span>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-stone-100 text-stone-600">
-                {fresh.addressType}
-              </span>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-stone-100 text-stone-600">{fresh.addressType}</span>
             </div>
-            {fresh.recipientPhone && (
-              <ContactCallReveal phone={fresh.recipientPhone} label="Recipient" />
-            )}
+            {fresh.recipientPhone && <div className="mt-2"><ContactCallReveal phone={fresh.recipientPhone} label="Recipient" /></div>}
           </div>
-
-          {/* Basket */}
-          <div className="bg-amber-50 rounded-2xl p-4 border border-amber-100">
-            <p className="text-[10px] font-black uppercase text-amber-600 mb-1">Gift Basket</p>
-            <p className="font-bold text-sm text-amber-900">{fresh.basketType}</p>
+          <div className="bg-amber-50 rounded-2xl p-3 border border-amber-100">
+            <p className="font-bold text-sm text-amber-900">🎁 {fresh.basketType}</p>
           </div>
-
-          {/* Driver info */}
           {fresh.driverName && (
             <div className="bg-blue-50 rounded-2xl p-3 border border-blue-100">
-              <p className="text-[10px] font-black uppercase text-blue-500">Assigned Driver</p>
+              <p className="text-[10px] font-black uppercase text-blue-500">Driver</p>
               <p className="font-bold text-sm">{fresh.driverName}</p>
             </div>
           )}
-
-          {/* Admin-only: fee & worker */}
           {isAdmin && (
-            <div className="bg-green-50 rounded-2xl p-3 border border-green-100">
-              <div className="flex justify-between items-center">
-                <div>
-                  <p className="text-[10px] font-black uppercase text-green-600">Delivery Fee</p>
-                  <p className="font-black text-xl text-green-700">${fresh.deliveryFee}</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-[10px] font-black uppercase text-stone-400">Employee</p>
-                  <p className="font-bold text-sm text-stone-600">{fresh.workerName || '—'}</p>
-                </div>
-              </div>
+            <div className="bg-green-50 rounded-2xl p-3 border border-green-100 flex justify-between items-center">
+              <div><p className="text-[10px] font-black uppercase text-green-600">Delivery Fee</p><p className="font-black text-xl text-green-700">${fresh.deliveryFee}</p></div>
+              <div className="text-right"><p className="text-[10px] font-black uppercase text-stone-400">Employee</p><p className="font-bold text-sm text-stone-600">{fresh.workerName || '—'}</p></div>
             </div>
           )}
-
-          {/* Admin notes */}
-          {fresh.adminNotes && (
-            <div className="bg-stone-50 rounded-2xl p-3">
-              <p className="text-[10px] font-black uppercase text-stone-400 mb-1">Admin Notes</p>
-              <p className="text-sm text-stone-600 whitespace-pre-wrap">{fresh.adminNotes}</p>
-            </div>
-          )}
-
-          {/* POD result if delivered */}
           {fresh.status === 'DELIVERED' && fresh.confirmationPhoto && (
             <div className="bg-green-50 rounded-2xl p-4 border border-green-200">
               <p className="text-[10px] font-black uppercase text-green-600 mb-2">Proof of Delivery</p>
               <img src={fresh.confirmationPhoto} alt="POD" className="w-full rounded-xl max-h-48 object-cover mb-2" />
-              {fresh.confirmationSignature && (
-                <img src={fresh.confirmationSignature} alt="Signature" className="w-full rounded-xl bg-white border border-green-200 max-h-24" />
-              )}
+              {fresh.confirmationSignature && <img src={fresh.confirmationSignature} alt="Sig" className="w-full rounded-xl bg-white border border-green-200 max-h-24" />}
               {fresh.completedAt && <p className="text-xs text-green-600 mt-2 font-bold">Completed: {formatDate(fresh.completedAt)} at {formatTime(fresh.completedAt)}</p>}
             </div>
           )}
-
-          {/* Contact Katie button for drivers */}
           {!isAdmin && (
-            <div className="bg-blue-50 rounded-2xl p-4 border border-blue-100">
+            <div className="bg-blue-50 rounded-2xl p-3 border border-blue-100">
               <p className="text-[10px] font-black uppercase text-blue-600 mb-2">Need Help?</p>
               <ContactCallReveal phone="3059944070" label="Katie (Manager)" />
             </div>
           )}
-
-          {/* Navigation */}
           <a href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${fresh.street}, ${fresh.city}, ${fresh.state} ${fresh.zip}`)}`}
             target="_blank" rel="noopener noreferrer"
             className="flex items-center justify-center gap-2 w-full py-3 bg-blue-600 text-white rounded-2xl font-black text-sm active:scale-95">
             <Navigation size={16} /> Navigate
           </a>
-
-          {/* Action buttons */}
+          {/* BIG POD BUTTONS */}
           {fresh.status !== 'DELIVERED' && fresh.status !== 'CLOSED' && (
-            <div className="flex gap-2">
+            <div className="space-y-2">
               <button onClick={() => setShowPOD(true)}
-                className="flex-1 py-3 bg-green-600 text-white rounded-2xl font-black text-sm flex items-center justify-center gap-2 active:scale-95">
-                <Camera size={16} /> Deliver
+                className="w-full py-4 bg-green-600 text-white rounded-2xl font-black text-lg flex items-center justify-center gap-3 active:scale-95 shadow-lg">
+                <Camera size={22} /> 📸 DELIVER — Take Photo + Signature
               </button>
               <button onClick={() => setShowFailedFlow(true)}
-                className="flex-1 py-3 bg-red-100 text-red-600 rounded-2xl font-black text-sm flex items-center justify-center gap-2 active:scale-95">
-                <XCircle size={16} /> Failed
+                className="w-full py-3 bg-red-100 text-red-600 rounded-2xl font-black text-sm flex items-center justify-center gap-2 active:scale-95">
+                <XCircle size={16} /> Report Failed Delivery
               </button>
             </div>
           )}
-
-          {/* Reschedule button for admin on failed orders */}
           {isAdmin && (fresh.status === 'FAILED' || fresh.status === 'PENDING_RESCHEDULE') && (
             <div className="space-y-2">
-              <button onClick={() => rescheduleOrder(fresh.id)}
-                className="w-full py-3 bg-amber-500 text-white rounded-2xl font-black text-sm active:scale-95">
-                ↻ Reschedule for Next Business Day
-              </button>
+              <button onClick={() => rescheduleOrder(fresh.id)} className="w-full py-3 bg-amber-500 text-white rounded-2xl font-black text-sm active:scale-95">↻ Reschedule Next Business Day</button>
               <div className="flex gap-2 items-center">
-                <input type="date" className="flex-1 border border-stone-200 rounded-xl px-3 py-2 text-sm"
-                  onChange={(e) => {
-                    if (e.target.value) rescheduleOrder(fresh.id, e.target.value);
-                  }} />
-                <span className="text-xs text-stone-400 font-bold">or pick a date</span>
+                <input type="date" className="flex-1 border border-stone-200 rounded-xl px-3 py-2 text-sm" onChange={e => { if (e.target.value) rescheduleOrder(fresh.id, e.target.value); }} />
+                <span className="text-xs text-stone-400 font-bold">or pick date</span>
               </div>
             </div>
           )}
-
-          {/* Admin: assign driver */}
           {isAdmin && fresh.status !== 'DELIVERED' && fresh.status !== 'CLOSED' && (
-            <div className="bg-stone-50 rounded-2xl p-3">
-              <p className="text-[10px] font-black uppercase text-stone-400 mb-2">Assign Driver</p>
-              <select
-                value={fresh.driverId}
-                onChange={e => {
-                  const driver = drivers.find(d => d.id === e.target.value);
-                  if (driver) updateOrder(fresh.id, { driverId: driver.id, driverName: driver.name, status: 'ASSIGNED' });
-                }}
-                className="w-full border border-stone-200 rounded-xl px-3 py-2 text-sm font-bold"
-              >
-                <option value="">Select driver...</option>
-                {drivers.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-              </select>
-            </div>
-          )}
-
-          {/* Admin: add note */}
-          {isAdmin && (
-            <div className="bg-stone-50 rounded-2xl p-3">
-              <p className="text-[10px] font-black uppercase text-stone-400 mb-2">Add Note</p>
-              <div className="flex gap-2">
-                <input type="text" placeholder="Type a note..." className="flex-1 border border-stone-200 rounded-xl px-3 py-2 text-sm"
-                  onKeyDown={e => {
-                    if (e.key === 'Enter' && (e.target as HTMLInputElement).value) {
-                      const note = (e.target as HTMLInputElement).value;
-                      updateOrder(fresh.id, { adminNotes: (fresh.adminNotes || '') + `\n[${new Date().toLocaleString()}] ${note}` });
-                      (e.target as HTMLInputElement).value = '';
-                      setDetailOrder({ ...fresh, adminNotes: (fresh.adminNotes || '') + `\n[${new Date().toLocaleString()}] ${note}` });
-                    }
-                  }}
-                />
+            <div className="bg-stone-50 rounded-2xl p-3 space-y-3">
+              <div>
+                <p className="text-[10px] font-black uppercase text-stone-400 mb-1">Schedule Date</p>
+                <input type="date" value={fresh.deliveryDate || ''} onChange={e => updateOrder(fresh.id, { deliveryDate: e.target.value })}
+                  className="w-full border border-stone-200 rounded-xl px-3 py-2 text-sm font-bold" />
+              </div>
+              <div>
+                <p className="text-[10px] font-black uppercase text-stone-400 mb-1">Assign Driver</p>
+                <select value={fresh.driverId} onChange={e => { const d = drivers.find(d => d.id === e.target.value); if (d) updateOrder(fresh.id, { driverId: d.id, driverName: d.name, status: 'ASSIGNED' }); }}
+                  className="w-full border border-stone-200 rounded-xl px-3 py-2 text-sm font-bold">
+                  <option value="">Select driver...</option>
+                  {drivers.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                </select>
               </div>
             </div>
           )}
+          {fresh.adminNotes && <div className="bg-stone-50 rounded-2xl p-3"><p className="text-[10px] font-black uppercase text-stone-400 mb-1">Notes</p><p className="text-sm text-stone-600 whitespace-pre-wrap">{fresh.adminNotes}</p></div>}
         </div>
       </div>
     );
   }
 
-  // ── MAIN PROJECTS VIEW ──
-  const activeProject = projects.find(p => p.id === activeProjectId);
+  // ── MAIN VIEW ──
+  // Helper to render an order card
+  const renderOrderCard = (o: BulkOrder, showCheckbox: boolean) => (
+    <div key={o.id} className={`mb-2 bg-white border rounded-2xl overflow-hidden transition-all ${selectedOrders.has(o.id) ? 'border-blue-500 bg-blue-50' : 'border-stone-100'}`}>
+      <div className="flex items-center">
+        {showCheckbox && isAdmin && (
+          <button onClick={() => { const next = new Set(selectedOrders); next.has(o.id) ? next.delete(o.id) : next.add(o.id); setSelectedOrders(next); }} className="pl-3 pr-1 py-3">
+            <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center ${selectedOrders.has(o.id) ? 'bg-blue-600 border-blue-600' : 'border-stone-300'}`}>
+              {selectedOrders.has(o.id) && <Check size={12} className="text-white" />}
+            </div>
+          </button>
+        )}
+        <button onClick={() => setDetailOrder(o)} className="flex-1 px-3 py-3 text-left">
+          <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center gap-2">
+              <span className="font-black text-xs text-stone-400">{o.orderNumber}</span>
+              <span className={`text-[9px] font-black px-1.5 py-0.5 rounded ${o.subBrand === 'BERKOWITZ' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>
+                {o.subBrand === 'BERKOWITZ' ? 'BRK' : 'PRV'}
+              </span>
+            </div>
+            <BulkStatusBadge status={o.status} />
+          </div>
+          <p className="font-black text-base leading-tight">{o.recipientName}</p>
+          <p className="text-xs text-stone-500 leading-tight">{o.street}, {o.city} {o.zip}</p>
+          <div className="flex items-center gap-2 mt-1 flex-wrap">
+            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${PREF_BADGE[o.deliveryPreference]?.bg || 'bg-stone-100'}`}>{o.deliveryPreference}</span>
+            {o.driverName && <span className="text-[9px] font-bold text-blue-600">🚗 {o.driverName}</span>}
+            {o.addressType === 'Apartment' && <span className="text-[9px] font-bold text-stone-400">🏢 Apt</span>}
+            {o.addressType === 'Business' && <span className="text-[9px] font-bold text-stone-400">🏢 Biz</span>}
+          </div>
+        </button>
+        <ChevronRight size={16} className="text-stone-300 mr-3" />
+      </div>
+    </div>
+  );
 
   return (
     <div className="pb-4">
-      {/* Project header */}
+      {/* Header with running totals */}
       <div className="px-4 pt-4 pb-2">
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center justify-between mb-2">
           <div>
             <p className="text-[10px] font-black uppercase text-stone-400">Bulk Project</p>
-            <p className="font-black text-xl">{activeProject?.name || 'Berkowitz 2026'}</p>
+            <p className="font-black text-xl">Berkowitz 2026</p>
           </div>
           {isAdmin && (
-            <button onClick={() => setShowUpload(true)}
-              className="flex items-center gap-1.5 px-3 py-2 bg-black text-white rounded-xl font-black text-[10px] uppercase active:scale-95">
+            <button onClick={() => setShowUpload(true)} className="flex items-center gap-1.5 px-3 py-2 bg-black text-white rounded-xl font-black text-[10px] uppercase active:scale-95">
               <FileText size={12} /> Upload CSV
             </button>
           )}
         </div>
-
-        {/* Upload overlay */}
         {showUpload && (
-          <div className="mb-4 bg-stone-50 rounded-2xl p-4 border border-stone-200">
+          <div className="mb-3 bg-stone-50 rounded-2xl p-4 border border-stone-200">
             <p className="font-bold text-sm mb-2">Upload Berkowitz or Provenance CSV</p>
-            <p className="text-xs text-stone-500 mb-3">Only "Local Delivery" rows will be imported. The system auto-detects which company.</p>
-            <input ref={fileInputRef} type="file" accept=".csv,.xlsx" onChange={handleFileUpload}
+            <input ref={fileInputRef} type="file" accept=".csv" onChange={handleFileUpload}
               className="w-full text-sm file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:font-bold file:bg-black file:text-white" />
             <button onClick={() => setShowUpload(false)} className="mt-2 text-xs text-stone-400 font-bold">Cancel</button>
           </div>
         )}
 
-        {/* Stats bar */}
-        <div className="grid grid-cols-4 gap-2 mb-3">
-          <div className="bg-stone-50 rounded-xl p-2 text-center">
-            <p className="text-lg font-black">{stats.total}</p>
-            <p className="text-[8px] font-black uppercase text-stone-400">Total</p>
+        {/* Running totals — big and clear */}
+        <div className="bg-stone-50 rounded-2xl p-4 mb-3">
+          <div className="flex items-center justify-between mb-2">
+            <p className="font-black text-3xl">{stats.remaining} <span className="text-base text-stone-400 font-bold">remaining</span></p>
+            <p className="text-right text-sm font-bold text-stone-500">of {stats.total} total</p>
           </div>
-          <div className="bg-green-50 rounded-xl p-2 text-center">
-            <p className="text-lg font-black text-green-600">{stats.delivered}</p>
-            <p className="text-[8px] font-black uppercase text-green-600">Delivered</p>
+          <div className="w-full bg-stone-200 rounded-full h-3 mb-3">
+            <div className="bg-green-500 h-3 rounded-full transition-all" style={{ width: `${stats.total > 0 ? (stats.delivered / stats.total * 100) : 0}%` }} />
           </div>
-          <div className="bg-blue-50 rounded-xl p-2 text-center">
-            <p className="text-lg font-black text-blue-600">{stats.assigned + stats.inTransit}</p>
-            <p className="text-[8px] font-black uppercase text-blue-600">Active</p>
-          </div>
-          <div className="bg-red-50 rounded-xl p-2 text-center cursor-pointer" onClick={() => setView('FAILED')}>
-            <p className="text-lg font-black text-red-600">{stats.failed}</p>
-            <p className="text-[8px] font-black uppercase text-red-600">Failed</p>
+          <div className="grid grid-cols-3 gap-2">
+            <div className="text-center"><p className="font-black text-lg text-green-600">{stats.delivered}</p><p className="text-[9px] font-black uppercase text-green-600">Delivered</p></div>
+            <div className="text-center cursor-pointer" onClick={() => setView('FAILED')}><p className="font-black text-lg text-red-600">{stats.failed}</p><p className="text-[9px] font-black uppercase text-red-600">Failed</p></div>
+            <div className="text-center"><p className="font-black text-lg text-amber-600">{stats.unscheduled}</p><p className="text-[9px] font-black uppercase text-amber-600">Unscheduled</p></div>
           </div>
         </div>
 
-        {/* Progress bar */}
-        <div className="w-full bg-stone-100 rounded-full h-2 mb-3">
-          <div className="bg-green-500 h-2 rounded-full transition-all" style={{ width: `${stats.total > 0 ? (stats.delivered / stats.total * 100) : 0}%` }} />
+        {/* Company breakdown */}
+        <div className="grid grid-cols-2 gap-2 mb-3">
+          <div className="bg-blue-50 rounded-xl p-3 text-center">
+            <p className="font-black text-xs text-blue-600 uppercase">Berkowitz</p>
+            <p className="font-black text-xl">{stats.berkowitz} <span className="text-sm text-stone-400">orders</span></p>
+            <p className="text-xs font-bold text-green-600">{stats.berkowitzDelivered} delivered</p>
+          </div>
+          <div className="bg-purple-50 rounded-xl p-3 text-center">
+            <p className="font-black text-xs text-purple-600 uppercase">Provenance</p>
+            <p className="font-black text-xl">{stats.provenance} <span className="text-sm text-stone-400">orders</span></p>
+            <p className="text-xs font-bold text-green-600">{stats.provenanceDelivered} delivered</p>
+          </div>
         </div>
 
-        {/* Admin fee summary pill */}
         {isAdmin && stats.totalFees > 0 && (
-          <button onClick={() => setView('FEES')} className="flex items-center gap-2 px-3 py-1.5 bg-green-50 border border-green-100 rounded-xl mb-3">
+          <button onClick={() => setView('FEES')} className="flex items-center gap-2 px-3 py-1.5 bg-green-50 border border-green-100 rounded-xl mb-3 w-full justify-center">
             <DollarSign size={12} className="text-green-600" />
             <span className="font-black text-sm text-green-700">${stats.totalFees} earned</span>
-            <ChevronRight size={12} className="text-green-400" />
           </button>
         )}
 
         {/* View tabs */}
         <div className="flex gap-1 mb-3">
-          {(['DASHBOARD', 'ORDERS', 'FAILED', ...(isAdmin ? ['FEES'] as const : [])] as const).map(v => (
+          {(['CALENDAR', 'ALL_ORDERS', 'FAILED', ...(isAdmin ? ['FEES'] as const : [])] as const).map(v => (
             <button key={v} onClick={() => setView(v as any)}
               className={`flex-1 py-2 rounded-xl font-black text-[10px] uppercase transition-all ${view === v ? 'bg-black text-white' : 'bg-stone-100 text-stone-500'}`}>
-              {v === 'FEES' ? 'Fees' : v === 'FAILED' ? `Failed (${failedOrders.length})` : v.charAt(0) + v.slice(1).toLowerCase()}
+              {v === 'CALENDAR' ? '📅 Schedule' : v === 'ALL_ORDERS' ? 'All Orders' : v === 'FAILED' ? `Failed (${failedOrders.length})` : 'Fees'}
             </button>
           ))}
         </div>
       </div>
 
-      {/* ── DASHBOARD VIEW ── */}
-      {view === 'DASHBOARD' && (
-        <div className="px-4 space-y-3">
-          {/* Today's summary */}
-          <div className="bg-stone-50 rounded-2xl p-4">
-            <p className="font-black text-sm mb-3">Today's Overview</p>
-            <div className="space-y-2">
-              {drivers.map(d => {
-                const driverOrders = orders.filter(o => o.driverId === d.id && o.status !== 'CLOSED');
-                const delivered = driverOrders.filter(o => o.status === 'DELIVERED').length;
-                if (driverOrders.length === 0) return null;
-                return (
-                  <div key={d.id} className="flex items-center justify-between bg-white rounded-xl px-3 py-2">
-                    <div className="flex items-center gap-2">
-                      <Truck size={14} className="text-stone-400" />
-                      <span className="font-bold text-sm">{d.name}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-green-600">{delivered}✓</span>
-                      <span className="text-xs text-stone-400">/</span>
-                      <span className="text-xs font-bold">{driverOrders.length}</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* By preference breakdown */}
-          <div className="bg-stone-50 rounded-2xl p-4">
-            <p className="font-black text-sm mb-3">By Preference</p>
-            <div className="grid grid-cols-2 gap-2">
-              {['Morning', 'Afternoon', 'Evening', 'Anytime'].map(pref => {
-                const count = orders.filter(o => o.deliveryPreference === pref && o.status !== 'CLOSED').length;
-                const done = orders.filter(o => o.deliveryPreference === pref && o.status === 'DELIVERED').length;
-                return (
-                  <div key={pref} className="bg-white rounded-xl p-2 text-center">
-                    <p className="text-xs font-bold">{PREF_BADGE[pref]?.label || pref}</p>
-                    <p className="font-black text-lg">{done}<span className="text-stone-300">/{count}</span></p>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Brand breakdown */}
-          <div className="bg-stone-50 rounded-2xl p-4">
-            <p className="font-black text-sm mb-3">By Company</p>
-            <div className="grid grid-cols-2 gap-2">
-              {['BERKOWITZ', 'PROVENANCE'].map(brand => {
-                const brandOrders = orders.filter(o => o.subBrand === brand && o.status !== 'CLOSED');
-                const done = brandOrders.filter(o => o.status === 'DELIVERED').length;
-                return (
-                  <div key={brand} className={`rounded-xl p-3 text-center ${brand === 'BERKOWITZ' ? 'bg-blue-50' : 'bg-purple-50'}`}>
-                    <p className={`text-xs font-black uppercase ${brand === 'BERKOWITZ' ? 'text-blue-600' : 'text-purple-600'}`}>{brand}</p>
-                    <p className="font-black text-xl">{done}<span className="text-stone-300 text-sm">/{brandOrders.length}</span></p>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── ORDERS VIEW ── */}
-      {view === 'ORDERS' && (
+      {/* ── CALENDAR / SCHEDULE VIEW ── */}
+      {view === 'CALENDAR' && (
         <div className="px-4">
-          {/* Search */}
-          <input type="text" placeholder="Search name, address, order #, zip..."
-            value={filter.search || ''}
-            onChange={e => setFilter(f => ({ ...f, search: e.target.value || undefined }))}
-            className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-2.5 text-sm font-bold mb-3 outline-none focus:border-black"
-          />
+          {/* Date picker */}
+          <div className="flex items-center gap-2 mb-3">
+            <button onClick={() => { const d = new Date(calendarDate); d.setDate(d.getDate() - 1); setCalendarDate(d.toISOString().split('T')[0]); }}
+              className="w-10 h-10 bg-stone-100 rounded-xl flex items-center justify-center font-black"><ChevronLeft size={18} /></button>
+            <input type="date" value={calendarDate} onChange={e => setCalendarDate(e.target.value)}
+              className="flex-1 bg-stone-50 border border-stone-200 rounded-xl px-4 py-2.5 text-center font-black text-sm" />
+            <button onClick={() => { const d = new Date(calendarDate); d.setDate(d.getDate() + 1); setCalendarDate(d.toISOString().split('T')[0]); }}
+              className="w-10 h-10 bg-stone-100 rounded-xl flex items-center justify-center font-black"><ChevronRight size={18} /></button>
+          </div>
 
-          {/* Filters row */}
-          <div className="flex gap-1.5 overflow-x-auto mb-2 pb-1" style={{ scrollbarWidth: 'none' }}>
-            <select value={filter.status || ''} onChange={e => setFilter(f => ({ ...f, status: e.target.value || undefined }))}
-              className="bg-stone-100 rounded-lg px-2 py-1.5 text-[10px] font-black uppercase min-w-fit">
-              <option value="">All Status</option>
-              {Object.entries(BULK_STATUS_CONFIG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-            </select>
-            {isAdmin && (
-              <select value={filter.driver || ''} onChange={e => setFilter(f => ({ ...f, driver: e.target.value || undefined }))}
-                className="bg-stone-100 rounded-lg px-2 py-1.5 text-[10px] font-black uppercase min-w-fit">
-                <option value="">All Drivers</option>
-                {drivers.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-                <option value="">Unassigned</option>
-              </select>
+          {/* Quick date pills — show dates that have orders */}
+          {Object.keys(scheduledDates).length > 0 && (
+            <div className="flex gap-1.5 overflow-x-auto mb-3 pb-1" style={{ scrollbarWidth: 'none' }}>
+              {Object.entries(scheduledDates).sort(([a], [b]) => a.localeCompare(b)).map(([date, info]) => (
+                <button key={date} onClick={() => setCalendarDate(date)}
+                  className={`px-3 py-1.5 rounded-xl font-bold text-xs whitespace-nowrap ${date === calendarDate ? 'bg-black text-white' : 'bg-stone-100 text-stone-600'}`}>
+                  {new Date(date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                  <span className="ml-1 text-[9px]">({info.delivered}/{info.total})</span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Day summary */}
+          <div className="bg-stone-50 rounded-2xl p-3 mb-3">
+            <p className="font-black text-sm">{new Date(calendarDate + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
+            <p className="text-sm font-bold text-stone-500">{calendarOrders.length} deliveries scheduled</p>
+            {calendarOrders.length > 0 && (
+              <div className="flex gap-3 mt-1">
+                {Array.from(new Set(calendarOrders.map(o => o.driverName).filter(Boolean))).map(dn => (
+                  <span key={dn} className="text-xs font-bold text-blue-600">🚗 {dn} ({calendarOrders.filter(o => o.driverName === dn).length})</span>
+                ))}
+              </div>
             )}
-            <select value={filter.brand || ''} onChange={e => setFilter(f => ({ ...f, brand: e.target.value || undefined }))}
-              className="bg-stone-100 rounded-lg px-2 py-1.5 text-[10px] font-black uppercase min-w-fit">
-              <option value="">All Companies</option>
-              <option value="BERKOWITZ">Berkowitz</option>
-              <option value="PROVENANCE">Provenance</option>
-            </select>
-            <select value={filter.pref || ''} onChange={e => setFilter(f => ({ ...f, pref: e.target.value || undefined }))}
-              className="bg-stone-100 rounded-lg px-2 py-1.5 text-[10px] font-black uppercase min-w-fit">
-              <option value="">All Prefs</option>
-              <option value="Morning">Morning</option>
-              <option value="Afternoon">Afternoon</option>
-              <option value="Evening">Evening</option>
-              <option value="Anytime">Anytime</option>
-            </select>
           </div>
 
-          {/* Sort & Group */}
-          <div className="flex gap-1.5 mb-3">
-            <select value={sortBy} onChange={e => setSortBy(e.target.value as any)}
-              className="bg-stone-50 border border-stone-200 rounded-lg px-2 py-1.5 text-[10px] font-black uppercase flex-1">
-              <option value="orderNumber">Sort: Order #</option>
-              <option value="name">Sort: Name</option>
-              <option value="zip">Sort: ZIP</option>
-              <option value="city">Sort: City</option>
-              <option value="status">Sort: Status</option>
-            </select>
-            <select value={groupBy} onChange={e => setGroupBy(e.target.value as any)}
-              className="bg-stone-50 border border-stone-200 rounded-lg px-2 py-1.5 text-[10px] font-black uppercase flex-1">
-              <option value="none">Group: None</option>
-              <option value="zip">Group: ZIP Code</option>
-              <option value="driver">Group: Driver</option>
-              <option value="preference">Group: Preference</option>
-              <option value="brand">Group: Company</option>
-            </select>
-          </div>
-
-          {/* Bulk actions */}
+          {/* Bulk actions bar */}
           {isAdmin && selectedOrders.size > 0 && (
             <div className="bg-black text-white rounded-2xl p-3 mb-3 flex items-center justify-between">
               <span className="font-black text-sm">{selectedOrders.size} selected</span>
               <div className="flex gap-2">
-                <button onClick={() => setShowAssignModal(true)} className="px-3 py-1.5 bg-blue-600 rounded-xl font-black text-[10px] uppercase active:scale-95">
-                  Assign Driver
-                </button>
-                <button onClick={() => setSelectedOrders(new Set())} className="px-3 py-1.5 bg-stone-700 rounded-xl font-black text-[10px] uppercase">
-                  Clear
-                </button>
+                <button onClick={() => setShowScheduleModal(true)} className="px-3 py-1.5 bg-amber-500 rounded-xl font-black text-[10px] uppercase active:scale-95">📅 Schedule</button>
+                <button onClick={() => setShowAssignModal(true)} className="px-3 py-1.5 bg-blue-600 rounded-xl font-black text-[10px] uppercase active:scale-95">🚗 Assign</button>
+                <button onClick={() => setSelectedOrders(new Set())} className="px-3 py-1.5 bg-stone-700 rounded-xl font-black text-[10px] uppercase">Clear</button>
               </div>
             </div>
           )}
 
-          {/* Select all in view */}
+          {/* Orders for this date */}
+          {calendarOrders.length > 0 ? calendarOrders.map(o => renderOrderCard(o, true)) : (
+            <div className="text-center py-8 text-stone-400">
+              <Calendar size={32} className="mx-auto mb-2 opacity-50" />
+              <p className="font-bold">No deliveries scheduled for this date</p>
+            </div>
+          )}
+
+          {/* Unscheduled orders toggle */}
+          {isAdmin && unscheduledOrders.length > 0 && (
+            <div className="mt-4">
+              <button onClick={() => setShowUnscheduled(!showUnscheduled)}
+                className="w-full py-3 bg-amber-50 border border-amber-200 rounded-2xl font-black text-sm text-amber-700 active:scale-95">
+                {showUnscheduled ? '▼' : '▶'} {unscheduledOrders.length} Unscheduled Orders — Tap to {showUnscheduled ? 'Hide' : 'Schedule'}
+              </button>
+              {showUnscheduled && (
+                <div className="mt-2">
+                  {isAdmin && (
+                    <button onClick={() => {
+                      if (selectedOrders.size === unscheduledOrders.length) setSelectedOrders(new Set());
+                      else setSelectedOrders(new Set(unscheduledOrders.map(o => o.id)));
+                    }} className="text-[10px] font-black uppercase text-stone-400 mb-2 block">
+                      {selectedOrders.size === unscheduledOrders.length ? '✓ Deselect All' : `Select All (${unscheduledOrders.length})`}
+                    </button>
+                  )}
+                  {unscheduledOrders.map(o => renderOrderCard(o, true))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── ALL ORDERS VIEW ── */}
+      {view === 'ALL_ORDERS' && (
+        <div className="px-4">
+          <input type="text" placeholder="Search name, address, order #, zip..."
+            value={filter.search || ''} onChange={e => setFilter(f => ({ ...f, search: e.target.value || undefined }))}
+            className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-2.5 text-sm font-bold mb-2 outline-none focus:border-black" />
+          <div className="flex gap-1.5 overflow-x-auto mb-2 pb-1" style={{ scrollbarWidth: 'none' }}>
+            <select value={filter.status || ''} onChange={e => setFilter(f => ({ ...f, status: e.target.value || undefined }))} className="bg-stone-100 rounded-lg px-2 py-1.5 text-[10px] font-black uppercase min-w-fit">
+              <option value="">All Status</option>
+              {Object.entries(BULK_STATUS_CONFIG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+            </select>
+            {isAdmin && <select value={filter.driver || ''} onChange={e => setFilter(f => ({ ...f, driver: e.target.value || undefined }))} className="bg-stone-100 rounded-lg px-2 py-1.5 text-[10px] font-black uppercase min-w-fit">
+              <option value="">All Drivers</option>{drivers.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+            </select>}
+            <select value={filter.brand || ''} onChange={e => setFilter(f => ({ ...f, brand: e.target.value || undefined }))} className="bg-stone-100 rounded-lg px-2 py-1.5 text-[10px] font-black uppercase min-w-fit">
+              <option value="">All Companies</option><option value="BERKOWITZ">Berkowitz</option><option value="PROVENANCE">Provenance</option>
+            </select>
+            <select value={filter.pref || ''} onChange={e => setFilter(f => ({ ...f, pref: e.target.value || undefined }))} className="bg-stone-100 rounded-lg px-2 py-1.5 text-[10px] font-black uppercase min-w-fit">
+              <option value="">All Prefs</option><option value="Morning">Morning</option><option value="Afternoon">Afternoon</option><option value="Evening">Evening</option><option value="Anytime">Anytime</option>
+            </select>
+          </div>
+          <div className="flex gap-1.5 mb-3">
+            <select value={sortBy} onChange={e => setSortBy(e.target.value as any)} className="bg-stone-50 border border-stone-200 rounded-lg px-2 py-1.5 text-[10px] font-black uppercase flex-1">
+              <option value="orderNumber">Sort: Order #</option><option value="name">Sort: Name</option><option value="zip">Sort: ZIP</option>
+              <option value="city">Sort: City</option><option value="status">Sort: Status</option><option value="driver">Sort: Driver</option>
+            </select>
+          </div>
+          {isAdmin && selectedOrders.size > 0 && (
+            <div className="bg-black text-white rounded-2xl p-3 mb-3 flex items-center justify-between">
+              <span className="font-black text-sm">{selectedOrders.size} selected</span>
+              <div className="flex gap-2">
+                <button onClick={() => setShowScheduleModal(true)} className="px-3 py-1.5 bg-amber-500 rounded-xl font-black text-[10px] uppercase active:scale-95">📅 Schedule</button>
+                <button onClick={() => setShowAssignModal(true)} className="px-3 py-1.5 bg-blue-600 rounded-xl font-black text-[10px] uppercase active:scale-95">🚗 Assign</button>
+                <button onClick={() => setSelectedOrders(new Set())} className="px-3 py-1.5 bg-stone-700 rounded-xl font-black text-[10px] uppercase">Clear</button>
+              </div>
+            </div>
+          )}
           {isAdmin && filteredOrders.length > 0 && (
-            <button onClick={() => {
-              if (selectedOrders.size === filteredOrders.length) setSelectedOrders(new Set());
-              else setSelectedOrders(new Set(filteredOrders.map(o => o.id)));
-            }}
+            <button onClick={() => { if (selectedOrders.size === filteredOrders.length) setSelectedOrders(new Set()); else setSelectedOrders(new Set(filteredOrders.map(o => o.id))); }}
               className="text-[10px] font-black uppercase text-stone-400 mb-2 block">
               {selectedOrders.size === filteredOrders.length ? '✓ Deselect All' : `Select All (${filteredOrders.length})`}
             </button>
           )}
-
-          {/* Order groups */}
-          {Object.entries(groupedOrders).map(([group, groupOrders]) => (
-            <div key={group} className="mb-4">
-              {groupBy !== 'none' && (
-                <div className="flex items-center justify-between mb-2">
-                  <p className="font-black text-sm text-stone-700">{group}</p>
-                  <span className="text-[10px] font-bold text-stone-400">{groupOrders.length} orders</span>
-                </div>
-              )}
-              {groupOrders.map(o => (
-                <div key={o.id}
-                  className={`mb-2 bg-white border rounded-2xl overflow-hidden transition-all ${selectedOrders.has(o.id) ? 'border-blue-500 bg-blue-50' : 'border-stone-100'}`}>
-                  <div className="flex items-center">
-                    {/* Checkbox for admin */}
-                    {isAdmin && (
-                      <button onClick={() => {
-                        const next = new Set(selectedOrders);
-                        next.has(o.id) ? next.delete(o.id) : next.add(o.id);
-                        setSelectedOrders(next);
-                      }} className="pl-3 pr-1 py-3">
-                        <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center ${selectedOrders.has(o.id) ? 'bg-blue-600 border-blue-600' : 'border-stone-300'}`}>
-                          {selectedOrders.has(o.id) && <Check size={12} className="text-white" />}
-                        </div>
-                      </button>
-                    )}
-                    {/* Order card body */}
-                    <button onClick={() => setDetailOrder(o)} className="flex-1 px-3 py-3 text-left">
-                      <div className="flex items-center justify-between mb-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-black text-xs text-stone-400">{o.orderNumber}</span>
-                          <span className={`text-[9px] font-black px-1.5 py-0.5 rounded ${o.subBrand === 'BERKOWITZ' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>
-                            {o.subBrand === 'BERKOWITZ' ? 'BRK' : 'PRV'}
-                          </span>
-                        </div>
-                        <BulkStatusBadge status={o.status} />
-                      </div>
-                      <p className="font-black text-base leading-tight">{o.recipientName}</p>
-                      <p className="text-xs text-stone-500 leading-tight">{o.street}, {o.city} {o.zip}</p>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${PREF_BADGE[o.deliveryPreference]?.bg || 'bg-stone-100'}`}>
-                          {o.deliveryPreference}
-                        </span>
-                        {o.driverName && <span className="text-[9px] font-bold text-blue-600">🚗 {o.driverName}</span>}
-                      </div>
-                    </button>
-                    <ChevronRight size={16} className="text-stone-300 mr-3" />
-                  </div>
-                </div>
-              ))}
-            </div>
-          ))}
-
-          {filteredOrders.length === 0 && (
-            <div className="text-center py-12 text-stone-400">
-              <Package size={32} className="mx-auto mb-2 opacity-50" />
-              <p className="font-bold">No orders match your filters</p>
-            </div>
-          )}
+          {filteredOrders.map(o => renderOrderCard(o, true))}
+          {filteredOrders.length === 0 && <div className="text-center py-12 text-stone-400"><Package size={32} className="mx-auto mb-2 opacity-50" /><p className="font-bold">No orders match filters</p></div>}
         </div>
       )}
 
@@ -4033,115 +3764,99 @@ const BulkProjectsView: React.FC<{
         <div className="px-4">
           <p className="font-black text-sm mb-3 text-red-600">Failed & Rescheduled Deliveries</p>
           {failedOrders.length === 0 ? (
-            <div className="text-center py-12 text-stone-400">
-              <CheckCircle2 size={32} className="mx-auto mb-2 opacity-50" />
-              <p className="font-bold">No failed deliveries!</p>
+            <div className="text-center py-12 text-stone-400"><CheckCircle2 size={32} className="mx-auto mb-2 opacity-50" /><p className="font-bold">No failed deliveries!</p></div>
+          ) : failedOrders.map(o => (
+            <div key={o.id} className="mb-2 bg-white border border-red-100 rounded-2xl overflow-hidden">
+              <button onClick={() => setDetailOrder(o)} className="w-full px-4 py-3 text-left">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="font-black text-xs text-stone-400">{o.orderNumber}</span>
+                  <BulkStatusBadge status={o.status} />
+                </div>
+                <p className="font-black text-base">{o.recipientName}</p>
+                <p className="text-xs text-stone-500">{o.street}, {o.city} {o.zip}</p>
+                {o.failureReason && <p className="text-xs text-red-500 font-bold mt-1">Reason: {FAILURE_REASON_LABELS[o.failureReason as keyof typeof FAILURE_REASON_LABELS] || o.failureReason}</p>}
+                {isAdmin && (
+                  <button onClick={(e) => { e.stopPropagation(); rescheduleOrder(o.id); }}
+                    className="mt-2 px-3 py-1.5 bg-amber-500 text-white rounded-xl font-black text-[10px] uppercase active:scale-95">
+                    ↻ Next Business Day
+                  </button>
+                )}
+              </button>
             </div>
-          ) : (
-            failedOrders.map(o => (
-              <div key={o.id} className="mb-2 bg-white border border-red-100 rounded-2xl overflow-hidden">
-                <button onClick={() => setDetailOrder(o)} className="w-full px-4 py-3 text-left">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-black text-xs text-stone-400">{o.orderNumber}</span>
-                    <BulkStatusBadge status={o.status} />
-                  </div>
-                  <p className="font-black text-base">{o.recipientName}</p>
-                  <p className="text-xs text-stone-500">{o.street}, {o.city} {o.zip}</p>
-                  {o.failureReason && (
-                    <p className="text-xs text-red-500 font-bold mt-1">
-                      Reason: {FAILURE_REASON_LABELS[o.failureReason as keyof typeof FAILURE_REASON_LABELS] || o.failureReason}
-                    </p>
-                  )}
-                  {o.rescheduledDate && (
-                    <p className="text-xs text-amber-600 font-bold mt-1">Rescheduled: {o.rescheduledDate}</p>
-                  )}
-                  {isAdmin && (
-                    <div className="flex gap-2 mt-2">
-                      <button onClick={(e) => { e.stopPropagation(); rescheduleOrder(o.id); }}
-                        className="px-3 py-1.5 bg-amber-500 text-white rounded-xl font-black text-[10px] uppercase active:scale-95">
-                        Next Business Day
-                      </button>
-                    </div>
-                  )}
-                </button>
-              </div>
-            ))
-          )}
+          ))}
         </div>
       )}
 
-      {/* ── FEES VIEW (admin only) ── */}
+      {/* ── FEES VIEW ── */}
       {view === 'FEES' && isAdmin && (
         <div className="px-4">
           <p className="font-black text-sm mb-3">Delivery Fees Summary</p>
-          {/* Filters */}
           <div className="flex gap-1.5 mb-3 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
-            <select value={feeFilter.driver || ''} onChange={e => setFeeFilter(f => ({ ...f, driver: e.target.value || undefined }))}
-              className="bg-stone-100 rounded-lg px-2 py-1.5 text-[10px] font-black uppercase min-w-fit">
-              <option value="">All Drivers</option>
-              {drivers.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+            <select value={feeFilter.driver || ''} onChange={e => setFeeFilter(f => ({ ...f, driver: e.target.value || undefined }))} className="bg-stone-100 rounded-lg px-2 py-1.5 text-[10px] font-black uppercase min-w-fit">
+              <option value="">All Drivers</option>{drivers.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
             </select>
-            <select value={feeFilter.brand || ''} onChange={e => setFeeFilter(f => ({ ...f, brand: e.target.value || undefined }))}
-              className="bg-stone-100 rounded-lg px-2 py-1.5 text-[10px] font-black uppercase min-w-fit">
-              <option value="">Both Companies</option>
-              <option value="BERKOWITZ">Berkowitz</option>
-              <option value="PROVENANCE">Provenance</option>
+            <select value={feeFilter.brand || ''} onChange={e => setFeeFilter(f => ({ ...f, brand: e.target.value || undefined }))} className="bg-stone-100 rounded-lg px-2 py-1.5 text-[10px] font-black uppercase min-w-fit">
+              <option value="">Both</option><option value="BERKOWITZ">Berkowitz</option><option value="PROVENANCE">Provenance</option>
             </select>
-            <input type="date" value={feeFilter.dateFrom || ''} onChange={e => setFeeFilter(f => ({ ...f, dateFrom: e.target.value || undefined }))}
-              className="bg-stone-100 rounded-lg px-2 py-1.5 text-[10px] font-black min-w-fit" />
-            <input type="date" value={feeFilter.dateTo || ''} onChange={e => setFeeFilter(f => ({ ...f, dateTo: e.target.value || undefined }))}
-              className="bg-stone-100 rounded-lg px-2 py-1.5 text-[10px] font-black min-w-fit" />
+            <input type="date" value={feeFilter.dateFrom || ''} onChange={e => setFeeFilter(f => ({ ...f, dateFrom: e.target.value || undefined }))} className="bg-stone-100 rounded-lg px-2 py-1.5 text-[10px] font-black min-w-fit" />
+            <input type="date" value={feeFilter.dateTo || ''} onChange={e => setFeeFilter(f => ({ ...f, dateTo: e.target.value || undefined }))} className="bg-stone-100 rounded-lg px-2 py-1.5 text-[10px] font-black min-w-fit" />
           </div>
-
-          {/* Grand total */}
           <div className="bg-green-50 rounded-2xl p-4 mb-4 border border-green-100 text-center">
             <p className="text-[10px] font-black uppercase text-green-600">Total Fees Earned</p>
             <p className="font-black text-4xl text-green-700">${feeSummary.grandTotal}</p>
             <p className="text-xs text-green-600 font-bold">{feeSummary.deliveries.length} deliveries</p>
           </div>
-
-          {/* By driver */}
-          <div className="bg-stone-50 rounded-2xl p-4 mb-3">
-            <p className="font-black text-sm mb-2">By Driver</p>
-            {Object.entries(feeSummary.byDriver).map(([name, data]) => (
-              <div key={name} className="flex items-center justify-between py-2 border-b border-stone-100 last:border-0">
-                <span className="font-bold text-sm">{name}</span>
-                <div className="text-right">
-                  <span className="font-black text-green-700">${data.total}</span>
-                  <span className="text-xs text-stone-400 ml-2">({data.count})</span>
+          {Object.entries(feeSummary.byDriver).length > 0 && (
+            <div className="bg-stone-50 rounded-2xl p-4 mb-3">
+              <p className="font-black text-sm mb-2">By Driver</p>
+              {Object.entries(feeSummary.byDriver).map(([name, data]) => (
+                <div key={name} className="flex items-center justify-between py-2 border-b border-stone-100 last:border-0">
+                  <span className="font-bold text-sm">{name}</span>
+                  <div className="text-right"><span className="font-black text-green-700">${data.total}</span><span className="text-xs text-stone-400 ml-2">({data.count})</span></div>
                 </div>
-              </div>
-            ))}
-          </div>
-
-          {/* By company */}
-          <div className="bg-stone-50 rounded-2xl p-4">
-            <p className="font-black text-sm mb-2">By Company</p>
-            {Object.entries(feeSummary.byBrand).map(([brand, data]) => (
-              <div key={brand} className="flex items-center justify-between py-2 border-b border-stone-100 last:border-0">
-                <span className="font-bold text-sm">{brand}</span>
-                <div className="text-right">
-                  <span className="font-black text-green-700">${data.total}</span>
-                  <span className="text-xs text-stone-400 ml-2">({data.count})</span>
+              ))}
+            </div>
+          )}
+          {Object.entries(feeSummary.byBrand).length > 0 && (
+            <div className="bg-stone-50 rounded-2xl p-4">
+              <p className="font-black text-sm mb-2">By Company</p>
+              {Object.entries(feeSummary.byBrand).map(([brand, data]) => (
+                <div key={brand} className="flex items-center justify-between py-2 border-b border-stone-100 last:border-0">
+                  <span className="font-bold text-sm">{brand}</span>
+                  <div className="text-right"><span className="font-black text-green-700">${data.total}</span><span className="text-xs text-stone-400 ml-2">({data.count})</span></div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
-      {/* ── ASSIGN DRIVER MODAL ── */}
+      {/* ── MODALS ── */}
       {showAssignModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center" onClick={() => setShowAssignModal(false)}>
           <div className="bg-white rounded-t-3xl w-full max-w-md p-4 pb-8" onClick={e => e.stopPropagation()}>
-            <p className="font-black text-lg mb-4 text-center">Assign {selectedOrders.size} Orders</p>
+            <p className="font-black text-lg mb-4 text-center">Assign {selectedOrders.size} Orders to Driver</p>
             {drivers.map(d => (
-              <button key={d.id} onClick={() => assignDriver(d.id, d.name)}
-                className="w-full text-left px-4 py-3 mb-2 bg-stone-50 rounded-xl font-bold text-sm active:bg-stone-100">
+              <button key={d.id} onClick={() => assignDriver(d.id, d.name)} className="w-full text-left px-4 py-3 mb-2 bg-stone-50 rounded-xl font-bold text-sm active:bg-stone-100">
                 <Truck size={14} className="inline mr-2 text-stone-400" />{d.name}
               </button>
             ))}
             <button onClick={() => setShowAssignModal(false)} className="w-full py-3 text-stone-400 font-bold text-sm mt-2">Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {showScheduleModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center" onClick={() => setShowScheduleModal(false)}>
+          <div className="bg-white rounded-t-3xl w-full max-w-md p-4 pb-8" onClick={e => e.stopPropagation()}>
+            <p className="font-black text-lg mb-4 text-center">Schedule {selectedOrders.size} Orders</p>
+            <input type="date" value={scheduleDate} onChange={e => setScheduleDate(e.target.value)}
+              className="w-full border border-stone-200 rounded-xl px-4 py-3 text-center font-black text-lg mb-4" />
+            <button onClick={() => scheduleOrders(scheduleDate)} disabled={!scheduleDate}
+              className={`w-full py-4 rounded-2xl font-black text-lg uppercase ${scheduleDate ? 'bg-black text-white active:scale-95' : 'bg-stone-200 text-stone-400 cursor-not-allowed'}`}>
+              Schedule for {scheduleDate ? new Date(scheduleDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '...'}
+            </button>
+            <button onClick={() => setShowScheduleModal(false)} className="w-full py-3 text-stone-400 font-bold text-sm mt-2">Cancel</button>
           </div>
         </div>
       )}
