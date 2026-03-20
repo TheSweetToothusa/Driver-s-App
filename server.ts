@@ -55,6 +55,10 @@ async function dbSet(key: string, value: any): Promise<void> {
   } catch(e) { console.error('dbSet error', e); }
 }
 
+// Aliases used throughout
+const getKV = dbGet;
+const setKV = dbSet;
+
 // --- Init DB tables ---
 async function initDB() {
   if (!pool) return;
@@ -630,6 +634,217 @@ async function startServer() {
     const message = "Test from The Sweet Tooth Driver App — email notifications are working! 🍫";
     const sent = await sendEmail(to, "Sweet Tooth App — Test Notification", message);
     res.json({ sent, message, channel: 'Email' });
+  });
+
+  // ── BULK PROJECTS (Berkowitz / Provenance) ─────────────────────────────────
+
+  // Get all projects
+  app.get("/api/bulk/projects", async (_req, res) => {
+    try {
+      const projects = await dbGet('bulk_projects') || [];
+      res.json({ projects });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  // Create a project
+  app.post("/api/bulk/projects", async (req, res) => {
+    try {
+      const { name, clientName } = req.body;
+      const projects = await dbGet('bulk_projects') || [];
+      const project = {
+        id: `proj_${Date.now()}`,
+        name, clientName,
+        createdAt: new Date().toISOString(),
+        status: 'ACTIVE',
+        totalOrders: 0,
+        completedOrders: 0,
+      };
+      projects.push(project);
+      await dbSet('bulk_projects', projects);
+      res.json({ project });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  // Get all orders for a project
+  app.get("/api/bulk/projects/:projectId/orders", async (req, res) => {
+    try {
+      const orders = await dbGet(`bulk_orders_${req.params.projectId}`) || [];
+      res.json({ orders });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  // Upload / import orders for a project (from parsed CSV data sent by frontend)
+  app.post("/api/bulk/projects/:projectId/orders/import", async (req, res) => {
+    try {
+      const { orders: newOrders } = req.body;
+      const projectId = req.params.projectId;
+      const existing = await dbGet(`bulk_orders_${projectId}`) || [];
+      const merged = [...existing, ...newOrders];
+      await dbSet(`bulk_orders_${projectId}`, merged);
+      // Update project totals
+      const projects = await dbGet('bulk_projects') || [];
+      const pIdx = projects.findIndex((p: any) => p.id === projectId);
+      if (pIdx !== -1) {
+        projects[pIdx].totalOrders = merged.length;
+        projects[pIdx].completedOrders = merged.filter((o: any) => o.status === 'DELIVERED' || o.status === 'CLOSED').length;
+        await dbSet('bulk_projects', projects);
+      }
+      res.json({ success: true, totalImported: newOrders.length, totalOrders: merged.length });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  // Update a single bulk order (assign driver, change status, add notes, POD, etc.)
+  app.patch("/api/bulk/orders/:projectId/:orderId", async (req, res) => {
+    try {
+      const { projectId, orderId } = req.params;
+      const updates = req.body;
+      const orders = await dbGet(`bulk_orders_${projectId}`) || [];
+      const idx = orders.findIndex((o: any) => o.id === orderId);
+      if (idx === -1) return res.status(404).json({ error: "Order not found" });
+      orders[idx] = { ...orders[idx], ...updates };
+      // If completing, set completedAt
+      if (updates.status === 'DELIVERED' && !orders[idx].completedAt) {
+        orders[idx].completedAt = new Date().toISOString();
+      }
+      await dbSet(`bulk_orders_${projectId}`, orders);
+      // Update project counts
+      const projects = await dbGet('bulk_projects') || [];
+      const pIdx = projects.findIndex((p: any) => p.id === projectId);
+      if (pIdx !== -1) {
+        projects[pIdx].completedOrders = orders.filter((o: any) => o.status === 'DELIVERED' || o.status === 'CLOSED').length;
+        await dbSet('bulk_projects', projects);
+      }
+      res.json({ success: true, order: orders[idx] });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  // Bulk assign driver to multiple orders
+  app.post("/api/bulk/orders/:projectId/assign", async (req, res) => {
+    try {
+      const { projectId } = req.params;
+      const { orderIds, driverId, driverName } = req.body;
+      const orders = await dbGet(`bulk_orders_${projectId}`) || [];
+      let count = 0;
+      for (const oid of orderIds) {
+        const idx = orders.findIndex((o: any) => o.id === oid);
+        if (idx !== -1) {
+          orders[idx].driverId = driverId;
+          orders[idx].driverName = driverName;
+          if (orders[idx].status === 'PENDING') orders[idx].status = 'ASSIGNED';
+          count++;
+        }
+      }
+      await dbSet(`bulk_orders_${projectId}`, orders);
+      res.json({ success: true, assigned: count });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  // Bulk update status for multiple orders
+  app.post("/api/bulk/orders/:projectId/bulk-status", async (req, res) => {
+    try {
+      const { projectId } = req.params;
+      const { orderIds, status } = req.body;
+      const orders = await dbGet(`bulk_orders_${projectId}`) || [];
+      let count = 0;
+      for (const oid of orderIds) {
+        const idx = orders.findIndex((o: any) => o.id === oid);
+        if (idx !== -1) {
+          orders[idx].status = status;
+          if (status === 'DELIVERED' && !orders[idx].completedAt) {
+            orders[idx].completedAt = new Date().toISOString();
+          }
+          count++;
+        }
+      }
+      await dbSet(`bulk_orders_${projectId}`, orders);
+      // Update project counts
+      const projects = await dbGet('bulk_projects') || [];
+      const pIdx = projects.findIndex((p: any) => p.id === projectId);
+      if (pIdx !== -1) {
+        projects[pIdx].completedOrders = orders.filter((o: any) => o.status === 'DELIVERED' || o.status === 'CLOSED').length;
+        await dbSet('bulk_projects', projects);
+      }
+      res.json({ success: true, updated: count });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  // POD for bulk order
+  app.post("/api/bulk/orders/:projectId/:orderId/pod", async (req, res) => {
+    try {
+      const { projectId, orderId } = req.params;
+      const { photo, signature, notes, status, driverId, driverName, failureReason } = req.body;
+      const orders = await dbGet(`bulk_orders_${projectId}`) || [];
+      const idx = orders.findIndex((o: any) => o.id === orderId);
+      if (idx === -1) return res.status(404).json({ error: "Order not found" });
+      orders[idx] = {
+        ...orders[idx],
+        confirmationPhoto: photo,
+        confirmationSignature: signature,
+        driverNotes: notes,
+        status: status || 'DELIVERED',
+        completedAt: status === 'DELIVERED' ? new Date().toISOString() : orders[idx].completedAt,
+        submittedAt: new Date().toISOString(),
+        driverId: driverId || orders[idx].driverId,
+        driverName: driverName || orders[idx].driverName,
+        failureReason: failureReason || undefined,
+      };
+      await dbSet(`bulk_orders_${projectId}`, orders);
+      // Update project counts
+      const projects = await dbGet('bulk_projects') || [];
+      const pIdx = projects.findIndex((p: any) => p.id === projectId);
+      if (pIdx !== -1) {
+        projects[pIdx].completedOrders = orders.filter((o: any) => o.status === 'DELIVERED' || o.status === 'CLOSED').length;
+        await dbSet('bulk_projects', projects);
+      }
+      res.json({ success: true, order: orders[idx] });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  // Reschedule a failed bulk order for next business day (or admin override date)
+  app.post("/api/bulk/orders/:projectId/:orderId/reschedule", async (req, res) => {
+    try {
+      const { projectId, orderId } = req.params;
+      const { overrideDate } = req.body; // optional admin override
+      const orders = await dbGet(`bulk_orders_${projectId}`) || [];
+      const idx = orders.findIndex((o: any) => o.id === orderId);
+      if (idx === -1) return res.status(404).json({ error: "Order not found" });
+      const nextDate = overrideDate || nextBusinessDay(new Date());
+      // Create a 2nd attempt copy
+      const original = orders[idx];
+      const secondAttempt = {
+        ...original,
+        id: `${original.id}_2nd`,
+        orderNumber: `${original.orderNumber}-R`,
+        status: 'SECOND_ATTEMPT',
+        attemptNumber: 2,
+        originalOrderId: original.id,
+        deliveryDate: nextDate,
+        rescheduledDate: nextDate,
+        confirmationPhoto: undefined,
+        confirmationSignature: undefined,
+        completedAt: undefined,
+        submittedAt: undefined,
+        failureReason: undefined,
+        failureNotes: undefined,
+        failurePhoto: undefined,
+        driverNotes: undefined,
+        createdAt: new Date().toISOString(),
+      };
+      orders.push(secondAttempt);
+      // Mark original as CLOSED
+      orders[idx].status = 'CLOSED';
+      orders[idx].adminNotes = (orders[idx].adminNotes || '') + `\n[${new Date().toLocaleString()}] Rescheduled to ${nextDate}`;
+      await dbSet(`bulk_orders_${projectId}`, orders);
+      // Update project totals
+      const projects = await dbGet('bulk_projects') || [];
+      const pIdx = projects.findIndex((p: any) => p.id === projectId);
+      if (pIdx !== -1) {
+        projects[pIdx].totalOrders = orders.filter((o: any) => o.status !== 'CLOSED' || o.attemptNumber === 1).length;
+        projects[pIdx].completedOrders = orders.filter((o: any) => o.status === 'DELIVERED').length;
+        await dbSet('bulk_projects', projects);
+      }
+      res.json({ success: true, rescheduledOrder: secondAttempt, nextDate });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
   // ── STATIC / VITE ───────────────────────────────────────────────────────────

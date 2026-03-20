@@ -150,3 +150,77 @@ export interface ManualStop {
 }
 
 export type ViewMode = 'DAY' | 'WEEK' | 'MONTH' | 'CUSTOM';
+
+// ── BULK PROJECTS (Berkowitz / Provenance) ──────────────────────────────────
+
+export interface BulkProject {
+  id: string;
+  name: string;                // "Berkowitz 2026"
+  clientName: string;          // "Berkowitz"
+  createdAt: string;
+  status: 'ACTIVE' | 'COMPLETED' | 'ARCHIVED';
+  totalOrders: number;
+  completedOrders: number;
+}
+
+export type BulkOrderStatus =
+  | 'PENDING'           // uploaded, not yet assigned
+  | 'ASSIGNED'          // driver assigned
+  | 'IN_TRANSIT'        // driver picked it up / on the way
+  | 'DELIVERED'         // POD completed
+  | 'FAILED'            // 1st attempt failed
+  | 'SECOND_ATTEMPT'    // rescheduled for 2nd try
+  | 'PENDING_RESCHEDULE' // admin needs to manually reschedule
+  | 'CLOSED';           // done (delivered or cancelled)
+
+export interface BulkOrder {
+  id: string;
+  projectId: string;
+  orderNumber: string;        // e.g. "BRK-001" or "PRV-001"
+  subBrand: 'BERKOWITZ' | 'PROVENANCE';
+  
+  // Recipient
+  recipientName: string;
+  recipientPhone: string;
+  street: string;
+  unit: string;
+  city: string;
+  state: string;
+  zip: string;
+  addressType: 'Residence' | 'Apartment' | 'Business';
+  
+  // Delivery
+  deliveryPreference: 'Morning' | 'Afternoon' | 'Evening' | 'Anytime';
+  basketType: string;         // "Standard Chocolate Basket" or "Dried Fruit and Chocolate Basket"
+  deliveryFee: number;        // admin-only, parsed from "$25" -> 25
+  deliveryDate: string;       // ISO date
+  
+  // Worker / sender info (admin-only context)
+  workerName: string;         // the Berkowitz employee who sent it
+  companyName: string;        // full company name from CSV
+  
+  // Status & assignment
+  status: BulkOrderStatus;
+  driverId: string;
+  driverName: string;
+  
+  // POD
+  confirmationPhoto?: string;
+  confirmationSignature?: string;
+  completedAt?: string;
+  submittedAt?: string;
+  
+  // Failure handling
+  failureReason?: string;
+  failureNotes?: string;
+  failurePhoto?: string;
+  attemptNumber: 1 | 2;
+  originalOrderId?: string;   // if 2nd attempt, links back
+  rescheduledDate?: string;   // override date for failed re-delivery
+  
+  // Notes
+  adminNotes?: string;
+  driverNotes?: string;
+  
+  createdAt: string;
+}

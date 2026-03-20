@@ -3038,6 +3038,1118 @@ const DriverHomeView: React.FC<DriverHomeProps> = ({ currentUser, deliveries, on
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+// BULK PROJECTS VIEW (Berkowitz / Provenance)
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface BulkProject {
+  id: string; name: string; clientName: string; createdAt: string;
+  status: string; totalOrders: number; completedOrders: number;
+}
+
+interface BulkOrder {
+  id: string; projectId: string; orderNumber: string; subBrand: 'BERKOWITZ' | 'PROVENANCE';
+  recipientName: string; recipientPhone: string; street: string; unit: string;
+  city: string; state: string; zip: string; addressType: string;
+  deliveryPreference: string; basketType: string; deliveryFee: number;
+  deliveryDate: string; workerName: string; companyName: string;
+  status: string; driverId: string; driverName: string;
+  confirmationPhoto?: string; confirmationSignature?: string;
+  completedAt?: string; submittedAt?: string;
+  failureReason?: string; failureNotes?: string; failurePhoto?: string;
+  attemptNumber: 1 | 2; originalOrderId?: string; rescheduledDate?: string;
+  adminNotes?: string; driverNotes?: string; createdAt: string;
+}
+
+const BULK_STATUS_CONFIG: Record<string, { label: string; bg: string; text: string }> = {
+  PENDING:             { label: 'Pending',            bg: 'bg-stone-800',   text: 'text-white' },
+  ASSIGNED:            { label: 'Assigned',           bg: 'bg-blue-600',    text: 'text-white' },
+  IN_TRANSIT:          { label: 'Out for Delivery',   bg: 'bg-black',       text: 'text-white' },
+  DELIVERED:           { label: 'Delivered ✓',        bg: 'bg-green-600',   text: 'text-white' },
+  FAILED:              { label: 'Failed',             bg: 'bg-red-600',     text: 'text-white' },
+  SECOND_ATTEMPT:      { label: '2nd Attempt',        bg: 'bg-amber-600',   text: 'text-white' },
+  PENDING_RESCHEDULE:  { label: 'Needs Reschedule',   bg: 'bg-amber-500',   text: 'text-white' },
+  CLOSED:              { label: 'Closed',             bg: 'bg-stone-300',   text: 'text-stone-600' },
+};
+
+function BulkStatusBadge({ status }: { status: string }) {
+  const cfg = BULK_STATUS_CONFIG[status] || BULK_STATUS_CONFIG.PENDING;
+  return (
+    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wide ${cfg.bg} ${cfg.text}`}>
+      {cfg.label}
+    </span>
+  );
+}
+
+const PREF_BADGE: Record<string, { bg: string; label: string }> = {
+  Morning:   { bg: 'bg-yellow-100 text-yellow-800', label: '☀️ Morning' },
+  Afternoon: { bg: 'bg-orange-100 text-orange-800', label: '🌤️ Afternoon' },
+  Evening:   { bg: 'bg-indigo-100 text-indigo-800', label: '🌙 Evening' },
+  Anytime:   { bg: 'bg-stone-100 text-stone-600',   label: '⏰ Anytime' },
+};
+
+const BulkProjectsView: React.FC<{
+  currentUser: UserAccount;
+  allUsers: UserAccount[];
+}> = ({ currentUser, allUsers }) => {
+  const isAdmin = currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'MANAGER';
+  const [projects, setProjects] = useState<BulkProject[]>([]);
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
+  const [orders, setOrders] = useState<BulkOrder[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [view, setView] = useState<'DASHBOARD' | 'ORDERS' | 'FAILED' | 'FEES'>('DASHBOARD');
+  const [filter, setFilter] = useState<{ status?: string; driver?: string; brand?: string; pref?: string; zip?: string; search?: string }>({});
+  const [groupBy, setGroupBy] = useState<'none' | 'zip' | 'driver' | 'preference' | 'brand'>('none');
+  const [sortBy, setSortBy] = useState<'orderNumber' | 'name' | 'zip' | 'city' | 'status'>('orderNumber');
+  const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [showUpload, setShowUpload] = useState(false);
+  const [detailOrder, setDetailOrder] = useState<BulkOrder | null>(null);
+  const [showPOD, setShowPOD] = useState(false);
+  const [podPhoto, setPodPhoto] = useState<string | null>(null);
+  const [podSignature, setPodSignature] = useState<string | null>(null);
+  const [showSigPad, setShowSigPad] = useState(false);
+  const [showFailedFlow, setShowFailedFlow] = useState(false);
+  const [failReason, setFailReason] = useState('');
+  const [failNotes, setFailNotes] = useState('');
+  const [feeFilter, setFeeFilter] = useState<{ driver?: string; brand?: string; dateFrom?: string; dateTo?: string }>({});
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+
+  // Load projects on mount
+  useEffect(() => {
+    loadProjects();
+  }, []);
+
+  // Load orders when active project changes
+  useEffect(() => {
+    if (activeProjectId) loadOrders(activeProjectId);
+  }, [activeProjectId]);
+
+  const loadProjects = async () => {
+    try {
+      const r = await fetch('/api/bulk/projects');
+      const d = await r.json();
+      setProjects(d.projects || []);
+      if (d.projects?.length > 0 && !activeProjectId) {
+        setActiveProjectId(d.projects[0].id);
+      }
+    } catch (e) { console.error('Failed to load projects', e); }
+    finally { setLoading(false); }
+  };
+
+  const loadOrders = async (projectId: string) => {
+    try {
+      const r = await fetch(`/api/bulk/projects/${projectId}/orders`);
+      const d = await r.json();
+      setOrders(d.orders || []);
+    } catch (e) { console.error('Failed to load orders', e); }
+  };
+
+  // CSV Upload handler
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const text = await file.text();
+    const lines = text.split('\n').filter(l => l.trim());
+    
+    // Detect if this is Berkowitz or Provenance by checking for "#" column or company name
+    const rawHeaders = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+    
+    // Skip title rows if present (Provenance has "Gift Basket Delivery Preferences" as title row)
+    let headerIdx = 0;
+    if (rawHeaders.some(h => h.toLowerCase().includes('gift basket delivery preferences'))) {
+      headerIdx = 1; // second row has real headers
+    }
+    // Also check if first row has "Send Gift Basket" — that's a real header
+    if (!rawHeaders.some(h => h.toLowerCase().includes('send gift basket')) && !rawHeaders.some(h => h === '#')) {
+      headerIdx = 1;
+    }
+    
+    const headers = headerIdx > 0 
+      ? lines[headerIdx].split(',').map(h => h.trim().replace(/"/g, ''))
+      : rawHeaders;
+    
+    const isBerkowitz = headers.some(h => h === '#' || h === 'Worker');
+    const subBrand: 'BERKOWITZ' | 'PROVENANCE' = isBerkowitz ? 'BERKOWITZ' : 'PROVENANCE';
+    const prefix = isBerkowitz ? 'BRK' : 'PRV';
+    
+    // Find column indices
+    const findCol = (keywords: string[]) => headers.findIndex(h => 
+      keywords.some(k => h.toLowerCase().includes(k.toLowerCase()))
+    );
+    
+    const colName = findCol(['Recipient Name']);
+    const colPhone = findCol(['Recipient Phone']);
+    const colStreet = findCol(['Recipient Street']);
+    const colUnit = findCol(['Apt/Unit', 'Unit Number']);
+    const colCity = findCol(['Recipient City']);
+    const colState = findCol(['Recipient State']);
+    const colZip = findCol(['Recipient Zip']);
+    const colType = findCol(['Address Type']);
+    const colPref = findCol(['Delivery Preference']);
+    const colBasket = findCol(['Gift Basket Selection']);
+    const colDeliveryType = findCol(['Delivery Type', 'Local Delivery or']);
+    const colFee = findCol(['Delivery Fee']);
+    const colWorker = findCol(['Worker']);
+    const colCompany = findCol(['Company']);
+    const colNumber = findCol(['#']);
+    
+    const dataLines = lines.slice(headerIdx + 1);
+    const parsedOrders: BulkOrder[] = [];
+    let orderNum = 1;
+    
+    // Simple CSV parser that handles quoted fields
+    const parseCSVLine = (line: string): string[] => {
+      const result: string[] = [];
+      let current = '';
+      let inQuotes = false;
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (ch === '"') { inQuotes = !inQuotes; }
+        else if (ch === ',' && !inQuotes) { result.push(current.trim()); current = ''; }
+        else { current += ch; }
+      }
+      result.push(current.trim());
+      return result;
+    };
+    
+    for (const line of dataLines) {
+      if (!line.trim()) continue;
+      const cols = parseCSVLine(line);
+      
+      // Skip if no name
+      const name = cols[colName] || '';
+      if (!name || name.toLowerCase() === 'nan') continue;
+      
+      // Check if local delivery
+      const deliveryType = colDeliveryType >= 0 ? (cols[colDeliveryType] || '') : '';
+      if (deliveryType && !deliveryType.toLowerCase().includes('local')) continue;
+      
+      // Parse fee — remove $ sign
+      const feeStr = colFee >= 0 ? (cols[colFee] || '$0') : '$0';
+      const fee = parseInt(feeStr.replace(/[^0-9]/g, '')) || 0;
+      
+      const num = colNumber >= 0 ? (cols[colNumber] || String(orderNum)) : String(orderNum);
+      
+      parsedOrders.push({
+        id: `${prefix.toLowerCase()}_${Date.now()}_${orderNum}`,
+        projectId: activeProjectId || '',
+        orderNumber: `${prefix}-${String(num).padStart(3, '0')}`,
+        subBrand,
+        recipientName: name,
+        recipientPhone: (cols[colPhone] || '').replace(/[^0-9]/g, ''),
+        street: cols[colStreet] || '',
+        unit: cols[colUnit] || '',
+        city: cols[colCity] || '',
+        state: cols[colState] || '',
+        zip: String(cols[colZip] || '').replace(/\.0$/, '').padStart(5, '0'),
+        addressType: (cols[colType] || 'Residence') as any,
+        deliveryPreference: (cols[colPref] || 'Anytime') as any,
+        basketType: cols[colBasket] || 'Standard Chocolate Basket',
+        deliveryFee: fee,
+        deliveryDate: new Date().toISOString().split('T')[0],
+        workerName: colWorker >= 0 ? (cols[colWorker] || '') : '',
+        companyName: colCompany >= 0 ? (cols[colCompany] || (subBrand === 'BERKOWITZ' ? 'Berkowitz Pollack Brant' : 'Provenance')) : (subBrand === 'BERKOWITZ' ? 'Berkowitz Pollack Brant' : 'Provenance'),
+        status: 'PENDING',
+        driverId: '',
+        driverName: '',
+        attemptNumber: 1,
+        createdAt: new Date().toISOString(),
+      });
+      orderNum++;
+    }
+    
+    if (parsedOrders.length === 0) {
+      alert('No local delivery orders found in this file. Make sure the CSV has a "Local Delivery" column.');
+      return;
+    }
+    
+    // If no project exists yet, create one
+    let projectId = activeProjectId;
+    if (!projectId) {
+      const r = await fetch('/api/bulk/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'Berkowitz 2026', clientName: 'Berkowitz' }),
+      });
+      const d = await r.json();
+      projectId = d.project.id;
+      setActiveProjectId(projectId);
+    }
+    
+    // Set projectId on all orders
+    parsedOrders.forEach(o => o.projectId = projectId!);
+    
+    // Import
+    const r = await fetch(`/api/bulk/projects/${projectId}/orders/import`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orders: parsedOrders }),
+    });
+    const d = await r.json();
+    alert(`Imported ${d.totalImported} ${subBrand} local deliveries! (${d.totalOrders} total in project)`);
+    loadOrders(projectId!);
+    loadProjects();
+    setShowUpload(false);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  // Assign selected orders to a driver
+  const assignDriver = async (driverId: string, driverName: string) => {
+    if (!activeProjectId || selectedOrders.size === 0) return;
+    await fetch(`/api/bulk/orders/${activeProjectId}/assign`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orderIds: Array.from(selectedOrders), driverId, driverName }),
+    });
+    setSelectedOrders(new Set());
+    setShowAssignModal(false);
+    loadOrders(activeProjectId);
+  };
+
+  // Update single order
+  const updateOrder = async (orderId: string, updates: Partial<BulkOrder>) => {
+    if (!activeProjectId) return;
+    await fetch(`/api/bulk/orders/${activeProjectId}/${orderId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    });
+    loadOrders(activeProjectId);
+  };
+
+  // Submit POD
+  const submitPOD = async (orderId: string, status: string) => {
+    if (!activeProjectId) return;
+    await fetch(`/api/bulk/orders/${activeProjectId}/${orderId}/pod`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        photo: podPhoto,
+        signature: podSignature,
+        status,
+        driverId: currentUser.id,
+        driverName: currentUser.name,
+        failureReason: status === 'FAILED' ? failReason : undefined,
+        notes: status === 'FAILED' ? failNotes : undefined,
+      }),
+    });
+    setPodPhoto(null);
+    setPodSignature(null);
+    setShowPOD(false);
+    setShowFailedFlow(false);
+    setFailReason('');
+    setFailNotes('');
+    setDetailOrder(null);
+    loadOrders(activeProjectId);
+    loadProjects();
+  };
+
+  // Reschedule failed order
+  const rescheduleOrder = async (orderId: string, overrideDate?: string) => {
+    if (!activeProjectId) return;
+    await fetch(`/api/bulk/orders/${activeProjectId}/${orderId}/reschedule`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ overrideDate }),
+    });
+    loadOrders(activeProjectId);
+    loadProjects();
+  };
+
+  // Photo capture
+  const handlePhotoCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setPodPhoto(reader.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  // Filtered & sorted orders
+  const filteredOrders = useMemo(() => {
+    let result = [...orders];
+    // Drivers only see their own orders
+    if (!isAdmin) {
+      result = result.filter(o => o.driverId === currentUser.id);
+    }
+    // Hide CLOSED from default view unless specifically filtered
+    if (!filter.status) {
+      result = result.filter(o => o.status !== 'CLOSED');
+    }
+    if (filter.status) result = result.filter(o => o.status === filter.status);
+    if (filter.driver) result = result.filter(o => o.driverId === filter.driver);
+    if (filter.brand) result = result.filter(o => o.subBrand === filter.brand);
+    if (filter.pref) result = result.filter(o => o.deliveryPreference === filter.pref);
+    if (filter.zip) result = result.filter(o => o.zip.startsWith(filter.zip!));
+    if (filter.search) {
+      const s = filter.search.toLowerCase();
+      result = result.filter(o =>
+        o.recipientName.toLowerCase().includes(s) ||
+        o.orderNumber.toLowerCase().includes(s) ||
+        o.street.toLowerCase().includes(s) ||
+        o.city.toLowerCase().includes(s) ||
+        o.zip.includes(s)
+      );
+    }
+    // Sort
+    result.sort((a, b) => {
+      if (sortBy === 'orderNumber') return a.orderNumber.localeCompare(b.orderNumber);
+      if (sortBy === 'name') return a.recipientName.localeCompare(b.recipientName);
+      if (sortBy === 'zip') return a.zip.localeCompare(b.zip);
+      if (sortBy === 'city') return a.city.localeCompare(b.city);
+      if (sortBy === 'status') return a.status.localeCompare(b.status);
+      return 0;
+    });
+    return result;
+  }, [orders, filter, sortBy, isAdmin, currentUser.id]);
+
+  // Grouped orders
+  const groupedOrders = useMemo(() => {
+    if (groupBy === 'none') return { 'All Orders': filteredOrders };
+    const groups: Record<string, BulkOrder[]> = {};
+    for (const o of filteredOrders) {
+      const key = groupBy === 'zip' ? o.zip
+        : groupBy === 'driver' ? (o.driverName || 'Unassigned')
+        : groupBy === 'preference' ? o.deliveryPreference
+        : groupBy === 'brand' ? o.subBrand
+        : 'Other';
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(o);
+    }
+    return groups;
+  }, [filteredOrders, groupBy]);
+
+  // Failed orders (for the FAILED tab)
+  const failedOrders = useMemo(() =>
+    orders.filter(o => o.status === 'FAILED' || o.status === 'SECOND_ATTEMPT' || o.status === 'PENDING_RESCHEDULE'),
+  [orders]);
+
+  // Stats
+  const stats = useMemo(() => {
+    const active = orders.filter(o => o.status !== 'CLOSED');
+    return {
+      total: active.length,
+      pending: active.filter(o => o.status === 'PENDING').length,
+      assigned: active.filter(o => o.status === 'ASSIGNED').length,
+      inTransit: active.filter(o => o.status === 'IN_TRANSIT').length,
+      delivered: active.filter(o => o.status === 'DELIVERED').length,
+      failed: active.filter(o => o.status === 'FAILED' || o.status === 'SECOND_ATTEMPT' || o.status === 'PENDING_RESCHEDULE').length,
+      totalFees: active.filter(o => o.status === 'DELIVERED').reduce((sum, o) => sum + o.deliveryFee, 0),
+    };
+  }, [orders]);
+
+  // Fee summary for admin
+  const feeSummary = useMemo(() => {
+    let feeable = orders.filter(o => o.status === 'DELIVERED');
+    if (feeFilter.driver) feeable = feeable.filter(o => o.driverId === feeFilter.driver);
+    if (feeFilter.brand) feeable = feeable.filter(o => o.subBrand === feeFilter.brand);
+    if (feeFilter.dateFrom) feeable = feeable.filter(o => (o.completedAt || '') >= feeFilter.dateFrom!);
+    if (feeFilter.dateTo) feeable = feeable.filter(o => (o.completedAt || '') <= feeFilter.dateTo! + 'T23:59:59');
+    const byDriver: Record<string, { count: number; total: number }> = {};
+    const byBrand: Record<string, { count: number; total: number }> = {};
+    for (const o of feeable) {
+      const dn = o.driverName || 'Unassigned';
+      if (!byDriver[dn]) byDriver[dn] = { count: 0, total: 0 };
+      byDriver[dn].count++;
+      byDriver[dn].total += o.deliveryFee;
+      if (!byBrand[o.subBrand]) byBrand[o.subBrand] = { count: 0, total: 0 };
+      byBrand[o.subBrand].count++;
+      byBrand[o.subBrand].total += o.deliveryFee;
+    }
+    return { deliveries: feeable, byDriver, byBrand, grandTotal: feeable.reduce((s, o) => s + o.deliveryFee, 0) };
+  }, [orders, feeFilter]);
+
+  // Drivers list
+  const drivers = useMemo(() =>
+    allUsers.filter(u => (u.role === 'DRIVER' || u.role === 'MANAGER') && u.isActive),
+  [allUsers]);
+
+  if (loading) return <div className="p-8 text-center text-stone-400 font-bold">Loading projects...</div>;
+
+  // ── ORDER DETAIL VIEW ──
+  if (detailOrder) {
+    const o = detailOrder;
+    // Refresh from orders array in case it was updated
+    const fresh = orders.find(ord => ord.id === o.id) || o;
+
+    // POD overlay
+    if (showPOD) {
+      return (
+        <div className="min-h-screen bg-white p-4">
+          <div className="flex items-center justify-between mb-4">
+            <button onClick={() => { setShowPOD(false); setPodPhoto(null); setPodSignature(null); }} className="flex items-center gap-1 text-stone-500 font-bold text-sm"><ChevronLeft size={16} /> Back</button>
+            <p className="font-black text-lg">Proof of Delivery</p>
+            <div className="w-16" />
+          </div>
+          <div className="bg-stone-50 rounded-2xl p-4 mb-4">
+            <p className="font-black text-lg">{fresh.recipientName}</p>
+            <p className="text-stone-500 text-sm">{fresh.street}{fresh.unit ? `, ${fresh.unit}` : ''}</p>
+            <p className="text-stone-500 text-sm">{fresh.city}, {fresh.state} {fresh.zip}</p>
+          </div>
+
+          {/* Photo */}
+          <div className="mb-4">
+            <p className="font-black text-sm mb-2 uppercase text-stone-500">Photo</p>
+            {podPhoto ? (
+              <div className="relative">
+                <img src={podPhoto} alt="POD" className="w-full rounded-xl max-h-48 object-cover" />
+                <button onClick={() => setPodPhoto(null)} className="absolute top-2 right-2 bg-red-500 text-white w-7 h-7 rounded-full flex items-center justify-center"><X size={14} /></button>
+              </div>
+            ) : (
+              <button onClick={() => photoInputRef.current?.click()} className="w-full py-8 border-2 border-dashed border-stone-300 rounded-xl text-stone-400 font-bold flex flex-col items-center gap-2">
+                <Camera size={28} />
+                <span>Take Photo</span>
+              </button>
+            )}
+            <input ref={photoInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handlePhotoCapture} />
+          </div>
+
+          {/* Signature */}
+          <div className="mb-4">
+            <p className="font-black text-sm mb-2 uppercase text-stone-500">Signature</p>
+            {podSignature ? (
+              <div className="relative">
+                <img src={podSignature} alt="Signature" className="w-full rounded-xl bg-white border border-stone-200" style={{ maxHeight: 120 }} />
+                <button onClick={() => setPodSignature(null)} className="absolute top-2 right-2 bg-red-500 text-white w-7 h-7 rounded-full flex items-center justify-center"><X size={14} /></button>
+              </div>
+            ) : showSigPad ? (
+              <SignaturePad onSave={(d) => { setPodSignature(d); setShowSigPad(false); }} onCancel={() => setShowSigPad(false)} />
+            ) : (
+              <button onClick={() => setShowSigPad(true)} className="w-full py-6 border-2 border-dashed border-stone-300 rounded-xl text-stone-400 font-bold flex flex-col items-center gap-2">
+                <PenTool size={24} />
+                <span>Capture Signature</span>
+              </button>
+            )}
+          </div>
+
+          {/* Submit */}
+          <button
+            onClick={() => submitPOD(fresh.id, 'DELIVERED')}
+            disabled={!podPhoto}
+            className={`w-full py-4 rounded-2xl font-black text-lg uppercase tracking-wide transition-all ${podPhoto ? 'bg-green-600 text-white active:scale-95' : 'bg-stone-200 text-stone-400 cursor-not-allowed'}`}
+          >
+            {podPhoto ? '✓ CONFIRM DELIVERED' : 'Photo Required'}
+          </button>
+        </div>
+      );
+    }
+
+    // Failed delivery flow
+    if (showFailedFlow) {
+      return (
+        <div className="min-h-screen bg-white p-4">
+          <div className="flex items-center justify-between mb-4">
+            <button onClick={() => setShowFailedFlow(false)} className="flex items-center gap-1 text-stone-500 font-bold text-sm"><ChevronLeft size={16} /> Back</button>
+            <p className="font-black text-lg text-red-600">Report Failed Delivery</p>
+            <div className="w-16" />
+          </div>
+          <div className="bg-red-50 rounded-2xl p-4 mb-4 border border-red-100">
+            <p className="font-black text-lg">{fresh.recipientName}</p>
+            <p className="text-stone-500 text-sm">{fresh.street}, {fresh.city}</p>
+          </div>
+          <p className="font-black text-sm mb-2 uppercase text-stone-500">Reason</p>
+          {Object.entries(FAILURE_REASON_LABELS).map(([key, label]) => (
+            <button key={key} onClick={() => setFailReason(key)}
+              className={`w-full text-left px-4 py-3 mb-2 rounded-xl border-2 font-bold text-sm transition-all ${failReason === key ? 'border-red-500 bg-red-50 text-red-700' : 'border-stone-200 text-stone-600'}`}>
+              {label}
+            </button>
+          ))}
+          <p className="font-black text-sm mb-2 mt-4 uppercase text-stone-500">Notes</p>
+          <textarea value={failNotes} onChange={e => setFailNotes(e.target.value)} placeholder="Details about the failed attempt..." className="w-full border border-stone-200 rounded-xl p-3 text-sm min-h-[80px] mb-4" />
+          <button
+            onClick={() => { submitPOD(fresh.id, 'FAILED'); }}
+            disabled={!failReason}
+            className={`w-full py-4 rounded-2xl font-black text-lg uppercase ${failReason ? 'bg-red-600 text-white active:scale-95' : 'bg-stone-200 text-stone-400 cursor-not-allowed'}`}
+          >
+            Submit Failed Delivery
+          </button>
+        </div>
+      );
+    }
+
+    // Order detail
+    return (
+      <div className="min-h-screen bg-white">
+        {/* Sticky header */}
+        <div className="sticky top-0 z-40 bg-white border-b border-stone-100 px-4 py-3 flex items-center justify-between shadow-sm">
+          <button onClick={() => setDetailOrder(null)} className="flex items-center gap-1 text-stone-500 font-bold text-sm"><ChevronLeft size={16} /> Back</button>
+          <p className="font-black text-sm">{fresh.orderNumber}</p>
+          <BulkStatusBadge status={fresh.status} />
+        </div>
+
+        <div className="p-4 space-y-4">
+          {/* Sub-brand badge */}
+          <div className={`inline-flex items-center px-3 py-1.5 rounded-xl font-black text-xs uppercase ${fresh.subBrand === 'BERKOWITZ' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'}`}>
+            {fresh.subBrand}
+          </div>
+
+          {/* Recipient */}
+          <div className="bg-stone-50 rounded-2xl p-4">
+            <p className="text-[10px] font-black uppercase text-stone-400 mb-1">Recipient</p>
+            <p className="font-black text-2xl text-black leading-tight">{fresh.recipientName}</p>
+            <p className="text-stone-600 text-sm mt-1">{fresh.street}{fresh.unit ? `, ${fresh.unit}` : ''}</p>
+            <p className="text-stone-600 text-sm">{fresh.city}, {fresh.state} {fresh.zip}</p>
+            <div className="flex items-center gap-2 mt-2">
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${PREF_BADGE[fresh.deliveryPreference]?.bg || 'bg-stone-100'}`}>
+                {PREF_BADGE[fresh.deliveryPreference]?.label || fresh.deliveryPreference}
+              </span>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-stone-100 text-stone-600">
+                {fresh.addressType}
+              </span>
+            </div>
+            {fresh.recipientPhone && (
+              <ContactCallReveal phone={fresh.recipientPhone} label="Recipient" />
+            )}
+          </div>
+
+          {/* Basket */}
+          <div className="bg-amber-50 rounded-2xl p-4 border border-amber-100">
+            <p className="text-[10px] font-black uppercase text-amber-600 mb-1">Gift Basket</p>
+            <p className="font-bold text-sm text-amber-900">{fresh.basketType}</p>
+          </div>
+
+          {/* Driver info */}
+          {fresh.driverName && (
+            <div className="bg-blue-50 rounded-2xl p-3 border border-blue-100">
+              <p className="text-[10px] font-black uppercase text-blue-500">Assigned Driver</p>
+              <p className="font-bold text-sm">{fresh.driverName}</p>
+            </div>
+          )}
+
+          {/* Admin-only: fee & worker */}
+          {isAdmin && (
+            <div className="bg-green-50 rounded-2xl p-3 border border-green-100">
+              <div className="flex justify-between items-center">
+                <div>
+                  <p className="text-[10px] font-black uppercase text-green-600">Delivery Fee</p>
+                  <p className="font-black text-xl text-green-700">${fresh.deliveryFee}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-[10px] font-black uppercase text-stone-400">Employee</p>
+                  <p className="font-bold text-sm text-stone-600">{fresh.workerName || '—'}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Admin notes */}
+          {fresh.adminNotes && (
+            <div className="bg-stone-50 rounded-2xl p-3">
+              <p className="text-[10px] font-black uppercase text-stone-400 mb-1">Admin Notes</p>
+              <p className="text-sm text-stone-600 whitespace-pre-wrap">{fresh.adminNotes}</p>
+            </div>
+          )}
+
+          {/* POD result if delivered */}
+          {fresh.status === 'DELIVERED' && fresh.confirmationPhoto && (
+            <div className="bg-green-50 rounded-2xl p-4 border border-green-200">
+              <p className="text-[10px] font-black uppercase text-green-600 mb-2">Proof of Delivery</p>
+              <img src={fresh.confirmationPhoto} alt="POD" className="w-full rounded-xl max-h-48 object-cover mb-2" />
+              {fresh.confirmationSignature && (
+                <img src={fresh.confirmationSignature} alt="Signature" className="w-full rounded-xl bg-white border border-green-200 max-h-24" />
+              )}
+              {fresh.completedAt && <p className="text-xs text-green-600 mt-2 font-bold">Completed: {formatDate(fresh.completedAt)} at {formatTime(fresh.completedAt)}</p>}
+            </div>
+          )}
+
+          {/* Contact Katie button for drivers */}
+          {!isAdmin && (
+            <div className="bg-blue-50 rounded-2xl p-4 border border-blue-100">
+              <p className="text-[10px] font-black uppercase text-blue-600 mb-2">Need Help?</p>
+              <ContactCallReveal phone="3059944070" label="Katie (Manager)" />
+            </div>
+          )}
+
+          {/* Navigation */}
+          <a href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${fresh.street}, ${fresh.city}, ${fresh.state} ${fresh.zip}`)}`}
+            target="_blank" rel="noopener noreferrer"
+            className="flex items-center justify-center gap-2 w-full py-3 bg-blue-600 text-white rounded-2xl font-black text-sm active:scale-95">
+            <Navigation size={16} /> Navigate
+          </a>
+
+          {/* Action buttons */}
+          {fresh.status !== 'DELIVERED' && fresh.status !== 'CLOSED' && (
+            <div className="flex gap-2">
+              <button onClick={() => setShowPOD(true)}
+                className="flex-1 py-3 bg-green-600 text-white rounded-2xl font-black text-sm flex items-center justify-center gap-2 active:scale-95">
+                <Camera size={16} /> Deliver
+              </button>
+              <button onClick={() => setShowFailedFlow(true)}
+                className="flex-1 py-3 bg-red-100 text-red-600 rounded-2xl font-black text-sm flex items-center justify-center gap-2 active:scale-95">
+                <XCircle size={16} /> Failed
+              </button>
+            </div>
+          )}
+
+          {/* Reschedule button for admin on failed orders */}
+          {isAdmin && (fresh.status === 'FAILED' || fresh.status === 'PENDING_RESCHEDULE') && (
+            <div className="space-y-2">
+              <button onClick={() => rescheduleOrder(fresh.id)}
+                className="w-full py-3 bg-amber-500 text-white rounded-2xl font-black text-sm active:scale-95">
+                ↻ Reschedule for Next Business Day
+              </button>
+              <div className="flex gap-2 items-center">
+                <input type="date" className="flex-1 border border-stone-200 rounded-xl px-3 py-2 text-sm"
+                  onChange={(e) => {
+                    if (e.target.value) rescheduleOrder(fresh.id, e.target.value);
+                  }} />
+                <span className="text-xs text-stone-400 font-bold">or pick a date</span>
+              </div>
+            </div>
+          )}
+
+          {/* Admin: assign driver */}
+          {isAdmin && fresh.status !== 'DELIVERED' && fresh.status !== 'CLOSED' && (
+            <div className="bg-stone-50 rounded-2xl p-3">
+              <p className="text-[10px] font-black uppercase text-stone-400 mb-2">Assign Driver</p>
+              <select
+                value={fresh.driverId}
+                onChange={e => {
+                  const driver = drivers.find(d => d.id === e.target.value);
+                  if (driver) updateOrder(fresh.id, { driverId: driver.id, driverName: driver.name, status: 'ASSIGNED' });
+                }}
+                className="w-full border border-stone-200 rounded-xl px-3 py-2 text-sm font-bold"
+              >
+                <option value="">Select driver...</option>
+                {drivers.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+              </select>
+            </div>
+          )}
+
+          {/* Admin: add note */}
+          {isAdmin && (
+            <div className="bg-stone-50 rounded-2xl p-3">
+              <p className="text-[10px] font-black uppercase text-stone-400 mb-2">Add Note</p>
+              <div className="flex gap-2">
+                <input type="text" placeholder="Type a note..." className="flex-1 border border-stone-200 rounded-xl px-3 py-2 text-sm"
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && (e.target as HTMLInputElement).value) {
+                      const note = (e.target as HTMLInputElement).value;
+                      updateOrder(fresh.id, { adminNotes: (fresh.adminNotes || '') + `\n[${new Date().toLocaleString()}] ${note}` });
+                      (e.target as HTMLInputElement).value = '';
+                      setDetailOrder({ ...fresh, adminNotes: (fresh.adminNotes || '') + `\n[${new Date().toLocaleString()}] ${note}` });
+                    }
+                  }}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ── MAIN PROJECTS VIEW ──
+  const activeProject = projects.find(p => p.id === activeProjectId);
+
+  return (
+    <div className="pb-4">
+      {/* Project header */}
+      <div className="px-4 pt-4 pb-2">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <p className="text-[10px] font-black uppercase text-stone-400">Bulk Project</p>
+            <p className="font-black text-xl">{activeProject?.name || 'Berkowitz 2026'}</p>
+          </div>
+          {isAdmin && (
+            <button onClick={() => setShowUpload(true)}
+              className="flex items-center gap-1.5 px-3 py-2 bg-black text-white rounded-xl font-black text-[10px] uppercase active:scale-95">
+              <FileText size={12} /> Upload CSV
+            </button>
+          )}
+        </div>
+
+        {/* Upload overlay */}
+        {showUpload && (
+          <div className="mb-4 bg-stone-50 rounded-2xl p-4 border border-stone-200">
+            <p className="font-bold text-sm mb-2">Upload Berkowitz or Provenance CSV</p>
+            <p className="text-xs text-stone-500 mb-3">Only "Local Delivery" rows will be imported. The system auto-detects which company.</p>
+            <input ref={fileInputRef} type="file" accept=".csv,.xlsx" onChange={handleFileUpload}
+              className="w-full text-sm file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:font-bold file:bg-black file:text-white" />
+            <button onClick={() => setShowUpload(false)} className="mt-2 text-xs text-stone-400 font-bold">Cancel</button>
+          </div>
+        )}
+
+        {/* Stats bar */}
+        <div className="grid grid-cols-4 gap-2 mb-3">
+          <div className="bg-stone-50 rounded-xl p-2 text-center">
+            <p className="text-lg font-black">{stats.total}</p>
+            <p className="text-[8px] font-black uppercase text-stone-400">Total</p>
+          </div>
+          <div className="bg-green-50 rounded-xl p-2 text-center">
+            <p className="text-lg font-black text-green-600">{stats.delivered}</p>
+            <p className="text-[8px] font-black uppercase text-green-600">Delivered</p>
+          </div>
+          <div className="bg-blue-50 rounded-xl p-2 text-center">
+            <p className="text-lg font-black text-blue-600">{stats.assigned + stats.inTransit}</p>
+            <p className="text-[8px] font-black uppercase text-blue-600">Active</p>
+          </div>
+          <div className="bg-red-50 rounded-xl p-2 text-center cursor-pointer" onClick={() => setView('FAILED')}>
+            <p className="text-lg font-black text-red-600">{stats.failed}</p>
+            <p className="text-[8px] font-black uppercase text-red-600">Failed</p>
+          </div>
+        </div>
+
+        {/* Progress bar */}
+        <div className="w-full bg-stone-100 rounded-full h-2 mb-3">
+          <div className="bg-green-500 h-2 rounded-full transition-all" style={{ width: `${stats.total > 0 ? (stats.delivered / stats.total * 100) : 0}%` }} />
+        </div>
+
+        {/* Admin fee summary pill */}
+        {isAdmin && stats.totalFees > 0 && (
+          <button onClick={() => setView('FEES')} className="flex items-center gap-2 px-3 py-1.5 bg-green-50 border border-green-100 rounded-xl mb-3">
+            <DollarSign size={12} className="text-green-600" />
+            <span className="font-black text-sm text-green-700">${stats.totalFees} earned</span>
+            <ChevronRight size={12} className="text-green-400" />
+          </button>
+        )}
+
+        {/* View tabs */}
+        <div className="flex gap-1 mb-3">
+          {(['DASHBOARD', 'ORDERS', 'FAILED', ...(isAdmin ? ['FEES'] as const : [])] as const).map(v => (
+            <button key={v} onClick={() => setView(v as any)}
+              className={`flex-1 py-2 rounded-xl font-black text-[10px] uppercase transition-all ${view === v ? 'bg-black text-white' : 'bg-stone-100 text-stone-500'}`}>
+              {v === 'FEES' ? 'Fees' : v === 'FAILED' ? `Failed (${failedOrders.length})` : v.charAt(0) + v.slice(1).toLowerCase()}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ── DASHBOARD VIEW ── */}
+      {view === 'DASHBOARD' && (
+        <div className="px-4 space-y-3">
+          {/* Today's summary */}
+          <div className="bg-stone-50 rounded-2xl p-4">
+            <p className="font-black text-sm mb-3">Today's Overview</p>
+            <div className="space-y-2">
+              {drivers.map(d => {
+                const driverOrders = orders.filter(o => o.driverId === d.id && o.status !== 'CLOSED');
+                const delivered = driverOrders.filter(o => o.status === 'DELIVERED').length;
+                if (driverOrders.length === 0) return null;
+                return (
+                  <div key={d.id} className="flex items-center justify-between bg-white rounded-xl px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      <Truck size={14} className="text-stone-400" />
+                      <span className="font-bold text-sm">{d.name}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-green-600">{delivered}✓</span>
+                      <span className="text-xs text-stone-400">/</span>
+                      <span className="text-xs font-bold">{driverOrders.length}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* By preference breakdown */}
+          <div className="bg-stone-50 rounded-2xl p-4">
+            <p className="font-black text-sm mb-3">By Preference</p>
+            <div className="grid grid-cols-2 gap-2">
+              {['Morning', 'Afternoon', 'Evening', 'Anytime'].map(pref => {
+                const count = orders.filter(o => o.deliveryPreference === pref && o.status !== 'CLOSED').length;
+                const done = orders.filter(o => o.deliveryPreference === pref && o.status === 'DELIVERED').length;
+                return (
+                  <div key={pref} className="bg-white rounded-xl p-2 text-center">
+                    <p className="text-xs font-bold">{PREF_BADGE[pref]?.label || pref}</p>
+                    <p className="font-black text-lg">{done}<span className="text-stone-300">/{count}</span></p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Brand breakdown */}
+          <div className="bg-stone-50 rounded-2xl p-4">
+            <p className="font-black text-sm mb-3">By Company</p>
+            <div className="grid grid-cols-2 gap-2">
+              {['BERKOWITZ', 'PROVENANCE'].map(brand => {
+                const brandOrders = orders.filter(o => o.subBrand === brand && o.status !== 'CLOSED');
+                const done = brandOrders.filter(o => o.status === 'DELIVERED').length;
+                return (
+                  <div key={brand} className={`rounded-xl p-3 text-center ${brand === 'BERKOWITZ' ? 'bg-blue-50' : 'bg-purple-50'}`}>
+                    <p className={`text-xs font-black uppercase ${brand === 'BERKOWITZ' ? 'text-blue-600' : 'text-purple-600'}`}>{brand}</p>
+                    <p className="font-black text-xl">{done}<span className="text-stone-300 text-sm">/{brandOrders.length}</span></p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── ORDERS VIEW ── */}
+      {view === 'ORDERS' && (
+        <div className="px-4">
+          {/* Search */}
+          <input type="text" placeholder="Search name, address, order #, zip..."
+            value={filter.search || ''}
+            onChange={e => setFilter(f => ({ ...f, search: e.target.value || undefined }))}
+            className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-2.5 text-sm font-bold mb-3 outline-none focus:border-black"
+          />
+
+          {/* Filters row */}
+          <div className="flex gap-1.5 overflow-x-auto mb-2 pb-1" style={{ scrollbarWidth: 'none' }}>
+            <select value={filter.status || ''} onChange={e => setFilter(f => ({ ...f, status: e.target.value || undefined }))}
+              className="bg-stone-100 rounded-lg px-2 py-1.5 text-[10px] font-black uppercase min-w-fit">
+              <option value="">All Status</option>
+              {Object.entries(BULK_STATUS_CONFIG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+            </select>
+            {isAdmin && (
+              <select value={filter.driver || ''} onChange={e => setFilter(f => ({ ...f, driver: e.target.value || undefined }))}
+                className="bg-stone-100 rounded-lg px-2 py-1.5 text-[10px] font-black uppercase min-w-fit">
+                <option value="">All Drivers</option>
+                {drivers.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                <option value="">Unassigned</option>
+              </select>
+            )}
+            <select value={filter.brand || ''} onChange={e => setFilter(f => ({ ...f, brand: e.target.value || undefined }))}
+              className="bg-stone-100 rounded-lg px-2 py-1.5 text-[10px] font-black uppercase min-w-fit">
+              <option value="">All Companies</option>
+              <option value="BERKOWITZ">Berkowitz</option>
+              <option value="PROVENANCE">Provenance</option>
+            </select>
+            <select value={filter.pref || ''} onChange={e => setFilter(f => ({ ...f, pref: e.target.value || undefined }))}
+              className="bg-stone-100 rounded-lg px-2 py-1.5 text-[10px] font-black uppercase min-w-fit">
+              <option value="">All Prefs</option>
+              <option value="Morning">Morning</option>
+              <option value="Afternoon">Afternoon</option>
+              <option value="Evening">Evening</option>
+              <option value="Anytime">Anytime</option>
+            </select>
+          </div>
+
+          {/* Sort & Group */}
+          <div className="flex gap-1.5 mb-3">
+            <select value={sortBy} onChange={e => setSortBy(e.target.value as any)}
+              className="bg-stone-50 border border-stone-200 rounded-lg px-2 py-1.5 text-[10px] font-black uppercase flex-1">
+              <option value="orderNumber">Sort: Order #</option>
+              <option value="name">Sort: Name</option>
+              <option value="zip">Sort: ZIP</option>
+              <option value="city">Sort: City</option>
+              <option value="status">Sort: Status</option>
+            </select>
+            <select value={groupBy} onChange={e => setGroupBy(e.target.value as any)}
+              className="bg-stone-50 border border-stone-200 rounded-lg px-2 py-1.5 text-[10px] font-black uppercase flex-1">
+              <option value="none">Group: None</option>
+              <option value="zip">Group: ZIP Code</option>
+              <option value="driver">Group: Driver</option>
+              <option value="preference">Group: Preference</option>
+              <option value="brand">Group: Company</option>
+            </select>
+          </div>
+
+          {/* Bulk actions */}
+          {isAdmin && selectedOrders.size > 0 && (
+            <div className="bg-black text-white rounded-2xl p-3 mb-3 flex items-center justify-between">
+              <span className="font-black text-sm">{selectedOrders.size} selected</span>
+              <div className="flex gap-2">
+                <button onClick={() => setShowAssignModal(true)} className="px-3 py-1.5 bg-blue-600 rounded-xl font-black text-[10px] uppercase active:scale-95">
+                  Assign Driver
+                </button>
+                <button onClick={() => setSelectedOrders(new Set())} className="px-3 py-1.5 bg-stone-700 rounded-xl font-black text-[10px] uppercase">
+                  Clear
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Select all in view */}
+          {isAdmin && filteredOrders.length > 0 && (
+            <button onClick={() => {
+              if (selectedOrders.size === filteredOrders.length) setSelectedOrders(new Set());
+              else setSelectedOrders(new Set(filteredOrders.map(o => o.id)));
+            }}
+              className="text-[10px] font-black uppercase text-stone-400 mb-2 block">
+              {selectedOrders.size === filteredOrders.length ? '✓ Deselect All' : `Select All (${filteredOrders.length})`}
+            </button>
+          )}
+
+          {/* Order groups */}
+          {Object.entries(groupedOrders).map(([group, groupOrders]) => (
+            <div key={group} className="mb-4">
+              {groupBy !== 'none' && (
+                <div className="flex items-center justify-between mb-2">
+                  <p className="font-black text-sm text-stone-700">{group}</p>
+                  <span className="text-[10px] font-bold text-stone-400">{groupOrders.length} orders</span>
+                </div>
+              )}
+              {groupOrders.map(o => (
+                <div key={o.id}
+                  className={`mb-2 bg-white border rounded-2xl overflow-hidden transition-all ${selectedOrders.has(o.id) ? 'border-blue-500 bg-blue-50' : 'border-stone-100'}`}>
+                  <div className="flex items-center">
+                    {/* Checkbox for admin */}
+                    {isAdmin && (
+                      <button onClick={() => {
+                        const next = new Set(selectedOrders);
+                        next.has(o.id) ? next.delete(o.id) : next.add(o.id);
+                        setSelectedOrders(next);
+                      }} className="pl-3 pr-1 py-3">
+                        <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center ${selectedOrders.has(o.id) ? 'bg-blue-600 border-blue-600' : 'border-stone-300'}`}>
+                          {selectedOrders.has(o.id) && <Check size={12} className="text-white" />}
+                        </div>
+                      </button>
+                    )}
+                    {/* Order card body */}
+                    <button onClick={() => setDetailOrder(o)} className="flex-1 px-3 py-3 text-left">
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-black text-xs text-stone-400">{o.orderNumber}</span>
+                          <span className={`text-[9px] font-black px-1.5 py-0.5 rounded ${o.subBrand === 'BERKOWITZ' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>
+                            {o.subBrand === 'BERKOWITZ' ? 'BRK' : 'PRV'}
+                          </span>
+                        </div>
+                        <BulkStatusBadge status={o.status} />
+                      </div>
+                      <p className="font-black text-base leading-tight">{o.recipientName}</p>
+                      <p className="text-xs text-stone-500 leading-tight">{o.street}, {o.city} {o.zip}</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${PREF_BADGE[o.deliveryPreference]?.bg || 'bg-stone-100'}`}>
+                          {o.deliveryPreference}
+                        </span>
+                        {o.driverName && <span className="text-[9px] font-bold text-blue-600">🚗 {o.driverName}</span>}
+                      </div>
+                    </button>
+                    <ChevronRight size={16} className="text-stone-300 mr-3" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ))}
+
+          {filteredOrders.length === 0 && (
+            <div className="text-center py-12 text-stone-400">
+              <Package size={32} className="mx-auto mb-2 opacity-50" />
+              <p className="font-bold">No orders match your filters</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── FAILED VIEW ── */}
+      {view === 'FAILED' && (
+        <div className="px-4">
+          <p className="font-black text-sm mb-3 text-red-600">Failed & Rescheduled Deliveries</p>
+          {failedOrders.length === 0 ? (
+            <div className="text-center py-12 text-stone-400">
+              <CheckCircle2 size={32} className="mx-auto mb-2 opacity-50" />
+              <p className="font-bold">No failed deliveries!</p>
+            </div>
+          ) : (
+            failedOrders.map(o => (
+              <div key={o.id} className="mb-2 bg-white border border-red-100 rounded-2xl overflow-hidden">
+                <button onClick={() => setDetailOrder(o)} className="w-full px-4 py-3 text-left">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="font-black text-xs text-stone-400">{o.orderNumber}</span>
+                    <BulkStatusBadge status={o.status} />
+                  </div>
+                  <p className="font-black text-base">{o.recipientName}</p>
+                  <p className="text-xs text-stone-500">{o.street}, {o.city} {o.zip}</p>
+                  {o.failureReason && (
+                    <p className="text-xs text-red-500 font-bold mt-1">
+                      Reason: {FAILURE_REASON_LABELS[o.failureReason as keyof typeof FAILURE_REASON_LABELS] || o.failureReason}
+                    </p>
+                  )}
+                  {o.rescheduledDate && (
+                    <p className="text-xs text-amber-600 font-bold mt-1">Rescheduled: {o.rescheduledDate}</p>
+                  )}
+                  {isAdmin && (
+                    <div className="flex gap-2 mt-2">
+                      <button onClick={(e) => { e.stopPropagation(); rescheduleOrder(o.id); }}
+                        className="px-3 py-1.5 bg-amber-500 text-white rounded-xl font-black text-[10px] uppercase active:scale-95">
+                        Next Business Day
+                      </button>
+                    </div>
+                  )}
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+
+      {/* ── FEES VIEW (admin only) ── */}
+      {view === 'FEES' && isAdmin && (
+        <div className="px-4">
+          <p className="font-black text-sm mb-3">Delivery Fees Summary</p>
+          {/* Filters */}
+          <div className="flex gap-1.5 mb-3 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+            <select value={feeFilter.driver || ''} onChange={e => setFeeFilter(f => ({ ...f, driver: e.target.value || undefined }))}
+              className="bg-stone-100 rounded-lg px-2 py-1.5 text-[10px] font-black uppercase min-w-fit">
+              <option value="">All Drivers</option>
+              {drivers.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+            </select>
+            <select value={feeFilter.brand || ''} onChange={e => setFeeFilter(f => ({ ...f, brand: e.target.value || undefined }))}
+              className="bg-stone-100 rounded-lg px-2 py-1.5 text-[10px] font-black uppercase min-w-fit">
+              <option value="">Both Companies</option>
+              <option value="BERKOWITZ">Berkowitz</option>
+              <option value="PROVENANCE">Provenance</option>
+            </select>
+            <input type="date" value={feeFilter.dateFrom || ''} onChange={e => setFeeFilter(f => ({ ...f, dateFrom: e.target.value || undefined }))}
+              className="bg-stone-100 rounded-lg px-2 py-1.5 text-[10px] font-black min-w-fit" />
+            <input type="date" value={feeFilter.dateTo || ''} onChange={e => setFeeFilter(f => ({ ...f, dateTo: e.target.value || undefined }))}
+              className="bg-stone-100 rounded-lg px-2 py-1.5 text-[10px] font-black min-w-fit" />
+          </div>
+
+          {/* Grand total */}
+          <div className="bg-green-50 rounded-2xl p-4 mb-4 border border-green-100 text-center">
+            <p className="text-[10px] font-black uppercase text-green-600">Total Fees Earned</p>
+            <p className="font-black text-4xl text-green-700">${feeSummary.grandTotal}</p>
+            <p className="text-xs text-green-600 font-bold">{feeSummary.deliveries.length} deliveries</p>
+          </div>
+
+          {/* By driver */}
+          <div className="bg-stone-50 rounded-2xl p-4 mb-3">
+            <p className="font-black text-sm mb-2">By Driver</p>
+            {Object.entries(feeSummary.byDriver).map(([name, data]) => (
+              <div key={name} className="flex items-center justify-between py-2 border-b border-stone-100 last:border-0">
+                <span className="font-bold text-sm">{name}</span>
+                <div className="text-right">
+                  <span className="font-black text-green-700">${data.total}</span>
+                  <span className="text-xs text-stone-400 ml-2">({data.count})</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* By company */}
+          <div className="bg-stone-50 rounded-2xl p-4">
+            <p className="font-black text-sm mb-2">By Company</p>
+            {Object.entries(feeSummary.byBrand).map(([brand, data]) => (
+              <div key={brand} className="flex items-center justify-between py-2 border-b border-stone-100 last:border-0">
+                <span className="font-bold text-sm">{brand}</span>
+                <div className="text-right">
+                  <span className="font-black text-green-700">${data.total}</span>
+                  <span className="text-xs text-stone-400 ml-2">({data.count})</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── ASSIGN DRIVER MODAL ── */}
+      {showAssignModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center" onClick={() => setShowAssignModal(false)}>
+          <div className="bg-white rounded-t-3xl w-full max-w-md p-4 pb-8" onClick={e => e.stopPropagation()}>
+            <p className="font-black text-lg mb-4 text-center">Assign {selectedOrders.size} Orders</p>
+            {drivers.map(d => (
+              <button key={d.id} onClick={() => assignDriver(d.id, d.name)}
+                className="w-full text-left px-4 py-3 mb-2 bg-stone-50 rounded-xl font-bold text-sm active:bg-stone-100">
+                <Truck size={14} className="inline mr-2 text-stone-400" />{d.name}
+              </button>
+            ))}
+            <button onClick={() => setShowAssignModal(false)} className="w-full py-3 text-stone-400 font-bold text-sm mt-2">Cancel</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 // MAIN APP
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -3051,7 +4163,7 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [dataSource, setDataSource] = useState<'LIVE' | 'MOCK' | 'ERROR'>('MOCK');
-  const [tab, setTab] = useState<'HOME' | 'ORDERS' | 'SCHEDULE' | 'ADMIN' | 'DRIVERS'>('HOME');
+  const [tab, setTab] = useState<'HOME' | 'ORDERS' | 'SCHEDULE' | 'ADMIN' | 'DRIVERS' | 'PROJECTS'>('HOME');
   const isAdmin = currentUser?.role === 'SUPER_ADMIN' || currentUser?.role === 'MANAGER';
   const [zipQuery, setZipQuery] = useState('');
   const [zipRate, setZipRate] = useState<number | null | undefined>(undefined);
@@ -3224,6 +4336,11 @@ export default function App() {
           <Calendar size={20} />
           <span className="text-[9px] font-black uppercase">Schedule</span>
         </button>
+        <button onClick={() => setTab('PROJECTS')}
+          className={`flex-1 py-3 flex flex-col items-center gap-0.5 transition-all ${tab === 'PROJECTS' ? 'text-black' : 'text-stone-300'}`}>
+          <Store size={20} />
+          <span className="text-[9px] font-black uppercase">Projects</span>
+        </button>
         {isAdmin && (
           <button onClick={() => setTab('DRIVERS')}
             className={`flex-1 py-3 flex flex-col items-center gap-0.5 transition-all ${tab === 'DRIVERS' ? 'text-black' : 'text-stone-300'}`}>
@@ -3276,6 +4393,14 @@ export default function App() {
             allUsers={allUsers}
             onSelectOrder={setSelectedOrder}
             onUpdateOrder={handleUpdateOrder}
+          />
+        )}
+
+        {/* ── PROJECTS TAB (Berkowitz / Provenance) ── */}
+        {tab === 'PROJECTS' && (
+          <BulkProjectsView
+            currentUser={currentUser}
+            allUsers={allUsers}
           />
         )}
 
