@@ -6,6 +6,7 @@ import { fileURLToPath } from "url";
 import { config } from "dotenv";
 import pkg from 'pg';
 const { Pool } = pkg;
+import { BERKOWITZ_SEED_ORDERS } from './seedData.js';
 
 config({ path: '.env.local' });
 
@@ -130,22 +131,16 @@ async function initDB() {
         });
         await dbSet('bulk_projects', existingProjects);
       }
-      // Load seed orders from JSON file
-      const seedPath = path.join(__dirname, 'seed_berkowitz.json');
-      if (fs.existsSync(seedPath)) {
-        const seedOrders = JSON.parse(fs.readFileSync(seedPath, 'utf-8'));
-        await dbSet('bulk_orders_proj_berkowitz_2026', seedOrders);
-        // Update project total
-        const projs = await dbGet('bulk_projects') || [];
-        const pIdx = projs.findIndex((p: any) => p.id === 'proj_berkowitz_2026');
-        if (pIdx !== -1) {
-          projs[pIdx].totalOrders = seedOrders.length;
-          await dbSet('bulk_projects', projs);
-        }
-        console.log(`Seeded Berkowitz project with ${seedOrders.length} orders`);
-      } else {
-        console.log('seed_berkowitz.json not found at', seedPath);
+      // Use embedded seed data
+      await dbSet('bulk_orders_proj_berkowitz_2026', BERKOWITZ_SEED_ORDERS);
+      // Update project total
+      const projs = await dbGet('bulk_projects') || [];
+      const pIdx = projs.findIndex((p: any) => p.id === 'proj_berkowitz_2026');
+      if (pIdx !== -1) {
+        projs[pIdx].totalOrders = BERKOWITZ_SEED_ORDERS.length;
+        await dbSet('bulk_projects', projs);
       }
+      console.log(`Seeded Berkowitz project with ${BERKOWITZ_SEED_ORDERS.length} orders`);
     } else {
       console.log(`Berkowitz project already has ${existingOrders.length} orders — skipping seed`);
     }
