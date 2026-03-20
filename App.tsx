@@ -3019,15 +3019,15 @@ const DriverHomeView: React.FC<DriverHomeProps> = ({ currentUser, deliveries, on
           </div>
           <div>
             <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest">Address</p>
-            <p className="font-bold text-stone-700 text-sm">12591 NW 107th Ave, Hialeah Gardens, FL 33018</p>
+            <p className="font-bold text-stone-700 text-sm">18435 NE 19th Ave, North Miami Beach, FL 33179</p>
           </div>
           <div>
             <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest">Phone</p>
-            <p className="font-bold text-stone-700 text-sm">(305) 814-9779</p>
+            <p className="font-bold text-stone-700 text-sm">(305) 682-1400</p>
           </div>
           <div>
             <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest">Hours</p>
-            <p className="font-bold text-stone-700 text-sm">Mon–Fri: 9 AM – 5 PM · Same-day cutoff: 2 PM</p>
+            <p className="font-bold text-stone-700 text-sm">Mon–Fri: 10 AM – 5 PM · Same-day cutoff: 2 PM</p>
           </div>
         </div>
       </div>

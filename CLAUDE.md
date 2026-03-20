@@ -4,6 +4,15 @@ Read this entire file before doing anything. It contains everything you need to 
 
 ---
 
+## Store Info (NEVER GET THIS WRONG)
+
+- **Store Name:** The Sweet Tooth — Chocolate Factory
+- **Address:** 18435 NE 19th Ave, North Miami Beach, FL 33179
+- **Phone:** (305) 682-1400
+- **Hours:** Mon–Fri: 10 AM – 5 PM · Same-day cutoff: 2 PM
+
+---
+
 ## What This Is
 
 The **Sweet Tooth Driver App** is a React 19 + TypeScript delivery management PWA used by drivers and admins at The Sweet Tooth, a chocolate gift delivery business in Miami. It connects to Shopify for order data.
