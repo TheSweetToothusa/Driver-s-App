@@ -82,7 +82,7 @@ async function initDB() {
     console.log('Default users seeded');
   } else {
     // Always ensure core accounts are unlocked and have correct PINs
-    const users = JSON.parse(existing);
+    const users = existing;
     let changed = false;
     const mikey = users.find((u: any) => u.id === 'super_admin');
     const katie = users.find((u: any) => u.id === 'manager_1');

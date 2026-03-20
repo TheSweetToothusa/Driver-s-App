@@ -3643,7 +3643,7 @@ const BulkProjectsView: React.FC<{
           {/* Quick date pills — show dates that have orders */}
           {Object.keys(scheduledDates).length > 0 && (
             <div className="flex gap-1.5 overflow-x-auto mb-3 pb-1" style={{ scrollbarWidth: 'none' }}>
-              {Object.entries(scheduledDates).sort(([a], [b]) => a.localeCompare(b)).map(([date, info]) => (
+              {Object.entries(scheduledDates).sort(([a], [b]) => a.localeCompare(b)).map(([date, info]: [string, any]) => (
                 <button key={date} onClick={() => setCalendarDate(date)}
                   className={`px-3 py-1.5 rounded-xl font-bold text-xs whitespace-nowrap ${date === calendarDate ? 'bg-black text-white' : 'bg-stone-100 text-stone-600'}`}>
                   {new Date(date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
@@ -3809,7 +3809,7 @@ const BulkProjectsView: React.FC<{
           {Object.entries(feeSummary.byDriver).length > 0 && (
             <div className="bg-stone-50 rounded-2xl p-4 mb-3">
               <p className="font-black text-sm mb-2">By Driver</p>
-              {Object.entries(feeSummary.byDriver).map(([name, data]) => (
+              {Object.entries(feeSummary.byDriver).map(([name, data]: [string, any]) => (
                 <div key={name} className="flex items-center justify-between py-2 border-b border-stone-100 last:border-0">
                   <span className="font-bold text-sm">{name}</span>
                   <div className="text-right"><span className="font-black text-green-700">${data.total}</span><span className="text-xs text-stone-400 ml-2">({data.count})</span></div>
@@ -3820,7 +3820,7 @@ const BulkProjectsView: React.FC<{
           {Object.entries(feeSummary.byBrand).length > 0 && (
             <div className="bg-stone-50 rounded-2xl p-4">
               <p className="font-black text-sm mb-2">By Company</p>
-              {Object.entries(feeSummary.byBrand).map(([brand, data]) => (
+              {Object.entries(feeSummary.byBrand).map(([brand, data]: [string, any]) => (
                 <div key={brand} className="flex items-center justify-between py-2 border-b border-stone-100 last:border-0">
                   <span className="font-bold text-sm">{brand}</span>
                   <div className="text-right"><span className="font-black text-green-700">${data.total}</span><span className="text-xs text-stone-400 ml-2">({data.count})</span></div>
