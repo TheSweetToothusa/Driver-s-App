@@ -112,40 +112,31 @@ async function initDB() {
     await setKV('default_driver', JSON.stringify({ driverId: 'manager_1', driverName: 'Katie' }));
   }
 
-  // Seed Berkowitz 2026 project + orders if orders are missing
+  // Seed Berkowitz 2026 — FORCE write if fewer than 100 orders found
   try {
     const existingOrders = await dbGet('bulk_orders_proj_berkowitz_2026');
-    if (!existingOrders || existingOrders.length === 0) {
-      // Ensure project exists
-      const existingProjects = await dbGet('bulk_projects') || [];
-      const hasProject = existingProjects.some((p: any) => p.id === 'proj_berkowitz_2026');
-      if (!hasProject) {
-        existingProjects.push({
-          id: 'proj_berkowitz_2026',
-          name: 'Berkowitz 2026',
-          clientName: 'Berkowitz',
-          createdAt: new Date().toISOString(),
-          status: 'ACTIVE',
-          totalOrders: 162,
-          completedOrders: 0,
-        });
-        await dbSet('bulk_projects', existingProjects);
-      }
-      // Use embedded seed data
+    const count = Array.isArray(existingOrders) ? existingOrders.length : 0;
+    console.log(`Berkowitz check: found ${count} orders in DB`);
+    if (count < 100) {
+      console.log('Seeding 162 Berkowitz/Provenance orders NOW...');
+      // Write project
+      await dbSet('bulk_projects', [{
+        id: 'proj_berkowitz_2026',
+        name: 'Berkowitz 2026',
+        clientName: 'Berkowitz',
+        createdAt: new Date().toISOString(),
+        status: 'ACTIVE',
+        totalOrders: BERKOWITZ_SEED_ORDERS.length,
+        completedOrders: 0,
+      }]);
+      // Write all orders
       await dbSet('bulk_orders_proj_berkowitz_2026', BERKOWITZ_SEED_ORDERS);
-      // Update project total
-      const projs = await dbGet('bulk_projects') || [];
-      const pIdx = projs.findIndex((p: any) => p.id === 'proj_berkowitz_2026');
-      if (pIdx !== -1) {
-        projs[pIdx].totalOrders = BERKOWITZ_SEED_ORDERS.length;
-        await dbSet('bulk_projects', projs);
-      }
-      console.log(`Seeded Berkowitz project with ${BERKOWITZ_SEED_ORDERS.length} orders`);
+      console.log(`DONE — seeded ${BERKOWITZ_SEED_ORDERS.length} orders`);
     } else {
-      console.log(`Berkowitz project already has ${existingOrders.length} orders — skipping seed`);
+      console.log(`Berkowitz already has ${count} orders — good`);
     }
   } catch (e) {
-    console.error('Berkowitz seed error:', e);
+    console.error('Berkowitz seed FAILED:', e);
   }
 }
 
@@ -881,6 +872,18 @@ async function startServer() {
         await dbSet('bulk_projects', projects);
       }
       res.json({ success: true, rescheduledOrder: secondAttempt, nextDate });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  // ── DEBUG: check bulk seed status ──────────────────────────────────────────
+  app.get('/api/debug/bulk', async (_req, res) => {
+    try {
+      const projects = await dbGet('bulk_projects');
+      const orders = await dbGet('bulk_orders_proj_berkowitz_2026');
+      const orderCount = Array.isArray(orders) ? orders.length : 0;
+      const seedCount = BERKOWITZ_SEED_ORDERS.length;
+      const dbConnected = !!pool;
+      res.json({ dbConnected, projects, orderCount, seedCount, sampleOrder: orders?.[0] || null });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
