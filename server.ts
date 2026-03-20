@@ -110,6 +110,32 @@ async function initDB() {
   } catch {
     await setKV('default_driver', JSON.stringify({ driverId: 'manager_1', driverName: 'Katie' }));
   }
+
+  // Seed Berkowitz 2026 project if not present
+  try {
+    const existingProjects = await dbGet('bulk_projects');
+    if (!existingProjects || existingProjects.length === 0) {
+      const project = {
+        id: 'proj_berkowitz_2026',
+        name: 'Berkowitz 2026',
+        clientName: 'Berkowitz',
+        createdAt: new Date().toISOString(),
+        status: 'ACTIVE',
+        totalOrders: 162,
+        completedOrders: 0,
+      };
+      await dbSet('bulk_projects', [project]);
+      // Load seed orders from JSON file
+      const seedPath = path.join(__dirname, 'seed_berkowitz.json');
+      if (fs.existsSync(seedPath)) {
+        const seedOrders = JSON.parse(fs.readFileSync(seedPath, 'utf-8'));
+        await dbSet('bulk_orders_proj_berkowitz_2026', seedOrders);
+        console.log(`Seeded Berkowitz project with ${seedOrders.length} orders`);
+      }
+    }
+  } catch (e) {
+    console.error('Berkowitz seed error:', e);
+  }
 }
 
 if (!fs.existsSync(USERS_PATH)) {
