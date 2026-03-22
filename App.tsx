@@ -733,6 +733,8 @@ const OrderDetail: React.FC<{
   const [showDeliveredConfirm, setShowDeliveredConfirm] = useState(false);
   const [showRevertConfirm, setShowRevertConfirm] = useState(false);
   const [showSendConfirm, setShowSendConfirm] = useState(false);
+  const [showNavChoice, setShowNavChoice] = useState(false);
+  const [navAddress, setNavAddress] = useState('');
 
   const handleComplete = async () => {
     const now = new Date().toISOString();
@@ -857,8 +859,21 @@ const OrderDetail: React.FC<{
   const senderPhone = editingContact ? editFields.senderPhone : (order.giftSenderPhone || '');
   const recipientName = editingContact ? editFields.recipientName : (order.giftReceiverName || order.customer?.name || '');
   const senderName = editingContact ? editFields.senderName : (order.giftSenderName || '');
-  const mapsUrl = `https://maps.google.com/?q=${encodeURIComponent([order.address?.street, order.address?.unit, order.address?.city, 'FL', order.address?.zip].filter(Boolean).join(' '))}`;
   const cleanOrderNum = order.orderNumber?.replace(/^#+/, '') || order.id;
+
+  const openNavChoice = (addr: string) => {
+    setNavAddress(addr);
+    setShowNavChoice(true);
+  };
+
+  const openNavApp = (app: 'google' | 'waze') => {
+    setShowNavChoice(false);
+    if (app === 'google') {
+      window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(navAddress)}`, '_blank');
+    } else {
+      window.open(`https://waze.com/ul?q=${encodeURIComponent(navAddress)}&navigate=yes`, '_blank');
+    }
+  };
 
 
   return (
@@ -873,6 +888,27 @@ const OrderDetail: React.FC<{
             </div>
             <p className="text-white text-3xl font-black uppercase tracking-widest">Delivered!</p>
             <p className="text-white/70 text-sm font-bold">#{order.orderNumber?.replace(/^#+/, '') || order.id}</p>
+          </div>
+        </div>
+      )}
+
+      {/* ── NAVIGATION APP CHOICE POPUP ── */}
+      {showNavChoice && (
+        <div className="fixed inset-0 z-[998] bg-black/50 flex items-end justify-center" onClick={() => setShowNavChoice(false)}>
+          <div className="bg-white w-full max-w-md rounded-t-3xl p-6 pb-8 space-y-3" onClick={e => e.stopPropagation()}>
+            <p className="text-center text-sm font-black uppercase text-stone-500 tracking-widest mb-2">Open with</p>
+            <button onClick={() => openNavApp('google')}
+              className="flex items-center justify-center gap-3 w-full py-4 bg-blue-600 text-white rounded-2xl font-black text-base active:scale-95">
+              🗺️ Google Maps
+            </button>
+            <button onClick={() => openNavApp('waze')}
+              className="flex items-center justify-center gap-3 w-full py-4 bg-[#33ccff] text-white rounded-2xl font-black text-base active:scale-95">
+              🚗 Waze
+            </button>
+            <button onClick={() => setShowNavChoice(false)}
+              className="w-full py-3 text-stone-400 font-bold text-sm active:scale-95">
+              Cancel
+            </button>
           </div>
         </div>
       )}
@@ -931,8 +967,8 @@ const OrderDetail: React.FC<{
           </div>
 
           <div className="border-t border-stone-100 divide-y divide-stone-100">
-            {/* Address — tappable to open maps */}
-            <a href={mapsUrl} target="_blank" rel="noopener noreferrer" className="block px-4 py-3 active:bg-stone-50">
+            {/* Address — tappable to choose nav app */}
+            <button onClick={() => openNavChoice([order.address?.street, order.address?.unit, order.address?.city, 'FL', order.address?.zip].filter(Boolean).join(' '))} className="block w-full text-left px-4 py-3 active:bg-stone-50">
               <div className="flex items-start justify-between gap-2">
                 <span className="text-[10px] font-black uppercase text-stone-400 tracking-widest">Address</span>
                 <span className="flex items-center gap-1 text-[10px] font-black text-blue-500 uppercase tracking-wide shrink-0 mt-0.5">
@@ -947,7 +983,7 @@ const OrderDetail: React.FC<{
               )}
               {order.address.company && <p className="text-sm font-bold text-blue-700 mt-1">📍 {order.address.company}</p>}
               <p className="text-base font-bold text-stone-600 mt-0.5">{order.address.city}, {order.address.zip}</p>
-            </a>
+            </button>
 
             {/* Items with SKU — parcels count */}
             {order.items?.length > 0 && (
@@ -3463,11 +3499,10 @@ const BulkProjectsView: React.FC<{
               <ContactCallReveal phone="3059944070" label="Katie (Manager)" />
             </div>
           )}
-          <a href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${fresh.street}, ${fresh.city}, ${fresh.state} ${fresh.zip}`)}`}
-            target="_blank" rel="noopener noreferrer"
+          <button onClick={() => openNavChoice(`${fresh.street}, ${fresh.city}, ${fresh.state} ${fresh.zip}`)}
             className="flex items-center justify-center gap-2 w-full py-3 bg-blue-600 text-white rounded-2xl font-black text-sm active:scale-95">
             <Navigation size={16} /> Navigate
-          </a>
+          </button>
           {/* BIG POD BUTTONS */}
           {fresh.status !== 'DELIVERED' && fresh.status !== 'CLOSED' && (
             <div className="space-y-2">
