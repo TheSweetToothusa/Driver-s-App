@@ -1395,8 +1395,7 @@ const OrdersView: React.FC<OrdersViewProps> = ({
   const [activeTab, setActiveTab] = useState<'active' | 'done'>('active');
   const [search, setSearch] = useState('');
   const [ordersDriverFilter, setOrdersDriverFilter] = useState('ALL');
-  const [dateFilter, setDateFilter] = useState<'TODAY'|'ALL'>('TODAY');
-  const [statusFilter, setStatusFilter] = useState<'ALL'|'OPEN'|'SCHEDULED'|'COMPLETED'>('ALL');
+  const [statusFilter, setStatusFilter] = useState<'OPEN'|'CLOSED'>('OPEN');
 
   const shiftDate = (days: number) => {
     const d = new Date(driverDate + 'T12:00:00');
@@ -1406,6 +1405,15 @@ const OrdersView: React.FC<OrdersViewProps> = ({
 
   const fmtDate = (iso: string) => new Date(iso + 'T12:00:00').toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
 
+  // Badge helper for 2nd attempt / needs attention
+  const renderAttemptBadge = (order: Delivery) => {
+    const is2nd = order.attemptNumber === 2;
+    const needsAttention = is2nd && (order.status === DeliveryStatus.FAILED || order.status === DeliveryStatus.PENDING_RESCHEDULE);
+    if (needsAttention) return <span className="inline-block ml-1 px-1.5 py-0.5 bg-red-100 text-red-700 text-[8px] font-black uppercase rounded">⚠ Needs Attention</span>;
+    if (is2nd) return <span className="inline-block ml-1 px-1.5 py-0.5 bg-amber-100 text-amber-700 text-[8px] font-black uppercase rounded">2nd Attempt</span>;
+    return null;
+  };
+
   // ── ADMIN VIEW ──
   if (isAdmin) {
     const sorted = [...deliveries].sort((a, b) => b.id.localeCompare(a.id)); // newest first
@@ -1413,25 +1421,23 @@ const OrdersView: React.FC<OrdersViewProps> = ({
 
     const adminToday = new Date().toISOString().split('T')[0];
 
-    const COMPLETED_STATUSES = [DeliveryStatus.DELIVERED, DeliveryStatus.FAILED, DeliveryStatus.PENDING_RESCHEDULE, DeliveryStatus.SECOND_ATTEMPT, DeliveryStatus.CLOSED];
-    const OPEN_STATUSES = [DeliveryStatus.PENDING, DeliveryStatus.SCHEDULED, DeliveryStatus.ASSIGNED, DeliveryStatus.IN_TRANSIT];
+    const CLOSED_STATUSES = [DeliveryStatus.DELIVERED, DeliveryStatus.CLOSED];
+    const OPEN_STATUSES = [DeliveryStatus.PENDING, DeliveryStatus.SCHEDULED, DeliveryStatus.ASSIGNED, DeliveryStatus.IN_TRANSIT, DeliveryStatus.SECOND_ATTEMPT, DeliveryStatus.FAILED, DeliveryStatus.PENDING_RESCHEDULE];
 
     const uniqueOrderDrivers = [
       { id: 'ALL', name: 'All Drivers' },
       ...allUsers.filter(u => (u.role === 'DRIVER' || u.role === 'MANAGER') && u.isActive).map(u => ({ id: u.id, name: u.name }))
     ];
 
-    // When actively searching, ignore date filter to show all matching results
-    const todayFiltered = (dateFilter === 'TODAY' && !search)
-      ? sorted.filter(d => (d.deliveryDate || '').split('T')[0] === adminToday)
-      : sorted;
+    // All orders — filtered by Open/Closed status toggle
+    const todayFiltered = sorted;
 
     const filtered = todayFiltered.filter(d => {
       // Driver filter
       if (ordersDriverFilter !== 'ALL' && d.driverId !== ordersDriverFilter) return false;
       // Status filter
       if (statusFilter === 'OPEN' && !OPEN_STATUSES.includes(d.status)) return false;
-      if (statusFilter === 'COMPLETED' && !COMPLETED_STATUSES.includes(d.status)) return false;
+      if (statusFilter === 'CLOSED' && !CLOSED_STATUSES.includes(d.status)) return false;
       // Text search
       if (!search) return true;
       const q = search.toLowerCase();
@@ -1449,10 +1455,9 @@ const OrdersView: React.FC<OrdersViewProps> = ({
     return (
       <div className="flex flex-col h-full">
         {/* Stats */}
-        <div className="grid grid-cols-4 border-b border-stone-200">
+        <div className="grid grid-cols-3 border-b border-stone-200">
           {[
-          { label: 'Assigned', val: deliveries.filter(d => d.driverId).length, color: 'text-blue-600' },
-            { label: 'Assigned', val: deliveries.filter(d => d.status === DeliveryStatus.ASSIGNED).length, color: 'text-blue-600' },
+            { label: 'Open', val: deliveries.filter(d => OPEN_STATUSES.includes(d.status)).length, color: 'text-blue-600' },
             { label: 'Out for Delivery', val: inTransitCount, color: 'text-black' },
             { label: 'Done Today', val: deliveredTodayCount, color: 'text-green-600' },
           ].map(s => (
@@ -1470,30 +1475,16 @@ const OrdersView: React.FC<OrdersViewProps> = ({
             className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-2.5 text-sm font-bold outline-none focus:border-black">
             {uniqueOrderDrivers.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
           </select>
-          {/* Date: Today / All */}
+          {/* Open / Closed toggle */}
           <div className="flex gap-2">
-            <button onClick={() => setDateFilter('TODAY')}
-              className={`flex-1 py-2 rounded-xl font-black text-xs uppercase transition-all ${dateFilter === 'TODAY' ? 'bg-black text-white' : 'bg-stone-100 text-stone-500'}`}>
-              Today ({sorted.filter(d => (d.deliveryDate||'').split('T')[0] === adminToday).length})
+            <button onClick={() => setStatusFilter('OPEN')}
+              className={`flex-1 py-2.5 rounded-xl font-black text-xs uppercase transition-all ${statusFilter === 'OPEN' ? 'bg-blue-600 text-white' : 'bg-stone-100 text-stone-500'}`}>
+              Open ({deliveries.filter(d => OPEN_STATUSES.includes(d.status)).length})
             </button>
-            <button onClick={() => setDateFilter('ALL')}
-              className={`flex-1 py-2 rounded-xl font-black text-xs uppercase transition-all ${dateFilter === 'ALL' ? 'bg-black text-white' : 'bg-stone-100 text-stone-500'}`}>
-              All ({sorted.length})
+            <button onClick={() => setStatusFilter('CLOSED')}
+              className={`flex-1 py-2.5 rounded-xl font-black text-xs uppercase transition-all ${statusFilter === 'CLOSED' ? 'bg-green-600 text-white' : 'bg-stone-100 text-stone-500'}`}>
+              Closed ({deliveries.filter(d => CLOSED_STATUSES.includes(d.status)).length})
             </button>
-          </div>
-          {/* Status: All / Open / Scheduled / Completed */}
-          <div className="flex gap-1.5">
-            {(['ALL','OPEN','SCHEDULED','COMPLETED'] as const).map(f => (
-              <button key={f} onClick={() => setStatusFilter(f as any)}
-                className={`flex-1 py-1.5 rounded-lg font-black text-[9px] uppercase transition-all ${(statusFilter as string) === f
-                  ? (f === 'OPEN' ? 'bg-blue-600 text-white' : f === 'COMPLETED' ? 'bg-green-600 text-white' : f === 'SCHEDULED' ? 'bg-violet-600 text-white' : 'bg-stone-800 text-white')
-                  : 'bg-stone-100 text-stone-500'}`}>
-                {f === 'ALL' ? `All (${todayFiltered.length})`
-                  : f === 'OPEN' ? `Open (${todayFiltered.filter(d => OPEN_STATUSES.includes(d.status)).length})`
-                  : f === 'SCHEDULED' ? `Sched (${todayFiltered.filter(d => d.status === DeliveryStatus.SCHEDULED).length})`
-                  : `Done (${todayFiltered.filter(d => COMPLETED_STATUSES.includes(d.status)).length})`}
-              </button>
-            ))}
           </div>
           {/* Text search */}
           <input
@@ -1531,6 +1522,7 @@ const OrdersView: React.FC<OrdersViewProps> = ({
                   </div>
                   <div className="pr-2 min-w-0 cursor-pointer" onClick={() => onSelectOrder(order)}>
                     <p className="text-sm font-bold text-stone-900 truncate">{order.giftReceiverName || order.customer?.name}</p>
+                    {renderAttemptBadge(order)}
                     <p className="text-[10px] text-stone-400 truncate">{order.address?.street}, {order.address?.city}</p>
                     {order.items?.[0] && (
                       <p className="text-[10px] font-black text-stone-600 truncate">{order.items[0].name} — ${order.items[0].price.toFixed(2)}</p>
@@ -1599,6 +1591,7 @@ const OrdersView: React.FC<OrdersViewProps> = ({
                   </div>
                   <div className="pr-2 min-w-0 cursor-pointer" onClick={() => onSelectOrder(order)}>
                     <p className="text-sm font-bold text-stone-900 truncate">{order.giftReceiverName || order.customer?.name}</p>
+                    {renderAttemptBadge(order)}
                     <p className="text-[10px] text-stone-400 truncate">{order.address?.street}, {order.address?.city}</p>
                     {order.items?.[0] && (
                       <p className="text-[10px] font-black text-stone-600 truncate">{order.items[0].name} — ${order.items[0].price.toFixed(2)}</p>
@@ -1716,6 +1709,7 @@ const OrdersView: React.FC<OrdersViewProps> = ({
                 <div className="flex-1 min-w-0">
                   {/* RECIPIENT NAME — first and largest */}
                   <p className="text-base font-black text-stone-900 leading-tight">{order.giftReceiverName || order.customer?.name}</p>
+                  {renderAttemptBadge(order)}
                   <p className="text-sm text-stone-500 truncate">{order.address?.street}, {order.address?.city}</p>
                   {order.items?.[0] && (
                     <p className="text-xs text-stone-400 truncate">{order.items[0].name} — ${(order.items[0].price * order.items[0].quantity).toFixed(2)}</p>
