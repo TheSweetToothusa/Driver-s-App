@@ -664,6 +664,71 @@ async function startServer() {
     res.json({ sent, message, channel: 'Email' });
   });
 
+  // ── GEOCODING (free via OpenStreetMap Nominatim) ────────────────────────────
+
+  app.post("/api/geocode", async (req, res) => {
+    const { addresses } = req.body; // Array of { id, street, city, zip }
+    if (!Array.isArray(addresses)) return res.status(400).json({ error: "addresses array required" });
+    const results: Record<string, { lat: number; lng: number }> = {};
+    for (const addr of addresses) {
+      try {
+        const q = encodeURIComponent(`${addr.street}, ${addr.city}, FL ${addr.zip}`);
+        const resp = await fetch(`https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=1`, {
+          headers: { 'User-Agent': 'SweetToothDriverApp/1.0' }
+        });
+        const data = await resp.json();
+        if (data && data[0]) {
+          results[addr.id] = { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+        }
+        // Nominatim rate limit: 1 req/sec
+        await new Promise(r => setTimeout(r, 1100));
+      } catch (e) {
+        console.error('Geocode failed for', addr.id, e);
+      }
+    }
+    res.json({ results });
+  });
+
+  // ── ROUTE OPTIMIZATION (nearest-neighbor from driver location) ─────────────
+
+  app.post("/api/route/optimize", (req, res) => {
+    const { stops, startLat, startLng } = req.body;
+    // stops: Array of { id, lat, lng }
+    // Returns optimized order of stop IDs
+    if (!Array.isArray(stops) || stops.length === 0) return res.json({ order: [] });
+
+    const haversine = (lat1: number, lng1: number, lat2: number, lng2: number): number => {
+      const R = 3959; // miles
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLng = (lng2 - lng1) * Math.PI / 180;
+      const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    };
+
+    // Nearest-neighbor greedy algorithm
+    const remaining = [...stops];
+    const ordered: typeof stops = [];
+    let curLat = startLat || 25.946;
+    let curLng = startLng || -80.155;
+    let totalDistance = 0;
+
+    while (remaining.length > 0) {
+      let bestIdx = 0;
+      let bestDist = Infinity;
+      for (let i = 0; i < remaining.length; i++) {
+        const d = haversine(curLat, curLng, remaining[i].lat, remaining[i].lng);
+        if (d < bestDist) { bestDist = d; bestIdx = i; }
+      }
+      const next = remaining.splice(bestIdx, 1)[0];
+      ordered.push(next);
+      totalDistance += bestDist;
+      curLat = next.lat;
+      curLng = next.lng;
+    }
+
+    res.json({ order: ordered.map(s => s.id), totalDistance: Math.round(totalDistance * 10) / 10 });
+  });
+
   // ── BULK PROJECTS (Berkowitz / Provenance) ─────────────────────────────────
 
   // Get all projects

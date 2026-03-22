@@ -116,7 +116,8 @@ const mapShopifyOrder = (order: any): Delivery => {
       company: shipping.company || '',
       city: shipping.city || 'Miami',
       zip: shipping.zip || '33179',
-      lat: 25.946, lng: -80.155
+      lat: parseFloat(shipping.latitude) || 0,
+      lng: parseFloat(shipping.longitude) || 0
     },
     items: filteredItems,
     deliveryFee: shippingPrice,
@@ -136,7 +137,8 @@ const mapShopifyOrder = (order: any): Delivery => {
     giftSenderName: `${buyer.first_name || ''} ${buyer.last_name || ''}`.trim() || 'Customer',
     giftSenderPhone: buyer.phone || billing.phone || '',
     giftSenderEmail: buyer.email || '',
-    giftReceiverName: `${shipping.first_name || ''} ${shipping.last_name || ''}`.trim() || ''
+    giftReceiverName: `${shipping.first_name || ''} ${shipping.last_name || ''}`.trim() || '',
+    attempts: []
   };
 };
 

@@ -8,7 +8,7 @@ import {
   UserPlus, Users,
   MessageCircle, MessageSquare, ChevronLeft, Edit3,
   Bell, Clock, XCircle, Gift, User,
-  AlertTriangle, RotateCcw, Inbox, Home, DollarSign, Store, Truck
+  AlertTriangle, RotateCcw, Inbox, Home, DollarSign, Store, Truck, Map as MapIcon, Route
 } from 'lucide-react';
 import { Delivery, DeliveryStatus, AppRole, FailureReason, FAILURE_REASON_LABELS, ViewMode, UserAccount, MessageTemplate } from './types';
 import { getDeliveries } from './services/shopifyService';
@@ -1771,6 +1771,114 @@ const OrdersView: React.FC<OrdersViewProps> = ({
 // SCHEDULE VIEW
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ROUTE MAP PANEL — Leaflet + OpenStreetMap (free)
+// ─────────────────────────────────────────────────────────────────────────────
+
+declare const L: any; // Leaflet loaded via CDN
+
+const RouteMapPanel: React.FC<{
+  stops: { id: string; lat: number; lng: number; name: string; address: string; orderNumber: string; stopNumber: number }[];
+  driverLat: number;
+  driverLng: number;
+  onClose: () => void;
+  onStartNav: (app: 'waze' | 'google') => void;
+  totalDistance: number;
+}> = ({ stops, driverLat, driverLng, onClose, onStartNav, totalDistance }) => {
+  const mapRef = useRef<HTMLDivElement>(null);
+  const mapInstance = useRef<any>(null);
+
+  useEffect(() => {
+    if (!mapRef.current || typeof L === 'undefined') return;
+    if (mapInstance.current) { mapInstance.current.remove(); mapInstance.current = null; }
+
+    const map = L.map(mapRef.current, { zoomControl: false, attributionControl: false }).setView([driverLat, driverLng], 12);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap'
+    }).addTo(map);
+
+    // Driver marker (blue)
+    const driverIcon = L.divIcon({
+      html: '<div style="width:28px;height:28px;background:#2563eb;border:3px solid #fff;border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3"><path d="M12 2L19 21l-7-4-7 4z"/></svg></div>',
+      iconSize: [28, 28], iconAnchor: [14, 14], className: ''
+    });
+    L.marker([driverLat, driverLng], { icon: driverIcon }).addTo(map).bindPopup('<b>You are here</b>');
+
+    // Stop markers (numbered)
+    const allPoints: [number, number][] = [[driverLat, driverLng]];
+    stops.forEach(s => {
+      const stopIcon = L.divIcon({
+        html: `<div style="width:30px;height:30px;background:#111;border:3px solid #fff;border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:13px;font-family:system-ui">${s.stopNumber}</div>`,
+        iconSize: [30, 30], iconAnchor: [15, 15], className: ''
+      });
+      L.marker([s.lat, s.lng], { icon: stopIcon }).addTo(map)
+        .bindPopup(`<b>Stop ${s.stopNumber}: #${s.orderNumber}</b><br/>${s.name}<br/><span style="font-size:11px;color:#666">${s.address}</span>`);
+      allPoints.push([s.lat, s.lng]);
+    });
+
+    // Draw route line
+    if (allPoints.length > 1) {
+      L.polyline(allPoints, { color: '#111', weight: 3, opacity: 0.7, dashArray: '8,8' }).addTo(map);
+    }
+
+    // Fit bounds
+    if (allPoints.length > 1) {
+      map.fitBounds(allPoints, { padding: [40, 40] });
+    }
+
+    mapInstance.current = map;
+    setTimeout(() => map.invalidateSize(), 100);
+
+    return () => { if (mapInstance.current) { mapInstance.current.remove(); mapInstance.current = null; } };
+  }, [stops, driverLat, driverLng]);
+
+  return (
+    <div className="fixed inset-0 bg-black/80 z-[100] flex flex-col">
+      {/* Header */}
+      <div className="bg-white px-4 py-3 flex items-center justify-between border-b border-stone-200 safe-top">
+        <div>
+          <p className="font-black text-sm uppercase">Optimized Route</p>
+          <p className="text-[10px] text-stone-500 font-bold">{stops.length} stops • ~{totalDistance} mi total</p>
+        </div>
+        <button onClick={onClose} className="w-9 h-9 bg-stone-100 rounded-full flex items-center justify-center">
+          <X size={18} className="text-stone-600" />
+        </button>
+      </div>
+
+      {/* Map */}
+      <div ref={mapRef} className="flex-1" style={{ minHeight: 200 }} />
+
+      {/* Stop list */}
+      <div className="bg-white max-h-[35vh] overflow-y-auto border-t border-stone-200">
+        {stops.map(s => (
+          <div key={s.id} className="flex items-center gap-3 px-4 py-2.5 border-b border-stone-100">
+            <div className="w-7 h-7 bg-black rounded-full flex items-center justify-center shrink-0">
+              <span className="text-white font-black text-xs">{s.stopNumber}</span>
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-black text-stone-900 truncate">{s.name}</p>
+              <p className="text-[10px] text-stone-400 truncate">{s.address}</p>
+            </div>
+            <p className="text-[10px] font-black text-stone-400">#{s.orderNumber?.replace(/^#+/, '')}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Navigation buttons */}
+      <div className="bg-white px-4 py-3 border-t border-stone-200 flex gap-2 safe-bottom">
+        <button onClick={() => onStartNav('waze')}
+          className="flex-1 py-3.5 bg-[#33ccff] text-white rounded-2xl font-black uppercase text-sm flex items-center justify-center gap-2 active:scale-95">
+          <Navigation size={16} /> Waze
+        </button>
+        <button onClick={() => onStartNav('google')}
+          className="flex-1 py-3.5 bg-[#4285F4] text-white rounded-2xl font-black uppercase text-sm flex items-center justify-center gap-2 active:scale-95">
+          <MapIcon size={16} /> Google Maps
+        </button>
+      </div>
+    </div>
+  );
+};
+
 const ScheduleView: React.FC<{
   deliveries: Delivery[];
   role: AppRole;
@@ -1846,12 +1954,142 @@ const ScheduleView: React.FC<{
   const fmt = fmtSelectedDate(selectedDate);
 
   const [schedStatusFilter, setSchedStatusFilter] = useState<'ALL'|'OPEN'|'SCHEDULED'|'FAILED'|'2ND'|'CLOSED'>('ALL');
+  const [routeOptimized, setRouteOptimized] = useState(false);
+  const [routeOrder, setRouteOrder] = useState<string[]>([]);
+  const [routeTotalDist, setRouteTotalDist] = useState(0);
+  const [routeLoading, setRouteLoading] = useState(false);
+  const [showRouteMap, setShowRouteMap] = useState(false);
+  const [driverLat, setDriverLat] = useState(0);
+  const [driverLng, setDriverLng] = useState(0);
+  const [geocoding, setGeocoding] = useState(false);
+  const [navPref, setNavPref] = useState<'waze'|'google'>(() => {
+    try { return (localStorage.getItem('st_nav_pref') as 'waze'|'google') || 'waze'; } catch { return 'waze'; }
+  });
 
   const SCHED_OPEN = ['PENDING','ASSIGNED','IN_TRANSIT'] as string[];
   const SCHED_SCHEDULED = ['SCHEDULED'] as string[];
   const SCHED_FAILED = ['FAILED'] as string[];
   const SCHED_2ND = ['SECOND_ATTEMPT'] as string[];
   const SCHED_CLOSED = ['DELIVERED','FAILED','SECOND_ATTEMPT','PENDING_RESCHEDULE','CLOSED'] as string[];
+
+  // ── Route optimization logic ──
+  const activeDeliveries = useMemo(() => {
+    return filtered.filter(d => !['DELIVERED','CLOSED'].includes(d.status));
+  }, [filtered]);
+
+  const optimizeRoute = useCallback(async () => {
+    if (activeDeliveries.length === 0) return;
+    setRouteLoading(true);
+
+    // Get driver's current location
+    let lat = 25.946, lng = -80.155; // fallback: store location
+    try {
+      const pos = await new Promise<GeolocationPosition>((resolve, reject) =>
+        navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 8000, enableHighAccuracy: true })
+      );
+      lat = pos.coords.latitude;
+      lng = pos.coords.longitude;
+    } catch { /* use fallback */ }
+    setDriverLat(lat);
+    setDriverLng(lng);
+
+    // Check which orders need geocoding (lat/lng = 0 or missing)
+    const needGeocode = activeDeliveries.filter(d => !d.address?.lat || !d.address?.lng || (d.address.lat === 0 && d.address.lng === 0));
+    if (needGeocode.length > 0) {
+      setGeocoding(true);
+      try {
+        const resp = await fetch('/api/geocode', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ addresses: needGeocode.map(d => ({ id: d.id, street: d.address?.street || '', city: d.address?.city || 'Miami', zip: d.address?.zip || '' })) })
+        });
+        const data = await resp.json();
+        // Update the deliveries in-memory with geocoded coords
+        if (data.results) {
+          needGeocode.forEach(d => {
+            if (data.results[d.id]) {
+              d.address.lat = data.results[d.id].lat;
+              d.address.lng = data.results[d.id].lng;
+            }
+          });
+        }
+      } catch { /* proceed with what we have */ }
+      setGeocoding(false);
+    }
+
+    // Build stops array with valid coords only
+    const stops = activeDeliveries
+      .filter(d => d.address?.lat && d.address?.lng && d.address.lat !== 0)
+      .map(d => ({ id: d.id, lat: d.address.lat, lng: d.address.lng }));
+
+    if (stops.length === 0) { setRouteLoading(false); return; }
+
+    try {
+      const resp = await fetch('/api/route/optimize', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stops, startLat: lat, startLng: lng })
+      });
+      const data = await resp.json();
+      setRouteOrder(data.order || []);
+      setRouteTotalDist(data.totalDistance || 0);
+      setRouteOptimized(true);
+    } catch { /* fail silently */ }
+    setRouteLoading(false);
+  }, [activeDeliveries]);
+
+  // Auto-re-optimize when active deliveries change (order added/removed/completed)
+  const prevActiveCount = useRef(activeDeliveries.length);
+  useEffect(() => {
+    if (routeOptimized && activeDeliveries.length !== prevActiveCount.current) {
+      optimizeRoute();
+    }
+    prevActiveCount.current = activeDeliveries.length;
+  }, [activeDeliveries.length, routeOptimized, optimizeRoute]);
+
+  // Build sorted deliveries list: optimized order for active, then completed at bottom
+  const sortedDeliveries = useMemo(() => {
+    if (!routeOptimized || routeOrder.length === 0) return null; // null = don't override default
+    const active = activeDeliveries.slice();
+    const idxMap = new Map(routeOrder.map((id, i) => [id, i]));
+    active.sort((a, b) => { const ai: number = idxMap.has(a.id) ? (idxMap.get(a.id) as number) : 999; const bi: number = idxMap.has(b.id) ? (idxMap.get(b.id) as number) : 999; return ai - bi; });
+    return active;
+  }, [routeOptimized, routeOrder, activeDeliveries]);
+
+  // Build map stops data
+  const mapStops = useMemo(() => {
+    if (!sortedDeliveries) return [];
+    return sortedDeliveries
+      .filter(d => d.address?.lat && d.address?.lng && d.address.lat !== 0)
+      .map((d, i) => ({
+        id: d.id, lat: d.address.lat, lng: d.address.lng,
+        name: d.giftReceiverName || d.customer?.name || 'Recipient',
+        address: `${d.address?.street || ''}, ${d.address?.city || ''}`,
+        orderNumber: d.orderNumber || d.id,
+        stopNumber: i + 1
+      }));
+  }, [sortedDeliveries]);
+
+  // Navigation deep links
+  const startNavigation = (app: 'waze' | 'google') => {
+    localStorage.setItem('st_nav_pref', app);
+    setNavPref(app);
+    const stopsWithCoords = (sortedDeliveries || []).filter(d => d.address?.lat && d.address.lat !== 0);
+    if (stopsWithCoords.length === 0) return;
+
+    if (app === 'waze') {
+      // Waze supports one destination at a time, so open the first stop
+      const first = stopsWithCoords[0];
+      window.open(`https://waze.com/ul?ll=${first.address.lat},${first.address.lng}&navigate=yes`, '_blank');
+    } else {
+      // Google Maps supports multi-stop via waypoints
+      const dest = stopsWithCoords[stopsWithCoords.length - 1];
+      const waypoints = stopsWithCoords.slice(0, -1).map(d => `${d.address.lat},${d.address.lng}`).join('|');
+      const url = waypoints
+        ? `https://www.google.com/maps/dir/?api=1&destination=${dest.address.lat},${dest.address.lng}&waypoints=${encodeURIComponent(waypoints)}&travelmode=driving`
+        : `https://www.google.com/maps/dir/?api=1&destination=${dest.address.lat},${dest.address.lng}&travelmode=driving`;
+      window.open(url, '_blank');
+    }
+    setShowRouteMap(false);
+  };
 
   const filteredForStatus = useMemo(() => filtered.filter(d => {
     if (schedStatusFilter === 'OPEN') return SCHED_OPEN.includes(d.status);
@@ -1968,38 +2206,143 @@ const ScheduleView: React.FC<{
         </div>
       </div>
 
+      {/* Route Optimize Button */}
+      {activeDeliveries.length >= 2 && (
+        <div className="px-4 py-2 bg-stone-50 border-b border-stone-200">
+          {!routeOptimized ? (
+            <button onClick={optimizeRoute} disabled={routeLoading || geocoding}
+              className="w-full py-3 bg-black text-white rounded-2xl font-black uppercase text-xs flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50">
+              {routeLoading ? (
+                <><RefreshCw size={14} className="animate-spin" /> {geocoding ? 'Finding addresses...' : 'Optimizing...'}</>
+              ) : (
+                <><Route size={14} /> Optimize Route ({activeDeliveries.length} stops)</>
+              )}
+            </button>
+          ) : (
+            <div className="flex gap-2">
+              <button onClick={() => setShowRouteMap(true)}
+                className="flex-1 py-3 bg-black text-white rounded-2xl font-black uppercase text-xs flex items-center justify-center gap-2 active:scale-95">
+                <MapIcon size={14} /> View Map
+              </button>
+              <button onClick={() => startNavigation(navPref)}
+                className={`flex-1 py-3 ${navPref === 'waze' ? 'bg-[#33ccff]' : 'bg-[#4285F4]'} text-white rounded-2xl font-black uppercase text-xs flex items-center justify-center gap-2 active:scale-95`}>
+                <Navigation size={14} /> Start in {navPref === 'waze' ? 'Waze' : 'Maps'}
+              </button>
+              <button onClick={() => { setRouteOptimized(false); setRouteOrder([]); }}
+                className="w-11 h-11 bg-stone-200 rounded-2xl flex items-center justify-center active:scale-95 shrink-0">
+                <X size={16} className="text-stone-600" />
+              </button>
+            </div>
+          )}
+          {routeOptimized && (
+            <div className="flex items-center justify-between mt-1.5">
+              <p className="text-[10px] font-bold text-stone-400">
+                ✓ Optimized: {activeDeliveries.length} stops • ~{routeTotalDist} mi
+              </p>
+              <button onClick={() => setNavPref(p => { const n = p === 'waze' ? 'google' : 'waze'; localStorage.setItem('st_nav_pref', n); return n; })}
+                className="text-[10px] font-black text-blue-600 uppercase">
+                Switch to {navPref === 'waze' ? 'Google Maps' : 'Waze'}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Column header */}
       <div className="grid grid-cols-[1fr_80px] px-4 py-1.5 bg-stone-100 border-b border-stone-200">
-        <p className="text-[9px] font-black uppercase text-stone-500 tracking-widest">Order / Address</p>
+        <p className="text-[9px] font-black uppercase text-stone-500 tracking-widest">
+          {routeOptimized ? 'Optimized Stop Order' : 'Order / Address'}
+        </p>
         <p className="text-[9px] font-black uppercase text-stone-500 tracking-widest text-right">Status</p>
       </div>
 
       <div className="flex-1 overflow-y-auto pb-24">
-        {groupedForStatus.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-24">
-            <Calendar size={36} className="text-stone-200 mb-3" />
-            <p className="text-[11px] font-black uppercase text-stone-300">No deliveries in this range</p>
-          </div>
-        ) : groupedForStatus.map(([date, orders]) => {
-          const parsedDate = new Date(date + 'T12:00:00');
-          const isValidDate = !isNaN(parsedDate.getTime());
-          
-          return (
-            <div key={date}>
-              {/* Bold dark date header — easy to scan */}
-              <div className="px-4 py-2.5 bg-stone-900 flex items-center justify-between sticky top-0 z-[5]">
-                <p className="text-sm font-black text-white">
-                  {isValidDate 
-                    ? parsedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
-                    : date}
-                </p>
-                <span className="text-[10px] font-black text-stone-400 bg-stone-800 px-2 py-0.5 rounded-full">{orders.length}</span>
+        {/* Route-optimized flat list (no date grouping — shows stop numbers) */}
+        {routeOptimized && sortedDeliveries && sortedDeliveries.length > 0 ? (
+          <>
+            {sortedDeliveries.map((order, idx) => (
+              <div key={order.id} className="flex items-stretch border-b border-stone-100 bg-white active:bg-stone-50 cursor-pointer" onClick={() => onSelectOrder(order)}>
+                {/* Stop number badge */}
+                <div className="w-10 flex items-center justify-center shrink-0 bg-stone-50">
+                  <div className="w-7 h-7 bg-black rounded-full flex items-center justify-center">
+                    <span className="text-white font-black text-xs">{idx + 1}</span>
+                  </div>
+                </div>
+                {/* Order info */}
+                <div className="flex-1 px-3 py-2.5 min-w-0">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-black text-stone-900 leading-tight">{order.giftReceiverName || order.customer?.name || '—'}</p>
+                      <p className="text-xs text-stone-400 leading-tight mt-0.5 truncate">{order.address?.street}, {order.address?.city} {order.address?.zip}</p>
+                      {order.items?.[0] && <p className="text-[11px] text-stone-500 truncate mt-0.5">{order.items[0].name}{order.items[0].quantity > 1 ? ` ×${order.items[0].quantity}` : ''}</p>}
+                      {order.deliveryInstructions && (
+                        <div className="flex items-center gap-1 mt-1 bg-amber-100 rounded px-2 py-1">
+                          <AlertTriangle size={10} className="text-amber-700 shrink-0" />
+                          <p className="text-[10px] font-black text-amber-800 leading-tight truncate">{order.deliveryInstructions}</p>
+                        </div>
+                      )}
+                    </div>
+                    <div className="shrink-0 text-right flex flex-col items-end gap-1">
+                      <p className="text-[11px] font-black text-stone-500">#{order.orderNumber?.replace(/^#+/, '') || order.id}</p>
+                      <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${(STATUS_CONFIG[order.status] || STATUS_CONFIG.PENDING).bg} ${(STATUS_CONFIG[order.status] || STATUS_CONFIG.PENDING).text}`}>
+                        {(STATUS_CONFIG[order.status] || STATUS_CONFIG.PENDING).label}
+                      </span>
+                    </div>
+                  </div>
+                </div>
               </div>
-              {orders.map(order => <OrderCard key={order.id} order={order} role={role} onTap={() => onSelectOrder(order)} allUsers={allUsers} onUpdate={onUpdateOrder} />)}
+            ))}
+            {/* Show completed orders below the optimized list */}
+            {filtered.filter(d => ['DELIVERED','CLOSED'].includes(d.status)).length > 0 && (
+              <div>
+                <div className="px-4 py-2 bg-stone-200 border-b border-stone-300">
+                  <p className="text-[10px] font-black uppercase text-stone-500">Completed Today</p>
+                </div>
+                {filtered.filter(d => ['DELIVERED','CLOSED'].includes(d.status)).map(order => (
+                  <OrderCard key={order.id} order={order} role={role} onTap={() => onSelectOrder(order)} allUsers={allUsers} onUpdate={onUpdateOrder} />
+                ))}
+              </div>
+            )}
+          </>
+        ) : (
+          /* Default grouped-by-date view */
+          groupedForStatus.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-24">
+              <Calendar size={36} className="text-stone-200 mb-3" />
+              <p className="text-[11px] font-black uppercase text-stone-300">No deliveries in this range</p>
             </div>
-          );
-        })}
+          ) : groupedForStatus.map(([date, orders]) => {
+            const parsedDate = new Date(date + 'T12:00:00');
+            const isValidDate = !isNaN(parsedDate.getTime());
+            
+            return (
+              <div key={date}>
+                <div className="px-4 py-2.5 bg-stone-900 flex items-center justify-between sticky top-0 z-[5]">
+                  <p className="text-sm font-black text-white">
+                    {isValidDate 
+                      ? parsedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+                      : date}
+                  </p>
+                  <span className="text-[10px] font-black text-stone-400 bg-stone-800 px-2 py-0.5 rounded-full">{orders.length}</span>
+                </div>
+                {orders.map(order => <OrderCard key={order.id} order={order} role={role} onTap={() => onSelectOrder(order)} allUsers={allUsers} onUpdate={onUpdateOrder} />)}
+              </div>
+            );
+          })
+        )}
       </div>
+
+      {/* Route Map Overlay */}
+      {showRouteMap && routeOptimized && (
+        <RouteMapPanel
+          stops={mapStops}
+          driverLat={driverLat}
+          driverLng={driverLng}
+          onClose={() => setShowRouteMap(false)}
+          onStartNav={startNavigation}
+          totalDistance={routeTotalDist}
+        />
+      )}
     </div>
   );
 };
@@ -3499,7 +3842,7 @@ const BulkProjectsView: React.FC<{
               <ContactCallReveal phone="3059944070" label="Katie (Manager)" />
             </div>
           )}
-          <button onClick={() => openNavChoice(`${fresh.street}, ${fresh.city}, ${fresh.state} ${fresh.zip}`)}
+          <button onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${fresh.street}, ${fresh.city}, ${fresh.state} ${fresh.zip}`)}`, '_blank')}
             className="flex items-center justify-center gap-2 w-full py-3 bg-blue-600 text-white rounded-2xl font-black text-sm active:scale-95">
             <Navigation size={16} /> Navigate
           </button>
