@@ -60,6 +60,56 @@ async function dbSet(key: string, value: any): Promise<void> {
 const getKV = dbGet;
 const setKV = dbSet;
 
+// --- POD helpers (PostgreSQL-backed, survives deploys) ---
+// Each order's POD data is stored under key "pod:{orderId}"
+async function readPodData(): Promise<Record<string, any>> {
+  // Try DB first
+  if (pool) {
+    try {
+      const r = await pool.query("SELECT key, value FROM kv_store WHERE key LIKE 'pod:%'");
+      const result: Record<string, any> = {};
+      for (const row of r.rows) {
+        const orderId = row.key.replace('pod:', '');
+        try { result[orderId] = JSON.parse(row.value); } catch {}
+      }
+      return result;
+    } catch(e) { console.error('readPodData DB error, falling back to file:', e); }
+  }
+  // Fallback to file
+  try { return JSON.parse(fs.readFileSync(POD_STORAGE_PATH, 'utf-8')); } catch { return {}; }
+}
+
+async function readPodOrder(orderId: string): Promise<any> {
+  if (pool) {
+    try {
+      const r = await pool.query('SELECT value FROM kv_store WHERE key=$1', [`pod:${orderId}`]);
+      return r.rows[0] ? JSON.parse(r.rows[0].value) : {};
+    } catch { return {}; }
+  }
+  try {
+    const all = JSON.parse(fs.readFileSync(POD_STORAGE_PATH, 'utf-8'));
+    return all[orderId] || {};
+  } catch { return {}; }
+}
+
+async function writePodOrder(orderId: string, data: any): Promise<void> {
+  // Always write to DB
+  if (pool) {
+    try {
+      await pool.query(
+        'INSERT INTO kv_store(key,value) VALUES($1,$2) ON CONFLICT(key) DO UPDATE SET value=$2, updated_at=NOW()',
+        [`pod:${orderId}`, JSON.stringify(data)]
+      );
+    } catch(e) { console.error('writePodOrder DB error:', e); }
+  }
+  // Also write to file as fallback
+  try {
+    const all = JSON.parse(fs.readFileSync(POD_STORAGE_PATH, 'utf-8'));
+    all[orderId] = data;
+    fs.writeFileSync(POD_STORAGE_PATH, JSON.stringify(all, null, 2));
+  } catch {}
+}
+
 // --- Init DB tables ---
 async function initDB() {
   if (!pool) return;
@@ -312,7 +362,7 @@ async function startServer() {
         );
         return hasTag || hasLocalShipping || allOrders.length < 10; // if few orders, show all
       });
-      const podData = JSON.parse(fs.readFileSync(POD_STORAGE_PATH, 'utf-8'));
+      const podData = await readPodData();
 
       // Restore status/completedAt from Shopify tags (survives server restarts)
       const ordersWithTags = (filtered.length > 0 ? filtered : allOrders).map((o: any) => {
@@ -348,52 +398,48 @@ async function startServer() {
     }
   });
 
-  app.patch("/api/orders/:id/assign", (req, res) => {
+  app.patch("/api/orders/:id/assign", async (req, res) => {
     const { driverId, driverName } = req.body;
-    const pod = JSON.parse(fs.readFileSync(POD_STORAGE_PATH, 'utf-8'));
-    if (!pod[req.params.id]) pod[req.params.id] = {};
-    pod[req.params.id].driverId = driverId;
-    pod[req.params.id].driverName = driverName;
-    fs.writeFileSync(POD_STORAGE_PATH, JSON.stringify(pod, null, 2));
+    const existing = await readPodOrder(req.params.id);
+    existing.driverId = driverId;
+    existing.driverName = driverName;
+    await writePodOrder(req.params.id, existing);
     res.json({ success: true });
   });
 
-  app.patch("/api/orders/:id/status", (req, res) => {
+  app.patch("/api/orders/:id/status", async (req, res) => {
     const { status } = req.body;
-    const pod = JSON.parse(fs.readFileSync(POD_STORAGE_PATH, 'utf-8'));
-    if (!pod[req.params.id]) pod[req.params.id] = {};
-    pod[req.params.id].status = status;
-    if (status === 'DELIVERED' && !pod[req.params.id].completedAt) {
-      pod[req.params.id].completedAt = new Date().toISOString();
+    const existing = await readPodOrder(req.params.id);
+    existing.status = status;
+    if (status === 'DELIVERED' && !existing.completedAt) {
+      existing.completedAt = new Date().toISOString();
     }
-    fs.writeFileSync(POD_STORAGE_PATH, JSON.stringify(pod, null, 2));
+    await writePodOrder(req.params.id, existing);
     res.json({ success: true });
   });
 
-  app.post("/api/orders/:id/note", (req, res) => {
+  app.post("/api/orders/:id/note", async (req, res) => {
     const { note } = req.body;
-    const pod = JSON.parse(fs.readFileSync(POD_STORAGE_PATH, 'utf-8'));
-    if (!pod[req.params.id]) pod[req.params.id] = {};
-    const existing = pod[req.params.id].adminNotes || '';
-    pod[req.params.id].adminNotes = existing
-      ? `${existing}\n[${new Date().toLocaleString()}] ${note}`
+    const existing = await readPodOrder(req.params.id);
+    const prev = existing.adminNotes || '';
+    existing.adminNotes = prev
+      ? `${prev}\n[${new Date().toLocaleString()}] ${note}`
       : `[${new Date().toLocaleString()}] ${note}`;
-    fs.writeFileSync(POD_STORAGE_PATH, JSON.stringify(pod, null, 2));
+    await writePodOrder(req.params.id, existing);
     res.json({ success: true });
   });
 
   // Edit contact/address info (admin: all except rate; super_admin: everything)
-  app.patch("/api/orders/:id/edit", (req, res) => {
+  app.patch("/api/orders/:id/edit", async (req, res) => {
     const { customer, address, giftReceiverName, giftSenderName, giftSenderPhone, deliveryFee } = req.body;
-    const pod = JSON.parse(fs.readFileSync(POD_STORAGE_PATH, 'utf-8'));
-    if (!pod[req.params.id]) pod[req.params.id] = {};
-    if (customer) pod[req.params.id].customer = customer;
-    if (address) pod[req.params.id].address = address;
-    if (giftReceiverName !== undefined) pod[req.params.id].giftReceiverName = giftReceiverName;
-    if (giftSenderName !== undefined) pod[req.params.id].giftSenderName = giftSenderName;
-    if (giftSenderPhone !== undefined) pod[req.params.id].giftSenderPhone = giftSenderPhone;
-    if (deliveryFee !== undefined) pod[req.params.id].deliveryFee = deliveryFee;
-    fs.writeFileSync(POD_STORAGE_PATH, JSON.stringify(pod, null, 2));
+    const existing = await readPodOrder(req.params.id);
+    if (customer) existing.customer = customer;
+    if (address) existing.address = address;
+    if (giftReceiverName !== undefined) existing.giftReceiverName = giftReceiverName;
+    if (giftSenderName !== undefined) existing.giftSenderName = giftSenderName;
+    if (giftSenderPhone !== undefined) existing.giftSenderPhone = giftSenderPhone;
+    if (deliveryFee !== undefined) existing.deliveryFee = deliveryFee;
+    await writePodOrder(req.params.id, existing);
     res.json({ success: true });
   });
 
@@ -401,19 +447,15 @@ async function startServer() {
   app.post("/api/orders/:id/revert", async (req, res) => {
     const id = req.params.id;
     try {
-      // Clear POD data for this order from file fallback
-      const pod = JSON.parse(fs.readFileSync(POD_STORAGE_PATH, 'utf-8'));
-      if (!pod[id]) pod[id] = {};
-      delete pod[id].photo;
-      delete pod[id].signature;
-      delete pod[id].completedAt;
-      delete pod[id].submittedAt;
-      delete pod[id].successNotificationSent;
-      pod[id].status = 'ASSIGNED';
-      pod[id].revertedAt = new Date().toISOString();
-      fs.writeFileSync(POD_STORAGE_PATH, JSON.stringify(pod, null, 2));
-      // Also persist to DB kv_store
-      await dbSet(`pod_${id}`, pod[id]);
+      const existing = await readPodOrder(id);
+      delete existing.photo;
+      delete existing.signature;
+      delete existing.completedAt;
+      delete existing.submittedAt;
+      delete existing.successNotificationSent;
+      existing.status = 'ASSIGNED';
+      existing.revertedAt = new Date().toISOString();
+      await writePodOrder(id, existing);
       res.json({ success: true });
     } catch (e) {
       res.status(500).json({ error: String(e) });
@@ -442,9 +484,9 @@ async function startServer() {
   app.post("/api/pod", async (req, res) => {
     const { orderId, photo, signature, notes, completedAt, status, driverId, driverName, failureReason } = req.body;
     try {
-      const pod = JSON.parse(fs.readFileSync(POD_STORAGE_PATH, 'utf-8'));
-      pod[orderId] = { ...pod[orderId], photo, signature, notes, completedAt, submittedAt: new Date().toISOString(), status, driverId, driverName, failureReason };
-      fs.writeFileSync(POD_STORAGE_PATH, JSON.stringify(pod, null, 2));
+      const existingPod = await readPodOrder(orderId);
+      const updated = { ...existingPod, photo, signature, notes, completedAt, submittedAt: new Date().toISOString(), status, driverId, driverName, failureReason };
+      await writePodOrder(orderId, updated);
 
       // Write status + completedAt back to Shopify as order tags so it survives server restarts
       if (SHOPIFY_STORE_URL && SHOPIFY_ACCESS_TOKEN && status === 'DELIVERED') {
@@ -477,7 +519,7 @@ async function startServer() {
   // ── RESCHEDULE ──────────────────────────────────────────────────────────────
 
   // Auto-reschedule: creates a "2nd Attempt" entry for next business day, same driver
-  app.post("/api/reschedule/auto", (req, res) => {
+  app.post("/api/reschedule/auto", async (req, res) => {
     const { order } = req.body;
     const nextDay = nextBusinessDay(new Date());
     const rescheduledOrder = {
@@ -496,13 +538,11 @@ async function startServer() {
       failureNotificationSent: false,
     };
     // Store in POD data so it shows up in the app
-    const pod = JSON.parse(fs.readFileSync(POD_STORAGE_PATH, 'utf-8'));
-    pod[rescheduledOrder.id] = {
+    await writePodOrder(rescheduledOrder.id, {
       rescheduledOrder,
       createdAt: new Date().toISOString(),
       type: 'SECOND_ATTEMPT'
-    };
-    fs.writeFileSync(POD_STORAGE_PATH, JSON.stringify(pod, null, 2));
+    });
     res.json({ success: true, rescheduledOrder, nextDate: nextDay });
   });
 
@@ -606,10 +646,9 @@ async function startServer() {
       sent = await sendEmail(email, subject, message);
     }
     if (sent) {
-      const pod = JSON.parse(fs.readFileSync(POD_STORAGE_PATH, 'utf-8'));
-      if (!pod[order.id]) pod[order.id] = {};
-      pod[order.id][type === 'SUCCESS' ? 'successNotificationSent' : 'failureNotificationSent'] = true;
-      fs.writeFileSync(POD_STORAGE_PATH, JSON.stringify(pod, null, 2));
+      const existingPodNotif = await readPodOrder(order.id);
+      existingPodNotif[type === 'SUCCESS' ? 'successNotificationSent' : 'failureNotificationSent'] = true;
+      await writePodOrder(order.id, existingPodNotif);
       // Log the message
       appendMessageLog({
         id: `msg_${Date.now()}`,
