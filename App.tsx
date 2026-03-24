@@ -734,6 +734,9 @@ const OrderDetail: React.FC<{
   const [showRevertConfirm, setShowRevertConfirm] = useState(false);
   const [showSendConfirm, setShowSendConfirm] = useState(false);
   const [showNavChoice, setShowNavChoice] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [pendingDate, setPendingDate] = useState(order.deliveryDate || '');
+  const [dateSavedToast, setDateSavedToast] = useState(false);
   const [navAddress, setNavAddress] = useState('');
 
   const handleComplete = async () => {
@@ -913,6 +916,44 @@ const OrderDetail: React.FC<{
         </div>
       )}
 
+      {/* ── DATE PICKER MODAL ── */}
+      {showDatePicker && (
+        <div className="fixed inset-0 z-[998] bg-black/50 flex items-end justify-center" onClick={() => setShowDatePicker(false)}>
+          <div className="bg-white w-full max-w-md rounded-t-3xl p-6 pb-8 space-y-4" onClick={e => e.stopPropagation()}>
+            <p className="text-center text-sm font-black uppercase text-stone-500 tracking-widest">Reschedule Delivery</p>
+            <p className="text-center text-xs text-stone-400">Order #{cleanOrderNum} — {order.giftReceiverName || order.customer?.name}</p>
+            <input type="date" value={pendingDate} onChange={e => setPendingDate(e.target.value)}
+              className="w-full border-2 border-stone-300 rounded-xl px-4 py-3 text-lg font-bold text-center focus:border-amber-500 focus:outline-none" />
+            {pendingDate && pendingDate !== order.deliveryDate && (
+              <p className="text-center text-sm font-bold text-amber-700">
+                → {new Date(pendingDate + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+              </p>
+            )}
+            <button onClick={async () => {
+              onUpdate(order.id, { deliveryDate: pendingDate });
+              await fetch(`/api/orders/${order.id}/edit`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ deliveryDate: pendingDate }) });
+              setShowDatePicker(false);
+              setDateSavedToast(true);
+              setTimeout(() => setDateSavedToast(false), 3000);
+            }} disabled={!pendingDate || pendingDate === order.deliveryDate}
+              className={`w-full py-4 rounded-2xl font-black text-base active:scale-95 ${!pendingDate || pendingDate === order.deliveryDate ? 'bg-stone-200 text-stone-400' : 'bg-green-600 text-white'}`}>
+              ✓ Confirm New Date
+            </button>
+            <button onClick={() => setShowDatePicker(false)}
+              className="w-full py-3 text-stone-400 font-bold text-sm active:scale-95">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── DATE SAVED TOAST ── */}
+      {dateSavedToast && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[999] bg-green-600 text-white px-6 py-3 rounded-2xl shadow-lg font-black text-sm flex items-center gap-2 animate-bounce">
+          ✓ Delivery rescheduled successfully
+        </div>
+      )}
+
       {/* ── HEADER ── */}
       <div className="bg-black text-white px-4 py-3 flex items-center gap-3 shrink-0">
         <button onClick={onBack} className="w-9 h-9 flex items-center justify-center bg-white/10 rounded-full active:bg-white/20">
@@ -921,19 +962,12 @@ const OrderDetail: React.FC<{
         <div className="flex-1 min-w-0">
           <p className="text-xl font-black tracking-tight">#{cleanOrderNum}</p>
           {isAdmin ? (
-            <div className="flex items-center gap-1.5">
-              <label className="relative cursor-pointer group">
-                <span className="text-xs text-white font-bold underline decoration-dotted underline-offset-2 group-hover:text-amber-300">
-                  {order.deliveryDate ? new Date(order.deliveryDate + 'T12:00:00').toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric', year:'numeric' }) : 'Today'}
-                </span>
-                <span className="ml-1 text-[9px] text-white/50">✏️</span>
-                <input type="date" value={order.deliveryDate || ''} onChange={async e => {
-                  const newDate = e.target.value;
-                  onUpdate(order.id, { deliveryDate: newDate });
-                  fetch(`/api/orders/${order.id}/edit`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ deliveryDate: newDate }) }).catch(() => {});
-                }} className="absolute inset-0 opacity-0 cursor-pointer w-full h-full" />
-              </label>
-            </div>
+            <button onClick={() => { setPendingDate(order.deliveryDate || ''); setShowDatePicker(true); }} className="flex items-center gap-1.5 active:opacity-70">
+              <span className="text-xs text-amber-300 font-bold">
+                {order.deliveryDate ? new Date(order.deliveryDate + 'T12:00:00').toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric', year:'numeric' }) : 'Today'}
+              </span>
+              <span className="text-[10px] bg-white/20 rounded px-1 py-0.5 text-white/80 font-bold">Change</span>
+            </button>
           ) : (
             <p className="text-xs text-white font-bold">{order.deliveryDate ? new Date(order.deliveryDate + 'T12:00:00').toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric', year:'numeric' }) : 'Today'}</p>
           )}
@@ -1448,6 +1482,9 @@ const OrdersView: React.FC<OrdersViewProps> = ({
   const [search, setSearch] = useState('');
   const [ordersDriverFilter, setOrdersDriverFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState<'OPEN'|'CLOSED'>('OPEN');
+  const [rescheduleOrder, setRescheduleOrder] = useState<Delivery | null>(null);
+  const [rescheduleDate, setRescheduleDate] = useState('');
+  const [rescheduleSaved, setRescheduleSaved] = useState(false);
 
   const shiftDate = (days: number) => {
     const d = new Date(driverDate + 'T12:00:00');
@@ -1504,7 +1541,7 @@ const OrdersView: React.FC<OrdersViewProps> = ({
       );
     });
 
-    return (
+    return (<>
       <div className="flex flex-col h-full">
         {/* Stats */}
         <div className="grid grid-cols-3 border-b border-stone-200">
@@ -1571,15 +1608,9 @@ const OrdersView: React.FC<OrdersViewProps> = ({
                   <div className="cursor-pointer" onClick={() => onSelectOrder(order)}>
                     <p className="text-sm font-black text-black">#{order.orderNumber?.replace(/^#+/, '') || order.id}</p>
                     {isAdmin ? (
-                      <label className="relative cursor-pointer" onClick={e => e.stopPropagation()}>
-                        <span className="text-xs font-bold text-stone-700 mt-0.5 underline decoration-dotted underline-offset-2">{order.deliveryDate ? fmtDate(order.deliveryDate) : '—'}</span>
-                        <span className="ml-0.5 text-[8px]">✏️</span>
-                        <input type="date" value={order.deliveryDate || ''} onChange={async e => {
-                          const newDate = e.target.value;
-                          onUpdateOrder(order.id, { deliveryDate: newDate });
-                          fetch(`/api/orders/${order.id}/edit`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ deliveryDate: newDate }) }).catch(() => {});
-                        }} className="absolute inset-0 opacity-0 cursor-pointer w-full h-full" />
-                      </label>
+                      <button className="text-xs font-bold text-amber-700 mt-0.5 underline decoration-dotted underline-offset-2 active:opacity-60" onClick={e => { e.stopPropagation(); setRescheduleOrder(order); setRescheduleDate(order.deliveryDate || ''); }}>
+                        {order.deliveryDate ? fmtDate(order.deliveryDate) : '—'} <span className="text-[8px] no-underline">✏️</span>
+                      </button>
                     ) : (
                       <p className="text-xs font-bold text-stone-700 mt-0.5">{order.deliveryDate ? fmtDate(order.deliveryDate) : '—'}</p>
                     )}
@@ -1652,15 +1683,9 @@ const OrdersView: React.FC<OrdersViewProps> = ({
                   <div className="cursor-pointer" onClick={() => onSelectOrder(order)}>
                     <p className="text-sm font-black text-black">#{order.orderNumber?.replace(/^#+/, '') || order.id}</p>
                     {isAdmin ? (
-                      <label className="relative cursor-pointer" onClick={e => e.stopPropagation()}>
-                        <span className="text-xs font-bold text-stone-700 mt-0.5 underline decoration-dotted underline-offset-2">{order.deliveryDate ? fmtDate(order.deliveryDate) : '—'}</span>
-                        <span className="ml-0.5 text-[8px]">✏️</span>
-                        <input type="date" value={order.deliveryDate || ''} onChange={async e => {
-                          const newDate = e.target.value;
-                          onUpdateOrder(order.id, { deliveryDate: newDate });
-                          fetch(`/api/orders/${order.id}/edit`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ deliveryDate: newDate }) }).catch(() => {});
-                        }} className="absolute inset-0 opacity-0 cursor-pointer w-full h-full" />
-                      </label>
+                      <button className="text-xs font-bold text-amber-700 mt-0.5 underline decoration-dotted underline-offset-2 active:opacity-60" onClick={e => { e.stopPropagation(); setRescheduleOrder(order); setRescheduleDate(order.deliveryDate || ''); }}>
+                        {order.deliveryDate ? fmtDate(order.deliveryDate) : '—'} <span className="text-[8px] no-underline">✏️</span>
+                      </button>
                     ) : (
                       <p className="text-xs font-bold text-stone-700 mt-0.5">{order.deliveryDate ? fmtDate(order.deliveryDate) : '—'}</p>
                     )}
@@ -1711,7 +1736,43 @@ const OrdersView: React.FC<OrdersViewProps> = ({
           })()}
         </div>
       </div>
-    );
+
+      {/* ── RESCHEDULE MODAL ── */}
+      {rescheduleOrder && (
+        <div className="fixed inset-0 z-[998] bg-black/50 flex items-end justify-center" onClick={() => setRescheduleOrder(null)}>
+          <div className="bg-white w-full max-w-md rounded-t-3xl p-6 pb-8 space-y-4" onClick={e => e.stopPropagation()}>
+            <p className="text-center text-sm font-black uppercase text-stone-500 tracking-widest">Reschedule Delivery</p>
+            <p className="text-center text-xs text-stone-400">Order #{rescheduleOrder.orderNumber?.replace(/^#+/, '') || rescheduleOrder.id} — {rescheduleOrder.giftReceiverName || rescheduleOrder.customer?.name}</p>
+            <input type="date" value={rescheduleDate} onChange={e => setRescheduleDate(e.target.value)}
+              className="w-full border-2 border-stone-300 rounded-xl px-4 py-3 text-lg font-bold text-center focus:border-amber-500 focus:outline-none" />
+            {rescheduleDate && rescheduleDate !== rescheduleOrder.deliveryDate && (
+              <p className="text-center text-sm font-bold text-amber-700">
+                → {new Date(rescheduleDate + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+              </p>
+            )}
+            <button onClick={async () => {
+              onUpdateOrder(rescheduleOrder.id, { deliveryDate: rescheduleDate });
+              await fetch(`/api/orders/${rescheduleOrder.id}/edit`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ deliveryDate: rescheduleDate }) });
+              setRescheduleOrder(null);
+              setRescheduleSaved(true);
+              setTimeout(() => setRescheduleSaved(false), 3000);
+            }} disabled={!rescheduleDate || rescheduleDate === rescheduleOrder.deliveryDate}
+              className={`w-full py-4 rounded-2xl font-black text-base active:scale-95 ${!rescheduleDate || rescheduleDate === rescheduleOrder.deliveryDate ? 'bg-stone-200 text-stone-400' : 'bg-green-600 text-white'}`}>
+              ✓ Confirm New Date
+            </button>
+            <button onClick={() => setRescheduleOrder(null)}
+              className="w-full py-3 text-stone-400 font-bold text-sm active:scale-95">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+      {rescheduleSaved && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[999] bg-green-600 text-white px-6 py-3 rounded-2xl shadow-lg font-black text-sm flex items-center gap-2 animate-bounce">
+          ✓ Delivery rescheduled successfully
+        </div>
+      )}
+    </>);
   }
 
   // ── DRIVER VIEW ──
