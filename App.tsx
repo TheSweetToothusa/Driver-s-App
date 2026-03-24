@@ -1269,8 +1269,8 @@ const OrderDetail: React.FC<{
             {isAdmin && order.status === DeliveryStatus.DELIVERED && !order.successNotificationSent && !showRevertConfirm && (
               !showSendConfirm ? (
                 <button onClick={() => setShowSendConfirm(true)}
-                  className="w-full py-3.5 bg-black text-white rounded-xl font-black uppercase text-sm flex items-center justify-center gap-2 active:scale-95">
-                  <Bell size={16} /> Send Delivery Confirmation
+                  className="w-full py-2.5 bg-stone-100 text-stone-500 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 active:scale-95 border border-stone-200">
+                  <Bell size={13} /> Send Delivery Confirmation to Customer
                 </button>
               ) : (
                 <div className="bg-stone-900 rounded-2xl p-4 space-y-3">

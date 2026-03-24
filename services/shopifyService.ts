@@ -14,7 +14,12 @@ export const getDeliveries = async (): Promise<Delivery[]> => {
       const mapped = orders.map((order: any) => {
         const delivery = mapShopifyOrder(order);
         if (podData[delivery.id]) {
-          return { ...delivery, ...podData[delivery.id] };
+          const pod = podData[delivery.id];
+          // Map POD field names to delivery field names
+          if (pod.photo && !pod.confirmationPhoto) pod.confirmationPhoto = pod.photo;
+          if (pod.signature && !pod.confirmationSignature) pod.confirmationSignature = pod.signature;
+          if (pod.notes && !pod.driverNotes) pod.driverNotes = pod.notes;
+          return { ...delivery, ...pod };
         }
         return delivery;
       });
