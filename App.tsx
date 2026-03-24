@@ -3326,27 +3326,72 @@ const DriverHomeView: React.FC<DriverHomeProps> = ({ currentUser, deliveries, on
             <p className="text-sm font-bold text-stone-400">No upcoming deliveries</p>
             <p className="text-xs text-stone-300 mt-1">Check back soon for new assignments</p>
           </div>
-        ) : (
-          <div className="space-y-2">
-            {upcoming.slice(0, 5).map(d => (
-              <button key={d.id} onClick={() => onSelectOrder(d)}
-                className="w-full bg-white border border-stone-100 rounded-2xl px-4 py-3 flex items-center gap-3 active:scale-[0.98] transition-all text-left">
-                <div className="w-10 h-10 bg-stone-900 rounded-xl flex items-center justify-center shrink-0">
-                  <Package size={16} className="text-white" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-black text-sm text-stone-900 truncate">{d.giftReceiverName || d.customer.name}</p>
-                  <p className="text-[10px] text-stone-400 font-bold truncate">{d.customer.address}</p>
-                </div>
-                <StatusBadge status={d.status} />
-                <ChevronRight size={16} className="text-stone-300 shrink-0" />
-              </button>
-            ))}
-            {upcoming.length > 5 && (
-              <p className="text-center text-[10px] font-bold text-stone-400 uppercase">+{upcoming.length - 5} more — see Orders tab</p>
-            )}
-          </div>
-        )}
+        ) : (() => {
+          // Group upcoming by delivery date
+          const grouped: Record<string, typeof upcoming> = {};
+          upcoming.forEach(d => {
+            const key = (d.deliveryDate || '').split('T')[0] || 'unscheduled';
+            if (!grouped[key]) grouped[key] = [];
+            grouped[key].push(d);
+          });
+          const sortedKeys = Object.keys(grouped).sort((a, b) => {
+            if (a === 'unscheduled') return 1;
+            if (b === 'unscheduled') return -1;
+            return a.localeCompare(b);
+          });
+          return (
+            <div className="space-y-4">
+              {sortedKeys.map(dateKey => {
+                const label = dateKey === 'unscheduled'
+                  ? 'Unscheduled'
+                  : new Date(dateKey + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).toUpperCase();
+                return (
+                  <div key={dateKey}>
+                    {/* Date header */}
+                    <div className="flex items-center gap-2 mb-2 px-1">
+                      <p className="text-[11px] font-black uppercase tracking-widest text-stone-500">{label}</p>
+                      <div className="flex-1 h-px bg-stone-200" />
+                      <span className="text-[10px] font-black text-stone-400">{grouped[dateKey].length}</span>
+                    </div>
+                    {/* Orders for this date */}
+                    <div className="space-y-2">
+                      {grouped[dateKey].map(d => {
+                        const hasInstructions = !!(d.deliveryInstructions || d.adminNotes);
+                        const instructionsText = [d.deliveryInstructions, d.adminNotes].filter(Boolean).join(' · ');
+                        const cleanOrderNum = d.orderNumber?.replace(/^#+/, '') || d.id;
+                        return (
+                          <button key={d.id} onClick={() => onSelectOrder(d)}
+                            className="w-full bg-white border border-stone-100 rounded-2xl px-4 py-3 active:scale-[0.98] transition-all text-left">
+                            <div className="flex items-center gap-3">
+                              <div className="w-9 h-9 bg-stone-900 rounded-xl flex items-center justify-center shrink-0">
+                                <Package size={14} className="text-white" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <p className="font-black text-sm text-stone-900">#{cleanOrderNum}</p>
+                                  <p className="text-sm font-bold text-stone-500 truncate">{d.address?.city || '—'}</p>
+                                </div>
+                                <p className="text-[10px] text-stone-400 font-bold truncate">{d.address?.street || d.customer.address}</p>
+                              </div>
+                              <StatusBadge status={d.status} />
+                              <ChevronRight size={16} className="text-stone-300 shrink-0" />
+                            </div>
+                            {hasInstructions && (
+                              <div className="mt-2 flex items-start gap-1.5 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                                <AlertTriangle size={12} className="text-amber-600 shrink-0 mt-0.5" />
+                                <p className="text-[11px] font-black text-amber-800 leading-snug">{instructionsText}</p>
+                              </div>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
       </div>
 
       {/* Past Deliveries */}
