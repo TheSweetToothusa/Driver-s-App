@@ -127,7 +127,7 @@ const mapShopifyOrder = (order: any): Delivery => {
     status: (order._st_status as DeliveryStatus) ||
       (order.fulfillment_status === 'fulfilled' ? DeliveryStatus.DELIVERED : DeliveryStatus.PENDING),
     completedAt: order._st_completedAt || (order.fulfillment_status === "fulfilled" ? order.updated_at : undefined),
-    deliveryDate: parseDeliveryDate(rawDate),
+    deliveryDate: order._st_deliveryDate || parseDeliveryDate(rawDate),
     priority: order.tags?.toLowerCase().includes('urgent') ? 'Urgent' :
               order.tags?.toLowerCase().includes('sympathy') ? 'Sympathy' : 'Standard',
     driverId: order._st_driverId || '',

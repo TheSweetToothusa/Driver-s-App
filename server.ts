@@ -387,6 +387,8 @@ async function startServer() {
         }
         if (driverTag) o._st_driverId = driverTag.replace('st_driver:', '');
         if (driverNameTag) o._st_driverName = driverNameTag.replace('st_drivername:', '');
+        const deliveryDateTag = tagsList.find((t: string) => t.startsWith('st_deliverydate:'));
+        if (deliveryDateTag) o._st_deliveryDate = deliveryDateTag.replace('st_deliverydate:', '');
         return o;
       });
 
@@ -456,7 +458,7 @@ async function startServer() {
 
   // Edit contact/address info (admin: all except rate; super_admin: everything)
   app.patch("/api/orders/:id/edit", async (req, res) => {
-    const { customer, address, giftReceiverName, giftSenderName, giftSenderPhone, deliveryFee } = req.body;
+    const { customer, address, giftReceiverName, giftSenderName, giftSenderPhone, deliveryFee, deliveryDate } = req.body;
     const existing = await readPodOrder(req.params.id);
     if (customer) existing.customer = customer;
     if (address) existing.address = address;
@@ -464,7 +466,30 @@ async function startServer() {
     if (giftSenderName !== undefined) existing.giftSenderName = giftSenderName;
     if (giftSenderPhone !== undefined) existing.giftSenderPhone = giftSenderPhone;
     if (deliveryFee !== undefined) existing.deliveryFee = deliveryFee;
+    if (deliveryDate !== undefined) existing.deliveryDate = deliveryDate;
     await writePodOrder(req.params.id, existing);
+
+    // Sync delivery date back to Shopify as a tag
+    if (deliveryDate !== undefined && SHOPIFY_STORE_URL && SHOPIFY_ACCESS_TOKEN) {
+      try {
+        const orderId = req.params.id;
+        const existingResp = await fetch(`https://${SHOPIFY_STORE_URL}/admin/api/2025-01/orders/${orderId}.json?fields=tags`, {
+          headers: { 'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN }
+        });
+        const existingData = await existingResp.json();
+        const currentTags = existingData.order?.tags || '';
+        const tagsList = currentTags.split(',').map((t: string) => t.trim()).filter((t: string) => t && !t.startsWith('st_deliverydate:'));
+        if (deliveryDate) tagsList.push(`st_deliverydate:${deliveryDate}`);
+        await fetch(`https://${SHOPIFY_STORE_URL}/admin/api/2025-01/orders/${orderId}.json`, {
+          method: 'PUT',
+          headers: { 'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ order: { id: orderId, tags: tagsList.join(', ') } })
+        });
+      } catch (tagErr) {
+        console.error('Failed to sync delivery date to Shopify (non-fatal):', tagErr);
+      }
+    }
+
     res.json({ success: true });
   });
 

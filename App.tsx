@@ -920,7 +920,23 @@ const OrderDetail: React.FC<{
         </button>
         <div className="flex-1 min-w-0">
           <p className="text-xl font-black tracking-tight">#{cleanOrderNum}</p>
-          <p className="text-xs text-white font-bold">{order.deliveryDate ? new Date(order.deliveryDate + 'T12:00:00').toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric', year:'numeric' }) : 'Today'}</p>
+          {isAdmin ? (
+            <div className="flex items-center gap-1.5">
+              <label className="relative cursor-pointer group">
+                <span className="text-xs text-white font-bold underline decoration-dotted underline-offset-2 group-hover:text-amber-300">
+                  {order.deliveryDate ? new Date(order.deliveryDate + 'T12:00:00').toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric', year:'numeric' }) : 'Today'}
+                </span>
+                <span className="ml-1 text-[9px] text-white/50">✏️</span>
+                <input type="date" value={order.deliveryDate || ''} onChange={async e => {
+                  const newDate = e.target.value;
+                  onUpdate(order.id, { deliveryDate: newDate });
+                  fetch(`/api/orders/${order.id}/edit`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ deliveryDate: newDate }) }).catch(() => {});
+                }} className="absolute inset-0 opacity-0 cursor-pointer w-full h-full" />
+              </label>
+            </div>
+          ) : (
+            <p className="text-xs text-white font-bold">{order.deliveryDate ? new Date(order.deliveryDate + 'T12:00:00').toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric', year:'numeric' }) : 'Today'}</p>
+          )}
         </div>
         {!isAdmin && (
           <span className={`text-xs font-black px-3 py-1.5 rounded-full border ${order.status === DeliveryStatus.DELIVERED ? 'bg-green-500 border-green-400 text-white' : 'bg-white/10 border-white/20 text-white'}`}>
@@ -1554,7 +1570,19 @@ const OrdersView: React.FC<OrdersViewProps> = ({
                   className={`grid grid-cols-[90px_1fr_90px_130px] px-3 py-3 border-b border-stone-100 transition-all ${idx % 2 === 0 ? 'bg-white' : 'bg-stone-50/40'}`}>
                   <div className="cursor-pointer" onClick={() => onSelectOrder(order)}>
                     <p className="text-sm font-black text-black">#{order.orderNumber?.replace(/^#+/, '') || order.id}</p>
-                    <p className="text-xs font-bold text-stone-700 mt-0.5">{order.deliveryDate ? fmtDate(order.deliveryDate) : '—'}</p>
+                    {isAdmin ? (
+                      <label className="relative cursor-pointer" onClick={e => e.stopPropagation()}>
+                        <span className="text-xs font-bold text-stone-700 mt-0.5 underline decoration-dotted underline-offset-2">{order.deliveryDate ? fmtDate(order.deliveryDate) : '—'}</span>
+                        <span className="ml-0.5 text-[8px]">✏️</span>
+                        <input type="date" value={order.deliveryDate || ''} onChange={async e => {
+                          const newDate = e.target.value;
+                          onUpdateOrder(order.id, { deliveryDate: newDate });
+                          fetch(`/api/orders/${order.id}/edit`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ deliveryDate: newDate }) }).catch(() => {});
+                        }} className="absolute inset-0 opacity-0 cursor-pointer w-full h-full" />
+                      </label>
+                    ) : (
+                      <p className="text-xs font-bold text-stone-700 mt-0.5">{order.deliveryDate ? fmtDate(order.deliveryDate) : '—'}</p>
+                    )}
                   </div>
                   <div className="pr-2 min-w-0 cursor-pointer" onClick={() => onSelectOrder(order)}>
                     <p className="text-sm font-bold text-stone-900 truncate">{order.giftReceiverName || order.customer?.name}</p>
@@ -1623,7 +1651,19 @@ const OrdersView: React.FC<OrdersViewProps> = ({
                   className={`grid grid-cols-[90px_1fr_90px_130px] px-3 py-3 border-b border-stone-100 transition-all ${idx % 2 === 0 ? 'bg-white' : 'bg-stone-50/40'}`}>
                   <div className="cursor-pointer" onClick={() => onSelectOrder(order)}>
                     <p className="text-sm font-black text-black">#{order.orderNumber?.replace(/^#+/, '') || order.id}</p>
-                    <p className="text-xs font-bold text-stone-700 mt-0.5">{order.deliveryDate ? fmtDate(order.deliveryDate) : '—'}</p>
+                    {isAdmin ? (
+                      <label className="relative cursor-pointer" onClick={e => e.stopPropagation()}>
+                        <span className="text-xs font-bold text-stone-700 mt-0.5 underline decoration-dotted underline-offset-2">{order.deliveryDate ? fmtDate(order.deliveryDate) : '—'}</span>
+                        <span className="ml-0.5 text-[8px]">✏️</span>
+                        <input type="date" value={order.deliveryDate || ''} onChange={async e => {
+                          const newDate = e.target.value;
+                          onUpdateOrder(order.id, { deliveryDate: newDate });
+                          fetch(`/api/orders/${order.id}/edit`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ deliveryDate: newDate }) }).catch(() => {});
+                        }} className="absolute inset-0 opacity-0 cursor-pointer w-full h-full" />
+                      </label>
+                    ) : (
+                      <p className="text-xs font-bold text-stone-700 mt-0.5">{order.deliveryDate ? fmtDate(order.deliveryDate) : '—'}</p>
+                    )}
                   </div>
                   <div className="pr-2 min-w-0 cursor-pointer" onClick={() => onSelectOrder(order)}>
                     <p className="text-sm font-bold text-stone-900 truncate">{order.giftReceiverName || order.customer?.name}</p>
