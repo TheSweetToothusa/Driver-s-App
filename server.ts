@@ -391,6 +391,31 @@ async function startServer() {
       });
 
       console.log(`Shopify: ${allOrders.length} total, ${(filtered.length > 0 ? filtered : allOrders).length} local delivery`);
+
+      // Fetch fulfillment orders in parallel to get delivery instructions
+      const finalOrders = filtered.length > 0 ? filtered : allOrders;
+      const ordersToProcess = ordersWithTags.length > 0 ? ordersWithTags : finalOrders;
+      try {
+        const foResults = await Promise.allSettled(
+          ordersToProcess.map((o: any) =>
+            fetch(`https://${SHOPIFY_STORE_URL}/admin/api/2025-01/orders/${o.id}/fulfillment_orders.json`, {
+              headers: { 'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN, 'Content-Type': 'application/json' }
+            }).then(r => r.json())
+          )
+        );
+        foResults.forEach((result, i) => {
+          if (result.status === 'fulfilled' && result.value.fulfillment_orders) {
+            const fo = result.value.fulfillment_orders[0];
+            const instructions = fo?.delivery_method?.additional_information?.instructions;
+            if (instructions) {
+              ordersToProcess[i]._delivery_instructions = instructions;
+            }
+          }
+        });
+      } catch (e) {
+        console.error('Fulfillment orders fetch error (non-fatal):', e);
+      }
+
       res.json({ orders: ordersWithTags, podData });
     } catch (e) {
       console.error('Orders fetch error:', e);
