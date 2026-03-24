@@ -991,6 +991,25 @@ async function startServer() {
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
+  // ── DEBUG: raw order attributes ──────────────────────────────────────────────
+  app.get('/api/debug/order-attrs/:orderNum', async (req, res) => {
+    try {
+      const num = req.params.orderNum;
+      const url = `https://${SHOPIFY_STORE_URL}/admin/api/2024-01/orders.json?name=${encodeURIComponent(num)}&status=any&limit=5`;
+      const resp = await fetch(url, { headers: { 'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN, 'Content-Type': 'application/json' } });
+      const data = await resp.json();
+      const order = data.orders?.[0];
+      if (!order) return res.json({ error: 'Order not found' });
+      res.json({
+        name: order.name,
+        note: order.note,
+        note_attributes: order.note_attributes,
+        shipping_lines: order.shipping_lines?.map((sl: any) => ({ title: sl.title, code: sl.code, ...sl })),
+        tags: order.tags,
+      });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
   // ── STATIC / VITE ───────────────────────────────────────────────────────────
 
   if (process.env.NODE_ENV !== "production") {
@@ -1005,5 +1024,22 @@ async function startServer() {
 }
 
 startServer();
-
-// DEBUG endpoint — shows raw note_attributes for first 3 orders
+// TEMP DEBUG: raw note_attributes for a specific order
+app.get("/api/debug-order/:orderNumber", async (req, res) => {
+  try {
+    const num = req.params.orderNumber;
+    const url = `https://${SHOPIFY_STORE_URL}/admin/api/2024-01/orders.json?name=${num}&status=any&limit=1`;
+    const resp = await fetch(url, { headers: { 'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN, 'Content-Type': 'application/json' } });
+    const data = await resp.json();
+    const order = data.orders?.[0];
+    if (!order) return res.json({ error: 'not found' });
+    res.json({
+      id: order.id,
+      name: order.name,
+      note: order.note,
+      note_attributes: order.note_attributes,
+      shipping_lines: order.shipping_lines,
+      tags: order.tags,
+    });
+  } catch(e) { res.status(500).json({ error: String(e) }); }
+});
