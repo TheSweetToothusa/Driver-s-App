@@ -344,7 +344,7 @@ async function startServer() {
   app.get("/api/orders", async (_req, res) => {
     try {
       // Fetch ALL open orders with local delivery shipping method
-      const url = `https://${SHOPIFY_STORE_URL}/admin/api/2024-01/orders.json?status=any&limit=250`;
+      const url = `https://${SHOPIFY_STORE_URL}/admin/api/2025-01/orders.json?status=any&limit=250`;
       const resp = await fetch(url, { headers: { 'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN, 'Content-Type': 'application/json' } });
       if (!resp.ok) {
         const errText = await resp.text();
@@ -465,7 +465,7 @@ async function startServer() {
   // ── DEBUG: see raw order statuses ──────────────────────────────────────────
   app.get('/api/debug/orders', async (req, res) => {
     try {
-      const url = `https://${SHOPIFY_STORE_URL}/admin/api/2024-01/orders.json?status=any&limit=50`;
+      const url = `https://${SHOPIFY_STORE_URL}/admin/api/2025-01/orders.json?status=any&limit=50`;
       const resp = await fetch(url, { headers: { 'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN } });
       const data = await resp.json();
       const summary = (data.orders || []).map((o: any) => ({
@@ -492,7 +492,7 @@ async function startServer() {
       if (SHOPIFY_STORE_URL && SHOPIFY_ACCESS_TOKEN && status === 'DELIVERED') {
         try {
           // Get existing tags first
-          const existing = await fetch(`https://${SHOPIFY_STORE_URL}/admin/api/2024-01/orders/${orderId}.json?fields=tags`, {
+          const existing = await fetch(`https://${SHOPIFY_STORE_URL}/admin/api/2025-01/orders/${orderId}.json?fields=tags`, {
             headers: { 'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN }
           });
           const existingData = await existing.json();
@@ -502,7 +502,7 @@ async function startServer() {
           tagsList.push(`st_completed:${(completedAt || new Date().toISOString()).replace(/:/g,'-')}`);
           if (driverId) tagsList.push(`st_driver:${driverId}`);
           if (driverName) tagsList.push(`st_drivername:${driverName.replace(/,/g, '')}`);
-          await fetch(`https://${SHOPIFY_STORE_URL}/admin/api/2024-01/orders/${orderId}.json`, {
+          await fetch(`https://${SHOPIFY_STORE_URL}/admin/api/2025-01/orders/${orderId}.json`, {
             method: 'PUT',
             headers: { 'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN, 'Content-Type': 'application/json' },
             body: JSON.stringify({ order: { id: orderId, tags: tagsList.join(', ') } })
@@ -995,16 +995,27 @@ async function startServer() {
   app.get('/api/debug/order-attrs/:orderNum', async (req, res) => {
     try {
       const num = req.params.orderNum;
-      const url = `https://${SHOPIFY_STORE_URL}/admin/api/2024-01/orders.json?name=${encodeURIComponent(num)}&status=any&limit=5`;
+      const url = `https://${SHOPIFY_STORE_URL}/admin/api/2025-01/orders.json?name=${encodeURIComponent(num)}&status=any&limit=5`;
       const resp = await fetch(url, { headers: { 'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN, 'Content-Type': 'application/json' } });
       const data = await resp.json();
       const order = data.orders?.[0];
       if (!order) return res.json({ error: 'Order not found' });
+
+      // Also fetch fulfillment orders which contain delivery_method.additional_information
+      let fulfillmentOrders = null;
+      try {
+        const foUrl = `https://${SHOPIFY_STORE_URL}/admin/api/2025-01/orders/${order.id}/fulfillment_orders.json`;
+        const foResp = await fetch(foUrl, { headers: { 'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN, 'Content-Type': 'application/json' } });
+        const foData = await foResp.json();
+        fulfillmentOrders = foData.fulfillment_orders;
+      } catch (e) { fulfillmentOrders = { error: String(e) }; }
+
       res.json({
         name: order.name,
         note: order.note,
         note_attributes: order.note_attributes,
-        shipping_lines: order.shipping_lines?.map((sl: any) => ({ title: sl.title, code: sl.code, ...sl })),
+        shipping_lines: order.shipping_lines,
+        fulfillment_orders: fulfillmentOrders,
         tags: order.tags,
       });
     } catch (e) { res.status(500).json({ error: String(e) }); }
