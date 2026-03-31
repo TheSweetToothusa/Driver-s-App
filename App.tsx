@@ -23,7 +23,7 @@ const BRAND_LOGO = "https://cdn.shopify.com/s/files/1/0559/8498/0141/files/The_S
 const isWithinSendingHours = () => { const h = new Date().getHours(); return h >= 9 && h < 20; };
 const STATUSES_FOR_DROPDOWN = [
   { value: 'SCHEDULED',          label: 'Scheduled',          color: '#7c3aed' },
-  { value: 'ASSIGNED',           label: 'Driver Assigned',    color: '#2563eb' },
+  { value: 'ASSIGNED',           label: 'Assigned',           color: '#2563eb' },
   { value: 'IN_TRANSIT',         label: 'Out for Delivery',   color: '#000000' },
   { value: 'DELIVERED',          label: 'Delivered',          color: '#16a34a' },
   { value: 'FAILED',             label: '1st Attempt Failed', color: '#dc2626' },
@@ -38,7 +38,7 @@ const formatDate = (iso: string) => new Date(iso).toLocaleDateString('en-US', { 
 const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string }> = {
   PENDING:             { label: 'Not Assigned',       bg: 'bg-stone-800',   text: 'text-white' },
   SCHEDULED:           { label: 'Scheduled',          bg: 'bg-violet-600',  text: 'text-white' },
-  ASSIGNED:            { label: 'Driver Assigned',    bg: 'bg-blue-600',    text: 'text-white' },
+  ASSIGNED:            { label: 'Assigned',           bg: 'bg-blue-600',    text: 'text-white' },
   IN_TRANSIT:          { label: 'Out for Delivery',   bg: 'bg-black',       text: 'text-white' },
   DELIVERED:           { label: 'Delivered ✓',        bg: 'bg-green-600',   text: 'text-white' },
   FAILED:              { label: '1st Attempt Failed', bg: 'bg-red-600',     text: 'text-white' },
@@ -447,26 +447,9 @@ const OrderCard: React.FC<{ order: Delivery; role: AppRole; onTap: () => void; i
             {product && <p className="text-sm font-black text-stone-900">${(product.price * product.quantity).toFixed(2)}</p>}
           </div>
         </div>
-        {/* Driver row — admin only */}
+        {/* Driver row — admin only, just the name, no inline reassign */}
         {isAdmin && (
-          <div className="mt-1.5">
-            <p className="text-[10px] text-stone-400">{order.driverName ? `Driver: ${order.driverName}` : 'No driver assigned'}</p>
-            {isAdmin && allUsers && onUpdate && (
-              <div className="flex gap-1.5 mt-1" onClick={e => e.stopPropagation()}>
-                <select value={reassignTo} onChange={e => setReassignTo(e.target.value)}
-                  className="flex-1 bg-stone-50 border border-stone-200 rounded-lg px-2 py-1 text-[10px] font-bold outline-none">
-                  <option value="">Reassign driver...</option>
-                  {allUsers.filter(u => (u.role === 'DRIVER' || u.role === 'MANAGER') && u.isActive).map(u => (
-                    <option key={u.id} value={u.id}>{u.name}</option>
-                  ))}
-                </select>
-                <button onClick={handleReassign} disabled={!reassignTo}
-                  className="px-3 py-1 bg-black text-white rounded-lg font-black text-[10px] uppercase disabled:opacity-30 shrink-0">
-                  Set
-                </button>
-              </div>
-            )}
-          </div>
+          <p className="text-[10px] text-stone-400 mt-1">{order.driverName ? `👤 ${order.driverName}` : 'No driver assigned'}</p>
         )}
       </div>
     </div>
@@ -2254,7 +2237,8 @@ const ScheduleView: React.FC<{
   };
   const fmt = fmtSelectedDate(selectedDate);
 
-  const [schedStatusFilter, setSchedStatusFilter] = useState<'ALL'|'OPEN'|'SCHEDULED'|'FAILED'|'2ND'|'CLOSED'>('ALL');
+  const [schedStatusFilter, setSchedStatusFilter] = useState<'ALL'|'OPEN'|'SCHEDULED'|'FAILED'|'2ND'|'CLOSED'>('OPEN');
+  const [schedSearch, setSchedSearch] = useState('');
   const [routeOptimized, setRouteOptimized] = useState(false);
   const [routeOrder, setRouteOrder] = useState<string[]>([]);
   const [routeTotalDist, setRouteTotalDist] = useState(0);
@@ -2393,13 +2377,24 @@ const ScheduleView: React.FC<{
   };
 
   const filteredForStatus = useMemo(() => filtered.filter(d => {
-    if (schedStatusFilter === 'OPEN') return SCHED_OPEN.includes(d.status);
-    if (schedStatusFilter === 'SCHEDULED') return SCHED_SCHEDULED.includes(d.status);
-    if (schedStatusFilter === 'FAILED') return SCHED_FAILED.includes(d.status);
-    if (schedStatusFilter === '2ND') return SCHED_2ND.includes(d.status);
-    if (schedStatusFilter === 'CLOSED') return SCHED_CLOSED.includes(d.status);
-    return true;
-  }), [filtered, schedStatusFilter]);
+    if (schedStatusFilter === 'OPEN') { if (!SCHED_OPEN.includes(d.status)) return false; }
+    else if (schedStatusFilter === 'SCHEDULED') { if (!SCHED_SCHEDULED.includes(d.status)) return false; }
+    else if (schedStatusFilter === 'FAILED') { if (!SCHED_FAILED.includes(d.status)) return false; }
+    else if (schedStatusFilter === '2ND') { if (!SCHED_2ND.includes(d.status)) return false; }
+    else if (schedStatusFilter === 'CLOSED') { if (!SCHED_CLOSED.includes(d.status)) return false; }
+    if (!schedSearch.trim()) return true;
+    const q = schedSearch.toLowerCase();
+    return (
+      (d.giftReceiverName || '').toLowerCase().includes(q) ||
+      (d.customer?.name || '').toLowerCase().includes(q) ||
+      (d.orderNumber || '').toLowerCase().includes(q) ||
+      (d.address?.street || '').toLowerCase().includes(q) ||
+      (d.address?.city || '').toLowerCase().includes(q) ||
+      (d.address?.zip || '').toLowerCase().includes(q) ||
+      (d.items?.[0]?.name || '').toLowerCase().includes(q) ||
+      (d.driverName || '').toLowerCase().includes(q)
+    );
+  }), [filtered, schedStatusFilter, schedSearch]);
 
   const groupedForStatus = useMemo(() => {
     const map: Record<string, Delivery[]> = {};
@@ -2430,80 +2425,64 @@ const ScheduleView: React.FC<{
 
   return (
     <div className="flex flex-col h-full bg-white">
-      <div className="sticky top-0 bg-white z-10 border-b border-stone-200 px-4 pt-3 pb-3 space-y-3">
-        {/* View mode tabs */}
-        <div className="flex gap-1.5">
-          {(['DAY', 'WEEK', 'MONTH', 'CUSTOM'] as ViewMode[]).map(m => (
+      <div className="sticky top-0 bg-white z-10 border-b border-stone-200 px-4 pt-3 pb-3 space-y-2">
+        {/* Search bar — always visible at top */}
+        <div className="relative">
+          <input
+            value={schedSearch}
+            onChange={e => setSchedSearch(e.target.value)}
+            placeholder="Search name, order #, address, city, ZIP..."
+            className="w-full bg-stone-50 border-2 border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black pr-9"
+          />
+          {schedSearch ? (
+            <button onClick={() => setSchedSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400">
+              <X size={16} />
+            </button>
+          ) : (
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-300">🔍</span>
+          )}
+        </div>
+        {/* Date nav + view mode row */}
+        <div className="flex items-center gap-2">
+          <button onClick={() => shiftDay(-1)} className="w-10 h-10 bg-stone-100 rounded-xl flex items-center justify-center active:bg-stone-200 shrink-0">
+            <ChevronLeft size={20} className="text-stone-700" />
+          </button>
+          <div className="flex-1 text-center">
+            {fmt.label && <p className="text-[9px] font-black uppercase text-black tracking-widest">{fmt.label}</p>}
+            <p className="text-sm font-black text-stone-900">{fmt.day}, {fmt.date}</p>
+          </div>
+          <button onClick={() => shiftDay(1)} className="w-10 h-10 bg-stone-100 rounded-xl flex items-center justify-center active:bg-stone-200 shrink-0">
+            <ChevronRight size={20} className="text-stone-700" />
+          </button>
+        </div>
+        {/* Driver filter + view mode in one row */}
+        <div className="flex gap-1.5 items-center">
+          {(['DAY','WEEK','MONTH'] as ViewMode[]).map(m => (
             <button key={m} onClick={() => setViewMode(m)}
-              className={`flex-1 py-2 rounded-lg font-black uppercase text-[10px] transition-all ${viewMode === m ? 'bg-black text-white' : 'bg-stone-100 text-stone-500'}`}
+              className={`px-3 py-1.5 rounded-lg font-black uppercase text-[9px] transition-all ${viewMode === m ? 'bg-black text-white' : 'bg-stone-100 text-stone-500'}`}
             >{m}</button>
           ))}
+          {isAdmin && uniqueDrivers.length > 0 && (
+            <select value={filterDriver} onChange={e => setFilterDriver(e.target.value)}
+              className="flex-1 bg-stone-50 border border-stone-200 rounded-lg px-2 py-1.5 text-xs font-bold outline-none">
+              <option value="ALL">All Drivers</option>
+              {uniqueDrivers.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+            </select>
+          )}
         </div>
-        {/* Date navigation */}
-        {viewMode === 'DAY' ? (
-          <div className="flex items-center gap-2">
-            <button onClick={() => shiftDay(-1)} className="w-10 h-10 bg-stone-100 rounded-xl flex items-center justify-center active:bg-stone-200 shrink-0">
-              <ChevronLeft size={20} className="text-stone-700" />
-            </button>
-            <div className="flex-1 text-center">
-              {fmt.label && <p className="text-[10px] font-black uppercase text-black tracking-widest">{fmt.label}</p>}
-              <p className="text-base font-black text-stone-900">{fmt.day}, {fmt.date}</p>
-            </div>
-            <button onClick={() => shiftDay(1)} className="w-10 h-10 bg-stone-100 rounded-xl flex items-center justify-center active:bg-stone-200 shrink-0">
-              <ChevronRight size={20} className="text-stone-700" />
-            </button>
-          </div>
-        ) : viewMode === 'CUSTOM' ? (
-          <div className="flex items-center gap-2">
-            <input type="date" value={customStart} onChange={e => setCustomStart(e.target.value)}
-              className="flex-1 bg-stone-50 border border-stone-200 rounded-xl px-3 py-2.5 text-sm font-bold outline-none" />
-            <span className="text-stone-400 font-black">–</span>
-            <input type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)}
-              className="flex-1 bg-stone-50 border border-stone-200 rounded-xl px-3 py-2.5 text-sm font-bold outline-none" />
-          </div>
-        ) : (
-          <div className="flex items-center gap-2">
-            <button onClick={() => shiftDay(viewMode==='WEEK'?-7:-30)} className="w-10 h-10 bg-stone-100 rounded-xl flex items-center justify-center active:bg-stone-200 shrink-0">
-              <ChevronLeft size={20} className="text-stone-700" />
-            </button>
-            <p className="flex-1 text-center text-base font-black text-stone-900">{fmt.day}, {fmt.date}</p>
-            <button onClick={() => shiftDay(viewMode==='WEEK'?7:30)} className="w-10 h-10 bg-stone-100 rounded-xl flex items-center justify-center active:bg-stone-200 shrink-0">
-              <ChevronRight size={20} className="text-stone-700" />
-            </button>
-          </div>
-        )}
-        {/* Driver filter (admin only) */}
-        {isAdmin && uniqueDrivers.length > 0 && (
-          <select value={filterDriver} onChange={e => setFilterDriver(e.target.value)}
-            className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-2.5 text-sm font-bold outline-none">
-            <option value="ALL">All Drivers</option>
-            {uniqueDrivers.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-          </select>
-        )}
-        {/* Status filter — row 1: All / Open / Scheduled / Closed */}
+        {/* Status filter — 4 clear buttons */}
         <div className="flex gap-1.5">
-          {(['ALL','OPEN','SCHEDULED','CLOSED'] as const).map(f => (
-            <button key={f} onClick={() => setSchedStatusFilter(f)}
-              className={`flex-1 py-1.5 rounded-lg font-black text-[9px] uppercase transition-all ${schedStatusFilter === f
-                ? (f==='OPEN' ? 'bg-blue-600 text-white' : f==='SCHEDULED' ? 'bg-violet-600 text-white' : f==='CLOSED' ? 'bg-stone-500 text-white' : 'bg-stone-800 text-white')
-                : 'bg-stone-100 text-stone-500'}`}>
-              {f === 'ALL' ? `All (${filtered.length})`
-                : f === 'OPEN' ? `Open (${filtered.filter(d => SCHED_OPEN.includes(d.status)).length})`
-                : f === 'SCHEDULED' ? `Sched (${filtered.filter(d => SCHED_SCHEDULED.includes(d.status)).length})`
-                : `Closed (${filtered.filter(d => SCHED_CLOSED.includes(d.status)).length})`}
+          {([
+            { key: 'OPEN', label: `Active (${filtered.filter(d => SCHED_OPEN.includes(d.status)).length})`, on: 'bg-black text-white' },
+            { key: 'FAILED', label: `Failed (${filtered.filter(d => d.status === 'FAILED').length})`, on: 'bg-red-600 text-white' },
+            { key: 'CLOSED', label: `Done (${filtered.filter(d => SCHED_CLOSED.includes(d.status)).length})`, on: 'bg-green-600 text-white' },
+            { key: 'ALL', label: `All (${filtered.length})`, on: 'bg-stone-600 text-white' },
+          ] as const).map(f => (
+            <button key={f.key} onClick={() => setSchedStatusFilter(f.key as any)}
+              className={`flex-1 py-2 rounded-lg font-black text-[9px] uppercase transition-all ${schedStatusFilter === f.key ? f.on : 'bg-stone-100 text-stone-500'}`}>
+              {f.label}
             </button>
           ))}
-        </div>
-        {/* Status filter — row 2: Failed + 2nd Attempt pills */}
-        <div className="flex gap-1.5">
-          <button onClick={() => setSchedStatusFilter('FAILED')}
-            className={`flex-1 py-1.5 rounded-lg font-black text-[9px] uppercase transition-all ${schedStatusFilter === 'FAILED' ? 'bg-red-600 text-white' : 'bg-stone-100 text-stone-500'}`}>
-            1st Failed ({filtered.filter(d => d.status === 'FAILED').length})
-          </button>
-          <button onClick={() => setSchedStatusFilter('2ND')}
-            className={`flex-1 py-1.5 rounded-lg font-black text-[9px] uppercase transition-all ${schedStatusFilter === '2ND' ? 'bg-stone-700 text-white' : 'bg-stone-100 text-stone-500'}`}>
-            2nd Attempt ({filtered.filter(d => d.status === 'SECOND_ATTEMPT').length})
-          </button>
         </div>
       </div>
 
