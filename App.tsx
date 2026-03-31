@@ -1550,7 +1550,13 @@ const OrdersView: React.FC<OrdersViewProps> = ({
 
   // ── ADMIN VIEW ──
   if (isAdmin) {
-    const sorted = [...deliveries].sort((a, b) => b.id.localeCompare(a.id)); // newest first
+    // Sort by delivery date ASC, then order number ASC — so groups are clean
+    const sorted = [...deliveries].sort((a, b) => {
+      const da = (a.deliveryDate || '9999').split('T')[0];
+      const db = (b.deliveryDate || '9999').split('T')[0];
+      if (da !== db) return da.localeCompare(db);
+      return (a.orderNumber || '').localeCompare(b.orderNumber || '');
+    });
     const unassignedCount = deliveries.filter(d => !d.driverId || d.status === DeliveryStatus.PENDING).length;
 
     const adminToday = new Date().toISOString().split('T')[0];
@@ -3494,191 +3500,137 @@ interface DriverHomeProps {
 }
 
 const DriverHomeView: React.FC<DriverHomeProps> = ({ currentUser, deliveries, onSelectOrder }) => {
-  const [zipQuery, setZipQuery] = useState('');
-  const [zipRate, setZipRate] = useState<number | null | undefined>(undefined);
-
   const todayStr = new Date().toISOString().split('T')[0];
+  const tomorrowStr = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+  const [selectedDate, setSelectedDate] = useState(todayStr);
+  const isAdmin = currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'MANAGER';
   const isDriver = currentUser.role === 'DRIVER';
+  const firstName = currentUser.name.split(' ')[0];
+  const greetingHour = new Date().getHours();
+  const greeting = greetingHour < 12 ? 'Good morning' : greetingHour < 17 ? 'Good afternoon' : 'Good evening';
 
-  // Filter to this driver's deliveries (or all if admin)
+  const shiftDate = (n: number) => {
+    const d = new Date(selectedDate + 'T12:00:00');
+    d.setDate(d.getDate() + n);
+    setSelectedDate(d.toISOString().split('T')[0]);
+  };
+
   const myDeliveries = isDriver
-    ? deliveries.filter(d => d.assignedDriver === currentUser.id)
+    ? deliveries.filter(d => d.driverId === currentUser.id)
     : deliveries;
 
-  const upcoming = myDeliveries.filter(d =>
-    d.status !== DeliveryStatus.DELIVERED &&
-    d.status !== DeliveryStatus.CLOSED &&
-    d.status !== DeliveryStatus.FAILED
-  );
+  // Stats (all time / today)
   const todayDelivered = myDeliveries.filter(d =>
     d.status === DeliveryStatus.DELIVERED && (d.completedAt || '').startsWith(todayStr)
   );
-  const pastCompleted = myDeliveries.filter(d =>
-    d.status === DeliveryStatus.DELIVERED
-  ).sort((a, b) => (b.completedAt || '').localeCompare(a.completedAt || '')).slice(0, 10);
+  const allOpen = myDeliveries.filter(d =>
+    ![DeliveryStatus.DELIVERED, DeliveryStatus.CLOSED].includes(d.status)
+  );
 
-  const greetingHour = new Date().getHours();
-  const greeting = greetingHour < 12 ? 'Good morning' : greetingHour < 17 ? 'Good afternoon' : 'Good evening';
-  const firstName = currentUser.name.split(' ')[0];
+  // Deliveries for the selected date
+  const dateDeliveries = myDeliveries
+    .filter(d => (d.deliveryDate || '').split('T')[0] === selectedDate)
+    .sort((a, b) => (a.orderNumber || '').localeCompare(b.orderNumber || ''));
+
+  const dateOpen = dateDeliveries.filter(d => ![DeliveryStatus.DELIVERED, DeliveryStatus.CLOSED].includes(d.status));
+  const dateDone = dateDeliveries.filter(d => d.status === DeliveryStatus.DELIVERED);
+
+  const fmtDate = (iso: string) => {
+    const d = new Date(iso + 'T12:00:00');
+    const isToday = iso === todayStr;
+    const isTomorrow = iso === tomorrowStr;
+    if (isToday) return 'Today';
+    if (isTomorrow) return 'Tomorrow';
+    return d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+  };
 
   return (
-    <div className="px-4 py-5 space-y-5">
-      {/* Welcome */}
-      <div className="bg-gradient-to-br from-stone-900 to-stone-800 rounded-[28px] px-6 py-6 text-white">
-        <p className="text-stone-400 text-xs font-black uppercase tracking-widest">{greeting}</p>
-        <h1 className="text-3xl font-black mt-1">{firstName}!</h1>
-        <div className="flex items-center gap-4 mt-4">
+    <div className="px-4 py-4 space-y-4 pb-28">
+      {/* Welcome card */}
+      <div className="bg-gradient-to-br from-stone-900 to-stone-800 rounded-[24px] px-5 py-5 text-white">
+        <p className="text-stone-400 text-[10px] font-black uppercase tracking-widest">{greeting}</p>
+        <h1 className="text-3xl font-black mt-0.5">{firstName}!</h1>
+        <div className="flex items-center gap-3 mt-4">
           <div className="bg-white/10 rounded-2xl px-4 py-3 text-center flex-1">
-            <p className="text-2xl font-black">{upcoming.length}</p>
-            <p className="text-[9px] font-bold text-white/60 uppercase">Upcoming</p>
+            <p className="text-2xl font-black">{allOpen.length}</p>
+            <p className="text-[9px] font-bold text-white/60 uppercase">Open</p>
           </div>
           <div className="bg-white/10 rounded-2xl px-4 py-3 text-center flex-1">
             <p className="text-2xl font-black text-green-400">{todayDelivered.length}</p>
-            <p className="text-[9px] font-bold text-white/60 uppercase">Delivered Today</p>
+            <p className="text-[9px] font-bold text-white/60 uppercase">Done Today</p>
           </div>
           <div className="bg-white/10 rounded-2xl px-4 py-3 text-center flex-1">
-            <p className="text-2xl font-black text-amber-400">{pastCompleted.length}</p>
-            <p className="text-[9px] font-bold text-white/60 uppercase">Total Completed</p>
+            <p className="text-2xl font-black text-amber-400">{dateOpen.length}</p>
+            <p className="text-[9px] font-bold text-white/60 uppercase">{fmtDate(selectedDate) === 'Today' ? 'Left Today' : 'For ' + fmtDate(selectedDate).split(' ')[0]}</p>
           </div>
         </div>
       </div>
 
-      {/* Delivery Fee Lookup */}
-      <div className="bg-white border-2 border-stone-100 rounded-[24px] px-5 py-4">
-        <div className="flex items-center gap-2 mb-3">
-          <DollarSign size={16} className="text-green-600" />
-          <h3 className="font-black uppercase text-xs tracking-widest text-stone-700">Delivery Fee by ZIP</h3>
+      {/* Date switcher */}
+      <div className="flex items-center gap-2">
+        <button onClick={() => shiftDate(-1)} className="w-11 h-11 bg-stone-100 rounded-xl flex items-center justify-center active:bg-stone-200 shrink-0">
+          <ChevronLeft size={20} className="text-stone-700" />
+        </button>
+        <div className="flex-1 bg-stone-50 border-2 border-stone-200 rounded-xl py-2.5 text-center">
+          <p className="font-black text-base text-stone-900">{fmtDate(selectedDate)}</p>
+          <p className="text-[10px] text-stone-400 font-bold">{new Date(selectedDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
         </div>
-        <div className="flex gap-2 items-center">
-          <input
-            type="text" value={zipQuery} inputMode="numeric"
-            onChange={e => {
-              const v = e.target.value.replace(/\D/g, '').slice(0, 5);
-              setZipQuery(v);
-              if (v.length === 5) setZipRate(DELIVERY_FEES[v] ?? null);
-              else setZipRate(undefined);
-            }}
-            placeholder="Enter ZIP code..."
-            className="flex-1 bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-lg font-black text-center tracking-widest outline-none focus:border-black"
-          />
-        </div>
-        {zipQuery.length === 5 && zipRate !== undefined && (
-          zipRate !== null
-            ? <div className="flex items-center justify-between mt-3 px-4 py-3 bg-green-50 border border-green-100 rounded-xl">
-                <span className="font-black text-stone-700 text-sm">ZIP {zipQuery}</span>
-                <span className="text-2xl font-black text-green-700">${zipRate}</span>
-              </div>
-            : <p className="mt-3 text-xs font-black text-red-500 text-center">ZIP {zipQuery} not in delivery fee table</p>
-        )}
+        <button onClick={() => shiftDate(1)} className="w-11 h-11 bg-stone-100 rounded-xl flex items-center justify-center active:bg-stone-200 shrink-0">
+          <ChevronRight size={20} className="text-stone-700" />
+        </button>
       </div>
 
-      {/* Upcoming Deliveries */}
+      {/* Deliveries for selected date */}
       <div>
-        <div className="flex items-center gap-2 mb-3 px-1">
-          <Truck size={16} className="text-stone-600" />
-          <h3 className="font-black uppercase text-xs tracking-widest text-stone-700">Upcoming Deliveries</h3>
-          <span className="ml-auto bg-black text-white text-[10px] font-black px-2.5 py-0.5 rounded-full">{upcoming.length}</span>
+        <div className="flex items-center gap-2 mb-2 px-1">
+          <Truck size={15} className="text-stone-600" />
+          <h3 className="font-black uppercase text-xs tracking-widest text-stone-700">
+            {fmtDate(selectedDate)} — {dateOpen.length} to deliver{dateDone.length > 0 ? `, ${dateDone.length} done` : ''}
+          </h3>
         </div>
-        {upcoming.length === 0 ? (
-          <div className="bg-stone-50 rounded-2xl py-8 text-center">
+        {dateDeliveries.length === 0 ? (
+          <div className="bg-stone-50 rounded-2xl py-10 text-center">
             <Package size={28} className="text-stone-300 mx-auto mb-2" />
-            <p className="text-sm font-bold text-stone-400">No upcoming deliveries</p>
-            <p className="text-xs text-stone-300 mt-1">Check back soon for new assignments</p>
-          </div>
-        ) : (() => {
-          // Group upcoming by delivery date
-          const grouped: Record<string, typeof upcoming> = {};
-          upcoming.forEach(d => {
-            const key = (d.deliveryDate || '').split('T')[0] || 'unscheduled';
-            if (!grouped[key]) grouped[key] = [];
-            grouped[key].push(d);
-          });
-          const sortedKeys = Object.keys(grouped).sort((a, b) => {
-            if (a === 'unscheduled') return 1;
-            if (b === 'unscheduled') return -1;
-            return a.localeCompare(b);
-          });
-          return (
-            <div className="space-y-4">
-              {sortedKeys.map(dateKey => {
-                const label = dateKey === 'unscheduled'
-                  ? 'Unscheduled'
-                  : new Date(dateKey + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).toUpperCase();
-                return (
-                  <div key={dateKey}>
-                    {/* Date header */}
-                    <div className="flex items-center gap-2 mb-2 px-1">
-                      <p className="text-[11px] font-black uppercase tracking-widest text-stone-500">{label}</p>
-                      <div className="flex-1 h-px bg-stone-200" />
-                      <span className="text-[10px] font-black text-stone-400">{grouped[dateKey].length}</span>
-                    </div>
-                    {/* Orders for this date */}
-                    <div className="space-y-2">
-                      {grouped[dateKey].map(d => {
-                        const hasInstructions = !!(d.deliveryInstructions || d.adminNotes);
-                        const instructionsText = [d.deliveryInstructions, d.adminNotes].filter(Boolean).join(' · ');
-                        const cleanOrderNum = d.orderNumber?.replace(/^#+/, '') || d.id;
-                        return (
-                          <button key={d.id} onClick={() => onSelectOrder(d)}
-                            className="w-full bg-white border border-stone-100 rounded-2xl px-4 py-3 active:scale-[0.98] transition-all text-left">
-                            <div className="flex items-center gap-3">
-                              <div className="w-9 h-9 bg-stone-900 rounded-xl flex items-center justify-center shrink-0">
-                                <Package size={14} className="text-white" />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2">
-                                  <p className="font-black text-sm text-stone-900">#{cleanOrderNum}</p>
-                                  <p className="text-sm font-bold text-stone-500 truncate">{d.address?.city || '—'}</p>
-                                </div>
-                                <p className="text-[10px] text-stone-400 font-bold truncate">{d.address?.street || d.customer.address}</p>
-                              </div>
-                              <StatusBadge status={d.status} />
-                              <ChevronRight size={16} className="text-stone-300 shrink-0" />
-                            </div>
-                            {hasInstructions && (
-                              <div className="mt-2 flex items-start gap-1.5 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
-                                <AlertTriangle size={12} className="text-amber-600 shrink-0 mt-0.5" />
-                                <p className="text-[11px] font-black text-amber-800 leading-snug">{instructionsText}</p>
-                              </div>
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          );
-        })()}
-      </div>
-
-      {/* Past Deliveries */}
-      <div>
-        <div className="flex items-center gap-2 mb-3 px-1">
-          <CheckCircle2 size={16} className="text-green-600" />
-          <h3 className="font-black uppercase text-xs tracking-widest text-stone-700">Recent Completed</h3>
-        </div>
-        {pastCompleted.length === 0 ? (
-          <div className="bg-stone-50 rounded-2xl py-6 text-center">
-            <p className="text-sm font-bold text-stone-400">No completed deliveries yet</p>
+            <p className="text-sm font-bold text-stone-400">No deliveries for {fmtDate(selectedDate)}</p>
           </div>
         ) : (
           <div className="space-y-2">
-            {pastCompleted.slice(0, 5).map(d => (
-              <button key={d.id} onClick={() => onSelectOrder(d)}
-                className="w-full bg-white border border-stone-100 rounded-2xl px-4 py-3 flex items-center gap-3 active:scale-[0.98] transition-all text-left">
-                <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center shrink-0">
-                  <Check size={16} className="text-green-600" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-black text-sm text-stone-900 truncate">{d.giftReceiverName || d.customer.name}</p>
-                  <p className="text-[10px] text-stone-400 font-bold">{d.completedAt ? formatDate(d.completedAt) : ''}</p>
-                </div>
-                <span className="text-[10px] font-black text-green-600 bg-green-50 px-2 py-0.5 rounded-full">DELIVERED</span>
-                <ChevronRight size={16} className="text-stone-300 shrink-0" />
-              </button>
-            ))}
+            {dateDeliveries.map(d => {
+              const isDone = d.status === DeliveryStatus.DELIVERED;
+              const cleanNum = d.orderNumber?.replace(/^#+/, '') || d.id;
+              const hasAlert = !!(d.deliveryInstructions || d.adminNotes);
+              return (
+                <button key={d.id} onClick={() => onSelectOrder(d)}
+                  className={`w-full rounded-2xl px-4 py-3 active:scale-[0.98] transition-all text-left border ${isDone ? 'bg-green-50 border-green-100' : 'bg-white border-stone-100 shadow-sm'}`}>
+                  <div className="flex items-center gap-3">
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${isDone ? 'bg-green-500' : 'bg-stone-900'}`}>
+                      {isDone ? <Check size={15} className="text-white" /> : <Package size={14} className="text-white" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-baseline gap-2">
+                        <p className="font-black text-sm text-stone-900">#{cleanNum}</p>
+                        <p className="text-sm font-black text-stone-700 truncate">{d.address?.city || '—'}</p>
+                      </div>
+                      <p className="text-[11px] text-stone-500 font-bold truncate">{d.giftReceiverName || d.customer?.name}</p>
+                      <p className="text-[10px] text-stone-400 truncate">{d.address?.street}{d.address?.unit ? ` #${d.address.unit}` : ''}</p>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      {isDone
+                        ? <span className="text-[10px] font-black text-green-600 bg-green-100 px-2 py-0.5 rounded-full">DONE ✓</span>
+                        : <ChevronRight size={18} className="text-stone-300" />}
+                    </div>
+                  </div>
+                  {hasAlert && (
+                    <div className="mt-2 flex items-start gap-1.5 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                      <AlertTriangle size={11} className="text-amber-600 shrink-0 mt-0.5" />
+                      <p className="text-[10px] font-black text-amber-800 leading-snug">
+                        {[d.deliveryInstructions, d.adminNotes].filter(Boolean).join(' · ')}
+                      </p>
+                    </div>
+                  )}
+                </button>
+              );
+            })}
           </div>
         )}
       </div>
@@ -3686,33 +3638,21 @@ const DriverHomeView: React.FC<DriverHomeProps> = ({ currentUser, deliveries, on
       {/* Store Info */}
       <div className="bg-stone-50 border border-stone-100 rounded-[24px] px-5 py-4">
         <div className="flex items-center gap-2 mb-3">
-          <Store size={16} className="text-stone-600" />
+          <Store size={15} className="text-stone-600" />
           <h3 className="font-black uppercase text-xs tracking-widest text-stone-700">Store Info</h3>
         </div>
-        <div className="space-y-2.5">
-          <div>
-            <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest">Store Name</p>
-            <p className="font-black text-stone-900 text-sm">The Sweet Tooth — Chocolate Factory</p>
-          </div>
-          <div>
-            <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest">Address</p>
-            <p className="font-bold text-stone-700 text-sm">18435 NE 19th Ave, North Miami Beach, FL 33179</p>
-          </div>
-          <div>
-            <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest">Phone</p>
-            <p className="font-bold text-stone-700 text-sm">(305) 682-1400</p>
-          </div>
-          <div>
-            <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest">Hours</p>
-            <p className="font-bold text-stone-700 text-sm">Mon–Fri: 10 AM – 5 PM · Same-day cutoff: 2 PM</p>
-          </div>
+        <div className="space-y-2">
+          <p className="font-black text-stone-900 text-sm">The Sweet Tooth — Chocolate Factory</p>
+          <p className="font-bold text-stone-600 text-sm">18435 NE 19th Ave, North Miami Beach, FL 33179</p>
+          <p className="font-bold text-stone-600 text-sm">(305) 682-1400</p>
+          <p className="text-[10px] text-stone-400 font-bold uppercase">Mon–Fri 10AM–5PM · Same-day cutoff 2PM</p>
         </div>
       </div>
-
       <div className="h-4" />
     </div>
   );
 };
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // BULK PROJECTS VIEW (Berkowitz / Provenance)
