@@ -2276,6 +2276,15 @@ const ScheduleView: React.FC<{
   const [driverFilter, setDriverFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState<'OPEN'|'DONE'|'ALL'>('OPEN');
 
+  // Route optimization state
+  const [routeLoading, setRouteLoading] = useState(false);
+  const [routeStatus, setRouteStatus] = useState('');
+  const [showRouteMap, setShowRouteMap] = useState(false);
+  const [routeStops, setRouteStops] = useState<any[]>([]);
+  const [routeTotalDist, setRouteTotalDist] = useState(0);
+  const [driverLat, setDriverLat] = useState(25.946);
+  const [driverLng, setDriverLng] = useState(-80.155);
+
   const activeDrivers = useMemo(() =>
     allUsers.filter(u => (u.role === 'DRIVER' || u.role === 'MANAGER') && u.isActive),
     [allUsers]
@@ -2327,6 +2336,106 @@ const ScheduleView: React.FC<{
       return a.localeCompare(b);
     });
   }, [filtered]);
+
+  // Get active (not delivered) stops for route optimization
+  const optimizableStops = useMemo(() =>
+    filtered.filter(d => !['DELIVERED','CLOSED'].includes(d.status)),
+    [filtered]
+  );
+
+  const optimizeRoute = async () => {
+    if (optimizableStops.length === 0) return;
+    setRouteLoading(true);
+    setRouteStatus('Getting your location...');
+
+    // Get driver location
+    let lat = 25.946, lng = -80.155;
+    try {
+      const pos = await new Promise<GeolocationPosition>((resolve, reject) =>
+        navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 8000, enableHighAccuracy: true })
+      );
+      lat = pos.coords.latitude;
+      lng = pos.coords.longitude;
+    } catch { setRouteStatus('Using store location as start point...'); }
+    setDriverLat(lat);
+    setDriverLng(lng);
+
+    // Geocode stops that don't have coordinates
+    setRouteStatus('Finding addresses on map...');
+    const needGeocode = optimizableStops.filter(d => !d.address?.lat || d.address.lat === 0);
+    if (needGeocode.length > 0) {
+      try {
+        const resp = await fetch('/api/geocode', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ addresses: needGeocode.map(d => ({ id: d.id, street: d.address?.street || '', city: d.address?.city || 'Miami', zip: d.address?.zip || '' })) })
+        });
+        const data = await resp.json();
+        if (data.results) {
+          needGeocode.forEach(d => {
+            if (data.results[d.id]) {
+              d.address.lat = data.results[d.id].lat;
+              d.address.lng = data.results[d.id].lng;
+            }
+          });
+        }
+      } catch { /* proceed without geocoding */ }
+    }
+
+    // Optimize order
+    setRouteStatus('Calculating best route...');
+    const withCoords = optimizableStops.filter(d => d.address?.lat && d.address.lat !== 0);
+    try {
+      const resp = await fetch('/api/route/optimize', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ driverLat: lat, driverLng: lng, stops: withCoords.map(d => ({ id: d.id, lat: d.address.lat, lng: d.address.lng })) })
+      });
+      const data = await resp.json();
+      const orderedIds: string[] = data.orderedIds || withCoords.map((d: Delivery) => d.id);
+      const ordered = orderedIds.map((id: string, idx: number) => {
+        const d = withCoords.find((s: Delivery) => s.id === id);
+        if (!d) return null;
+        return {
+          id: d.id,
+          stopNumber: idx + 1,
+          lat: d.address.lat,
+          lng: d.address.lng,
+          name: d.giftReceiverName || d.customer?.name || '—',
+          address: `${d.address?.street}, ${d.address?.city}`,
+          orderNumber: d.orderNumber || d.id,
+        };
+      }).filter(Boolean);
+      setRouteTotalDist(data.totalDistance || 0);
+      setRouteStops(ordered);
+      setShowRouteMap(true);
+    } catch {
+      // Even if optimize fails, show the map with stops in list order
+      setRouteStops(withCoords.map((d: Delivery, idx: number) => ({
+        id: d.id, stopNumber: idx + 1,
+        lat: d.address.lat, lng: d.address.lng,
+        name: d.giftReceiverName || d.customer?.name || '—',
+        address: `${d.address?.street}, ${d.address?.city}`,
+        orderNumber: d.orderNumber || d.id,
+      })));
+      setShowRouteMap(true);
+    }
+    setRouteLoading(false);
+    setRouteStatus('');
+  };
+
+  const startNavigation = (app: 'waze' | 'google') => {
+    if (routeStops.length === 0) return;
+    if (app === 'waze') {
+      const first = routeStops[0];
+      window.open(`https://waze.com/ul?ll=${first.lat},${first.lng}&navigate=yes`, '_blank');
+    } else {
+      const dest = routeStops[routeStops.length - 1];
+      const waypoints = routeStops.slice(0, -1).map((s: any) => `${s.lat},${s.lng}`).join('|');
+      const url = waypoints
+        ? `https://www.google.com/maps/dir/?api=1&destination=${dest.lat},${dest.lng}&waypoints=${encodeURIComponent(waypoints)}&travelmode=driving`
+        : `https://www.google.com/maps/dir/?api=1&destination=${dest.lat},${dest.lng}&travelmode=driving`;
+      window.open(url, '_blank');
+    }
+  };
 
   const fmtDateHeader = (iso: string) => {
     if (iso === 'unscheduled') return { label: 'Unscheduled', sub: '', isToday: false, isTomorrow: false };
@@ -2393,6 +2502,35 @@ const ScheduleView: React.FC<{
           ))}
         </div>
       </div>
+
+      {/* ── MAP + OPTIMIZE ROUTE BUTTON ── */}
+      {optimizableStops.length > 0 && (
+        <div className="px-4 py-3 bg-stone-50 border-b border-stone-200">
+          <button
+            onClick={optimizeRoute}
+            disabled={routeLoading}
+            className="w-full py-4 bg-black text-white rounded-2xl font-black text-sm flex items-center justify-center gap-2 active:scale-95 disabled:opacity-60 transition-all"
+          >
+            {routeLoading ? (
+              <><RefreshCw size={16} className="animate-spin" /> {routeStatus || 'Loading...'}</>
+            ) : (
+              <><MapIcon size={16} /> 🗺 Map + Optimize Route ({optimizableStops.length} stops)</>
+            )}
+          </button>
+        </div>
+      )}
+
+      {/* ── ROUTE MAP OVERLAY ── */}
+      {showRouteMap && (
+        <RouteMapPanel
+          stops={routeStops}
+          driverLat={driverLat}
+          driverLng={driverLng}
+          totalDistance={routeTotalDist}
+          onClose={() => setShowRouteMap(false)}
+          onStartNav={startNavigation}
+        />
+      )}
 
       {/* ── ORDER LIST ── */}
       <div className="flex-1 overflow-y-auto pb-28">
