@@ -1515,7 +1515,7 @@ const OrdersView: React.FC<OrdersViewProps> = ({
   const [activeTab, setActiveTab] = useState<'active' | 'done'>('active');
   const [search, setSearch] = useState('');
   const [ordersDriverFilter, setOrdersDriverFilter] = useState('ALL');
-  const [statusFilter, setStatusFilter] = useState<'OPEN'|'CLOSED'>('OPEN');
+  const [statusFilter, setStatusFilter] = useState<'OPEN'|'CLOSED'>('CLOSED');
   const [rescheduleOrder, setRescheduleOrder] = useState<Delivery | null>(null);
   const [rescheduleDate, setRescheduleDate] = useState('');
   const [rescheduleSaved, setRescheduleSaved] = useState(false);
@@ -1608,12 +1608,6 @@ const OrdersView: React.FC<OrdersViewProps> = ({
               </div>
             ))}
           </div>
-          <button
-            onClick={() => { setManualForm({ recipientName: '', recipientPhone: '', recipientEmail: '', street: '', unit: '', city: '', zip: '', deliveryDate: new Date().toISOString().split('T')[0], deliveryInstructions: '', itemDescription: '', orderTotal: '', giftSenderName: '', giftMessage: '', driverId: '', driverName: '' }); setManualError(''); setShowAddManual(true); }}
-            className="w-full py-2.5 bg-black text-white font-black text-xs uppercase flex items-center justify-center gap-2 active:opacity-80 transition-all"
-          >
-            <Plus size={13} /> Add Delivery Manually
-          </button>
         </div>
 
         {/* Filters + Search */}
@@ -1623,15 +1617,15 @@ const OrdersView: React.FC<OrdersViewProps> = ({
             className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-2.5 text-sm font-bold outline-none focus:border-black">
             {uniqueOrderDrivers.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
           </select>
-          {/* Open / Closed toggle */}
+          {/* Delivered / Active toggle */}
           <div className="flex gap-2">
-            <button onClick={() => setStatusFilter('OPEN')}
-              className={`flex-1 py-2.5 rounded-xl font-black text-xs uppercase transition-all ${statusFilter === 'OPEN' ? 'bg-blue-600 text-white' : 'bg-stone-100 text-stone-500'}`}>
-              Open ({deliveries.filter(d => OPEN_STATUSES.includes(d.status)).length})
-            </button>
             <button onClick={() => setStatusFilter('CLOSED')}
               className={`flex-1 py-2.5 rounded-xl font-black text-xs uppercase transition-all ${statusFilter === 'CLOSED' ? 'bg-green-600 text-white' : 'bg-stone-100 text-stone-500'}`}>
-              Closed ({deliveries.filter(d => CLOSED_STATUSES.includes(d.status)).length})
+              ✓ Delivered ({deliveries.filter(d => CLOSED_STATUSES.includes(d.status)).length})
+            </button>
+            <button onClick={() => setStatusFilter('OPEN')}
+              className={`flex-1 py-2.5 rounded-xl font-black text-xs uppercase transition-all ${statusFilter === 'OPEN' ? 'bg-blue-600 text-white' : 'bg-stone-100 text-stone-500'}`}>
+              Active ({deliveries.filter(d => OPEN_STATUSES.includes(d.status)).length})
             </button>
           </div>
           {/* Text search */}
@@ -4494,7 +4488,7 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [dataSource, setDataSource] = useState<'LIVE' | 'MOCK' | 'ERROR'>('MOCK');
-  const [tab, setTab] = useState<'HOME' | 'ORDERS' | 'SCHEDULE' | 'ADMIN' | 'DRIVERS' | 'PROJECTS'>('HOME');
+  const [tab, setTab] = useState<'HOME' | 'ORDERS' | 'SCHEDULE' | 'ADMIN' | 'DRIVERS' | 'PROJECTS'>('SCHEDULE');
   const isAdmin = currentUser?.role === 'SUPER_ADMIN' || currentUser?.role === 'MANAGER';
   const [zipQuery, setZipQuery] = useState('');
   const [zipRate, setZipRate] = useState<number | null | undefined>(undefined);
@@ -4724,57 +4718,54 @@ export default function App() {
         </div>
       )}
 
-      {/* Bottom nav */}
-      <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-white border-t border-stone-100 z-50 flex">
-        <button onClick={() => setTab('HOME')}
-          className={`flex-1 py-3 flex flex-col items-center gap-0.5 transition-all ${tab === 'HOME' ? 'text-black' : 'text-stone-300'}`}>
-          <Home size={20} />
-          <span className="text-[9px] font-black uppercase">Home</span>
-        </button>
-        <button onClick={() => setTab('ORDERS')}
-          className={`flex-1 py-3 flex flex-col items-center gap-0.5 transition-all relative ${tab === 'ORDERS' ? 'text-black' : 'text-stone-300'}`}>
-          <Package size={20} />
-          <span className="text-[9px] font-black uppercase">Orders</span>
-          {activeOrders.length > 0 && <span className="absolute top-1 right-1 w-4 h-4 bg-black text-white text-[8px] font-black rounded-full flex items-center justify-center">{activeOrders.length > 99 ? '99+' : activeOrders.length}</span>}
-        </button>
+      {/* ── BOTTOM NAV — 3 tabs only ── */}
+      <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-white border-t border-stone-200 z-50 flex">
+
+        {/* DELIVERIES — the main tab everyone uses */}
         <button onClick={() => setTab('SCHEDULE')}
-          className={`flex-1 py-3 flex flex-col items-center gap-0.5 transition-all ${tab === 'SCHEDULE' ? 'text-black' : 'text-stone-300'}`}>
-          <Calendar size={20} />
-          <span className="text-[9px] font-black uppercase">Schedule</span>
+          className={`flex-1 py-3 flex flex-col items-center gap-0.5 transition-all relative ${tab === 'SCHEDULE' ? 'text-black' : 'text-stone-300'}`}>
+          <Truck size={22} className={tab === 'SCHEDULE' ? 'text-black' : ''} />
+          <span className="text-[9px] font-black uppercase">Deliveries</span>
+          {activeOrders.length > 0 && (
+            <span className="absolute top-1.5 right-3 min-w-[18px] h-[18px] bg-black text-white text-[9px] font-black rounded-full flex items-center justify-center px-1">
+              {activeOrders.length > 99 ? '99+' : activeOrders.length}
+            </span>
+          )}
         </button>
-        <button onClick={() => setTab('PROJECTS')}
-          className={`flex-1 py-3 flex flex-col items-center gap-0.5 transition-all ${tab === 'PROJECTS' ? 'text-black' : 'text-stone-300'}`}>
-          <Store size={20} />
-          <span className="text-[9px] font-black uppercase">Projects</span>
+
+        {/* HISTORY — closed/delivered orders */}
+        <button onClick={() => setTab('ORDERS')}
+          className={`flex-1 py-3 flex flex-col items-center gap-0.5 transition-all ${tab === 'ORDERS' ? 'text-black' : 'text-stone-300'}`}>
+          <CheckCircle2 size={22} />
+          <span className="text-[9px] font-black uppercase">History</span>
         </button>
-        {isAdmin && (
-          <button onClick={() => setTab('DRIVERS')}
-            className={`flex-1 py-3 flex flex-col items-center gap-0.5 transition-all ${tab === 'DRIVERS' ? 'text-black' : 'text-stone-300'}`}>
-            <Users size={20} />
-            <span className="text-[9px] font-black uppercase">Drivers</span>
-          </button>
-        )}
+
+        {/* MANAGE — admin: drivers, add manual, projects, admin panel */}
         {isAdmin && (
           <button onClick={() => setTab('ADMIN')}
             className={`flex-1 py-3 flex flex-col items-center gap-0.5 transition-all ${tab === 'ADMIN' ? 'text-black' : 'text-stone-300'}`}>
-            <Settings size={20} />
-            <span className="text-[9px] font-black uppercase">Admin</span>
+            <Settings size={22} />
+            <span className="text-[9px] font-black uppercase">Manage</span>
           </button>
         )}
+
       </div>
 
       <main className="flex-1 overflow-y-auto pb-20">
 
-        {/* ── HOME TAB ── */}
-        {tab === 'HOME' && (
-          <DriverHomeView
-            currentUser={currentUser}
+        {/* ── DELIVERIES TAB — Schedule view is the workhorse ── */}
+        {tab === 'SCHEDULE' && (
+          <ScheduleView
             deliveries={deliveries}
+            role={currentUser.role}
+            currentUserId={currentUser.id}
+            allUsers={allUsers}
             onSelectOrder={setSelectedOrder}
+            onUpdateOrder={handleUpdateOrder}
           />
         )}
 
-        {/* ── ORDERS TAB ── */}
+        {/* ── HISTORY TAB — closed/delivered, searchable ── */}
         {tab === 'ORDERS' && (
           <OrdersView
             deliveries={deliveries}
@@ -4790,8 +4781,58 @@ export default function App() {
           />
         )}
 
-        {/* ── SCHEDULE TAB ── */}
-        {tab === 'SCHEDULE' && (
+        {/* ── MANAGE TAB — admin: everything in one place ── */}
+        {tab === 'ADMIN' && isAdmin && (
+          <div className="pb-24">
+            {/* Quick stats */}
+            <div className="grid grid-cols-3 border-b border-stone-100">
+              {[
+                { label: 'Open', val: activeOrders.length, color: 'text-black' },
+                { label: 'Out for Delivery', val: inTransitCount, color: 'text-blue-600' },
+                { label: 'Done Today', val: deliveredTodayCount, color: 'text-green-600' },
+              ].map(s => (
+                <div key={s.label} className="py-3 text-center border-r border-stone-100 last:border-0">
+                  <p className={`text-2xl font-black ${s.color}`}>{s.val}</p>
+                  <p className="text-[8px] font-black uppercase text-stone-400 leading-tight px-1">{s.label}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Section: Add delivery */}
+            <div className="px-4 pt-4 pb-2">
+              <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest mb-2">Quick Actions</p>
+              <button onClick={openAddManual}
+                className="w-full py-4 bg-black text-white rounded-2xl font-black text-sm flex items-center justify-center gap-2 active:scale-95 transition-all">
+                <Plus size={18} /> Add Delivery Manually
+              </button>
+            </div>
+
+            {/* Section: Drivers */}
+            <div className="px-4 pt-3 pb-2">
+              <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest mb-2">Drivers & Settings</p>
+              <DriversView allUsers={allUsers} setAllUsers={setAllUsers} currentUser={currentUser} />
+            </div>
+
+            {/* Section: Projects (Berkowitz etc) */}
+            <div className="px-0 pt-2 pb-2">
+              <div className="px-4 mb-2">
+                <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest">Bulk Projects</p>
+              </div>
+              <BulkProjectsView currentUser={currentUser} allUsers={allUsers} />
+            </div>
+
+            {/* Section: Admin panel (fees, messages, reschedule queue) */}
+            <div className="px-0 pt-2">
+              <div className="px-4 mb-2">
+                <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest">Admin Tools</p>
+              </div>
+              <AdminPanel role={currentUser.role} deliveries={deliveries} allUsers={allUsers} setAllUsers={setAllUsers} />
+            </div>
+          </div>
+        )}
+
+        {/* Catch-all: if somehow on HOME/DRIVERS/PROJECTS tab, redirect to SCHEDULE */}
+        {(tab === 'HOME' || tab === 'DRIVERS' || tab === 'PROJECTS') && (
           <ScheduleView
             deliveries={deliveries}
             role={currentUser.role}
@@ -4800,24 +4841,6 @@ export default function App() {
             onSelectOrder={setSelectedOrder}
             onUpdateOrder={handleUpdateOrder}
           />
-        )}
-
-        {/* ── PROJECTS TAB (Berkowitz / Provenance) ── */}
-        {tab === 'PROJECTS' && (
-          <BulkProjectsView
-            currentUser={currentUser}
-            allUsers={allUsers}
-          />
-        )}
-
-        {/* ── DRIVERS TAB ── */}
-        {tab === 'DRIVERS' && isAdmin && (
-          <DriversView allUsers={allUsers} setAllUsers={setAllUsers} currentUser={currentUser} />
-        )}
-
-        {/* ── ADMIN TAB ── */}
-        {tab === 'ADMIN' && isAdmin && (
-          <AdminPanel role={currentUser.role} deliveries={deliveries} allUsers={allUsers} setAllUsers={setAllUsers} />
         )}
 
       </main>
