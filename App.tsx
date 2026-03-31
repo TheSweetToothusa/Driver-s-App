@@ -8,7 +8,7 @@ import {
   UserPlus, Users,
   MessageCircle, MessageSquare, ChevronLeft, Edit3,
   Bell, Clock, XCircle, Gift, User,
-  AlertTriangle, RotateCcw, Inbox, Home, DollarSign, Store, Truck, Map as MapIcon, Route
+  AlertTriangle, RotateCcw, Inbox, Home, DollarSign, Store, Truck, Map as MapIcon, Route, Trash2, Plus
 } from 'lucide-react';
 import { Delivery, DeliveryStatus, AppRole, FailureReason, FAILURE_REASON_LABELS, ViewMode, UserAccount, MessageTemplate } from './types';
 import { getDeliveries } from './services/shopifyService';
@@ -402,7 +402,12 @@ const OrderCard: React.FC<{ order: Delivery; role: AppRole; onTap: () => void; i
     if (!reassignTo || !allUsers || !onUpdate) return;
     const driver = allUsers.find(u => u.id === reassignTo);
     if (!driver) return;
-    await fetch(`/api/orders/${order.id}/assign`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ driverId: driver.id, driverName: driver.name }) });
+    const isManualOrder = (order as any).isManual;
+    await fetch(isManualOrder ? `/api/manual-orders/${order.id}` : `/api/orders/${order.id}/assign`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ driverId: driver.id, driverName: driver.name })
+    });
     onUpdate(order.id, { driverId: driver.id, driverName: driver.name });
     setReassignTo('');
   };
@@ -818,7 +823,12 @@ const OrderDetail: React.FC<{
   const handleReassign = async () => {
     if (!reassignTo) return;
     const driver = allUsers.find(u => u.id === reassignTo); if (!driver) return;
-    await fetch(`/api/orders/${order.id}/assign`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ driverId: driver.id, driverName: driver.name }) });
+    const isManualOrder = (order as any).isManual;
+    await fetch(isManualOrder ? `/api/manual-orders/${order.id}` : `/api/orders/${order.id}/assign`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ driverId: driver.id, driverName: driver.name })
+    });
     onUpdate(order.id, { driverId: driver.id, driverName: driver.name });
     setReassignTo('');
   };
@@ -983,7 +993,10 @@ const OrderDetail: React.FC<{
             onChange={async e => {
               const s = e.target.value as DeliveryStatus;
               onUpdate(order.id, { status: s });
-              fetch(`/api/orders/${order.id}/status`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: s }) }).catch(() => {});
+              const isManualOrd = (order as any).isManual;
+              fetch(isManualOrd ? `/api/manual-orders/${order.id}` : `/api/orders/${order.id}/status`, {
+                method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: s })
+              }).catch(() => {});
             }}
             className="bg-white/10 text-white text-[11px] font-black border border-white/20 rounded-lg px-2 py-1.5 outline-none max-w-[130px]"
           >
@@ -991,6 +1004,19 @@ const OrderDetail: React.FC<{
               <option key={s.value} value={s.value} style={{ background: '#111', color: '#fff' }}>{s.label}</option>
             ))}
           </select>
+        )}
+        {isAdmin && (order as any).isManual && (
+          <button
+            onClick={async () => {
+              if (!confirm('Delete this manual delivery? This cannot be undone.')) return;
+              await fetch(`/api/manual-orders/${order.id}`, { method: 'DELETE' });
+              onBack();
+            }}
+            className="w-9 h-9 flex items-center justify-center bg-red-500/80 rounded-full active:bg-red-600 ml-1"
+            title="Delete manual order"
+          >
+            <Trash2 size={14} className="text-white" />
+          </button>
         )}
       </div>
 
@@ -1657,8 +1683,12 @@ const OrdersView: React.FC<OrdersViewProps> = ({
                       onChange={e => {
                         const newStatus = e.target.value as DeliveryStatus;
                         onUpdateOrder(order.id, { status: newStatus });
-                        fetch(`/api/orders/${order.id}/status`, {
-                          method: 'PATCH',
+                        const isManualOrder = (order as any).isManual;
+                        const statusUrl = isManualOrder
+                          ? `/api/manual-orders/${order.id}`
+                          : `/api/orders/${order.id}/status`;
+                        fetch(statusUrl, {
+                          method: isManualOrder ? 'PATCH' : 'PATCH',
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({ status: newStatus })
                         }).catch(() => {});
@@ -1733,8 +1763,12 @@ const OrdersView: React.FC<OrdersViewProps> = ({
                       onChange={e => {
                         const newStatus = e.target.value as DeliveryStatus;
                         onUpdateOrder(order.id, { status: newStatus });
-                        fetch(`/api/orders/${order.id}/status`, {
-                          method: 'PATCH',
+                        const isManualOrder = (order as any).isManual;
+                        const statusUrl = isManualOrder
+                          ? `/api/manual-orders/${order.id}`
+                          : `/api/orders/${order.id}/status`;
+                        fetch(statusUrl, {
+                          method: isManualOrder ? 'PATCH' : 'PATCH',
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({ status: newStatus })
                         }).catch(() => {});
@@ -1772,7 +1806,12 @@ const OrdersView: React.FC<OrdersViewProps> = ({
             )}
             <button onClick={async () => {
               onUpdateOrder(rescheduleOrder.id, { deliveryDate: rescheduleDate });
-              await fetch(`/api/orders/${rescheduleOrder.id}/edit`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ deliveryDate: rescheduleDate }) });
+              const isManualReschedule = (rescheduleOrder as any).isManual;
+              if (isManualReschedule) {
+                await fetch(`/api/manual-orders/${rescheduleOrder.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ deliveryDate: rescheduleDate }) });
+              } else {
+                await fetch(`/api/orders/${rescheduleOrder.id}/edit`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ deliveryDate: rescheduleDate }) });
+              }
               setRescheduleOrder(null);
               setRescheduleSaved(true);
               setTimeout(() => setRescheduleSaved(false), 3000);
