@@ -410,7 +410,13 @@ async function startServer() {
             const fo = result.value.fulfillment_orders[0];
             const instructions = fo?.delivery_method?.additional_information?.instructions;
             if (instructions) {
-              ordersToProcess[i]._delivery_instructions = instructions;
+              // Only treat as delivery instructions if it contains real instruction keywords
+              // Basket Builder / occasion names are NOT delivery instructions
+              const lower = instructions.toLowerCase();
+              const isRealInstruction = ['gate', 'call', 'buzz', 'code', 'floor', 'unit', 'leave', 'ring', 'door', 'security', 'guard', 'lobby', 'buzzer', 'bell', 'phone', 'arrival', 'gated', 'access', 'building', 'apt', 'suite', 'knock', 'back', 'front', 'side', 'enter', 'key', 'intercom'].some(kw => lower.includes(kw));
+              if (isRealInstruction) {
+                ordersToProcess[i]._delivery_instructions = instructions;
+              }
             }
           }
         });

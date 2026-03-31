@@ -441,16 +441,38 @@ const OrderCard: React.FC<{ order: Delivery; role: AppRole; onTap: () => void; i
               </div>
             )}
           </div>
-          {/* Right: order# + status + price */}
+          {/* Right: order# + status + fee */}
           <div className="shrink-0 text-right flex flex-col items-end gap-1">
             <p className="text-[11px] font-black text-stone-500">#{order.orderNumber?.replace(/^#+/, '') || order.id}</p>
             <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${statusCfg.bg} ${statusCfg.text}`}>{statusCfg.label}</span>
-            {product && <p className="text-sm font-black text-stone-900">${(product.price * product.quantity).toFixed(2)}</p>}
+            {order.deliveryFee ? <p className="text-sm font-black text-green-700">${order.deliveryFee.toFixed(2)}</p> : null}
           </div>
         </div>
-        {/* Driver row — admin only, just the name, no inline reassign */}
+        {/* Driver row — admin: shows driver name + inline reassign dropdown */}
         {isAdmin && (
-          <p className="text-[10px] text-stone-400 mt-1">{order.driverName ? `👤 ${order.driverName}` : 'No driver assigned'}</p>
+          <div className="mt-1.5 flex items-center gap-2" onClick={e => e.stopPropagation()}>
+            <select
+              value={reassignTo || order.driverId || ''}
+              onChange={async e => {
+                const u = allUsers?.find(u => u.id === e.target.value);
+                if (!u) return;
+                setReassignTo(e.target.value);
+                const isManualOrder = (order as any).isManual;
+                await fetch(isManualOrder ? `/api/manual-orders/${order.id}` : `/api/orders/${order.id}/assign`, {
+                  method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ driverId: u.id, driverName: u.name })
+                });
+                if (onUpdate) onUpdate(order.id, { driverId: u.id, driverName: u.name });
+                setReassignTo('');
+              }}
+              className="flex-1 bg-stone-50 border border-stone-200 rounded-lg px-2 py-1.5 text-xs font-bold outline-none text-stone-700"
+            >
+              <option value="">👤 {order.driverName || 'Assign driver...'}</option>
+              {allUsers?.filter(u => (u.role === 'DRIVER' || u.role === 'MANAGER') && u.isActive).map(u => (
+                <option key={u.id} value={u.id}>{u.name}</option>
+              ))}
+            </select>
+          </div>
         )}
       </div>
     </div>
@@ -2153,7 +2175,7 @@ const ScheduleView: React.FC<{
   onSelectOrder: (order: Delivery) => void;
   onUpdateOrder: (id: string, updates: Partial<Delivery>) => void;
 }> = ({ deliveries, role, currentUserId, allUsers, onSelectOrder, onUpdateOrder }) => {
-  const [viewMode, setViewMode] = useState<ViewMode>('DAY');
+  const [viewMode, setViewMode] = useState<ViewMode>('WEEK');
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [customStart, setCustomStart] = useState(new Date().toISOString().split('T')[0]);
   const [customEnd, setCustomEnd] = useState(new Date().toISOString().split('T')[0]);
@@ -2424,35 +2446,39 @@ const ScheduleView: React.FC<{
             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-300">🔍</span>
           )}
         </div>
-        {/* Date nav + view mode row */}
-        <div className="flex items-center gap-2">
-          <button onClick={() => shiftDay(-1)} className="w-10 h-10 bg-stone-100 rounded-xl flex items-center justify-center active:bg-stone-200 shrink-0">
-            <ChevronLeft size={20} className="text-stone-700" />
-          </button>
-          <div className="flex-1 text-center">
-            {fmt.label && <p className="text-[9px] font-black uppercase text-black tracking-widest">{fmt.label}</p>}
-            <p className="text-sm font-black text-stone-900">{fmt.day}, {fmt.date}</p>
-          </div>
-          <button onClick={() => shiftDay(1)} className="w-10 h-10 bg-stone-100 rounded-xl flex items-center justify-center active:bg-stone-200 shrink-0">
-            <ChevronRight size={20} className="text-stone-700" />
-          </button>
-        </div>
-        {/* Driver filter + view mode in one row */}
-        <div className="flex gap-1.5 items-center">
-          {(['DAY','WEEK','MONTH'] as ViewMode[]).map(m => (
-            <button key={m} onClick={() => setViewMode(m)}
-              className={`px-3 py-1.5 rounded-lg font-black uppercase text-[9px] transition-all ${viewMode === m ? 'bg-black text-white' : 'bg-stone-100 text-stone-500'}`}
-            >{m}</button>
-          ))}
+        {/* Driver filter + view mode row */}
+        <div className="flex gap-2 items-center">
           {isAdmin && uniqueDrivers.length > 0 && (
             <select value={filterDriver} onChange={e => setFilterDriver(e.target.value)}
-              className="flex-1 bg-stone-50 border border-stone-200 rounded-lg px-2 py-1.5 text-xs font-bold outline-none">
+              className="flex-1 bg-stone-50 border-2 border-stone-200 rounded-xl px-3 py-2.5 text-sm font-black outline-none focus:border-black">
               <option value="ALL">All Drivers</option>
               {uniqueDrivers.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
             </select>
           )}
+          <div className="flex gap-1 shrink-0">
+            {(['DAY','WEEK','MONTH'] as ViewMode[]).map(m => (
+              <button key={m} onClick={() => setViewMode(m)}
+                className={`px-3 py-2.5 rounded-xl font-black uppercase text-[10px] transition-all ${viewMode === m ? 'bg-black text-white' : 'bg-stone-100 text-stone-500'}`}
+              >{m}</button>
+            ))}
+          </div>
         </div>
-        {/* Status filter — 4 clear buttons */}
+        {/* Date nav — only visible in DAY mode */}
+        {viewMode === 'DAY' && (
+          <div className="flex items-center gap-2">
+            <button onClick={() => shiftDay(-1)} className="w-10 h-10 bg-stone-100 rounded-xl flex items-center justify-center active:bg-stone-200 shrink-0">
+              <ChevronLeft size={20} className="text-stone-700" />
+            </button>
+            <div className="flex-1 text-center">
+              {fmt.label && <p className="text-[9px] font-black uppercase text-black tracking-widest">{fmt.label}</p>}
+              <p className="text-sm font-black text-stone-900">{fmt.day}, {fmt.date}</p>
+            </div>
+            <button onClick={() => shiftDay(1)} className="w-10 h-10 bg-stone-100 rounded-xl flex items-center justify-center active:bg-stone-200 shrink-0">
+              <ChevronRight size={20} className="text-stone-700" />
+            </button>
+          </div>
+        )}
+        {/* Status filter */}
         <div className="flex gap-1.5">
           {([
             { key: 'OPEN', label: `Active (${filtered.filter(d => SCHED_OPEN.includes(d.status)).length})`, on: 'bg-black text-white' },
