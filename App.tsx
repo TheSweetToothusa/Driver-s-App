@@ -2175,603 +2175,245 @@ const ScheduleView: React.FC<{
   onSelectOrder: (order: Delivery) => void;
   onUpdateOrder: (id: string, updates: Partial<Delivery>) => void;
 }> = ({ deliveries, role, currentUserId, allUsers, onSelectOrder, onUpdateOrder }) => {
-  const [viewMode, setViewMode] = useState<ViewMode>('WEEK');
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-  const [customStart, setCustomStart] = useState(new Date().toISOString().split('T')[0]);
-  const [customEnd, setCustomEnd] = useState(new Date().toISOString().split('T')[0]);
-  const [filterDriver, setFilterDriver] = useState('ALL');
   const isAdmin = role === 'SUPER_ADMIN' || role === 'MANAGER';
+  const todayStr = new Date().toISOString().split('T')[0];
+  const tomorrowStr = new Date(Date.now() + 86400000).toISOString().split('T')[0];
 
-  const getRange = (): [string, string] => {
-    const d = new Date(selectedDate);
-    if (viewMode === 'DAY') return [selectedDate, selectedDate];
-    if (viewMode === 'WEEK') {
-      const s = new Date(d); s.setDate(d.getDate() - d.getDay());
-      const e = new Date(s); e.setDate(s.getDate() + 6);
-      return [s.toISOString().split('T')[0], e.toISOString().split('T')[0]];
-    }
-    if (viewMode === 'MONTH') {
-      const s = new Date(d.getFullYear(), d.getMonth(), 1);
-      const e = new Date(d.getFullYear(), d.getMonth() + 1, 0);
-      return [s.toISOString().split('T')[0], e.toISOString().split('T')[0]];
-    }
-    return [customStart, customEnd];
-  };
+  const [search, setSearch] = useState('');
+  const [driverFilter, setDriverFilter] = useState('ALL');
+  const [statusFilter, setStatusFilter] = useState<'OPEN'|'DONE'|'ALL'>('OPEN');
 
-  const [rangeStart, rangeEnd] = getRange();
+  const activeDrivers = useMemo(() =>
+    allUsers.filter(u => (u.role === 'DRIVER' || u.role === 'MANAGER') && u.isActive),
+    [allUsers]
+  );
 
-  const filtered = useMemo(() => deliveries.filter(d => {
-    const date = (d.deliveryDate || new Date().toISOString()).split('T')[0];
-    const inRange = date >= rangeStart && date <= rangeEnd;
-    const myOrder = isAdmin ? true : (d.driverId === currentUserId || !d.driverId);
-    const driverMatch = (isAdmin && filterDriver !== 'ALL') ? d.driverId === filterDriver : true;
-    return inRange && myOrder && driverMatch;
-  }), [deliveries, rangeStart, rangeEnd, currentUserId, isAdmin, filterDriver]);
+  const OPEN_STATUSES = ['PENDING','ASSIGNED','IN_TRANSIT','SCHEDULED','SECOND_ATTEMPT','FAILED','PENDING_RESCHEDULE'];
+  const DONE_STATUSES = ['DELIVERED','CLOSED'];
 
+  // Filter deliveries
+  const filtered = useMemo(() => {
+    return deliveries.filter(d => {
+      // Driver filter
+      if (!isAdmin) {
+        if (d.driverId !== currentUserId && d.driverId !== 'manager_1') return false;
+      } else if (driverFilter !== 'ALL') {
+        if (d.driverId !== driverFilter) return false;
+      }
+      // Status filter
+      if (statusFilter === 'OPEN' && !OPEN_STATUSES.includes(d.status)) return false;
+      if (statusFilter === 'DONE' && !DONE_STATUSES.includes(d.status)) return false;
+      // Search
+      if (search.trim()) {
+        const q = search.toLowerCase();
+        return (
+          (d.giftReceiverName || '').toLowerCase().includes(q) ||
+          (d.customer?.name || '').toLowerCase().includes(q) ||
+          (d.orderNumber || '').toLowerCase().includes(q) ||
+          (d.address?.city || '').toLowerCase().includes(q) ||
+          (d.address?.zip || '').toLowerCase().includes(q) ||
+          (d.address?.street || '').toLowerCase().includes(q) ||
+          (d.driverName || '').toLowerCase().includes(q)
+        );
+      }
+      return true;
+    });
+  }, [deliveries, driverFilter, statusFilter, search, isAdmin, currentUserId]);
+
+  // Group by date, sorted ascending
   const grouped = useMemo(() => {
     const map: Record<string, Delivery[]> = {};
     filtered.forEach(d => {
-      const date = (d.deliveryDate || new Date().toISOString()).split('T')[0];
-      if (!map[date]) map[date] = [];
-      map[date].push(d);
+      const key = (d.deliveryDate || 'unscheduled').split('T')[0];
+      if (!map[key]) map[key] = [];
+      map[key].push(d);
     });
-    return Object.entries(map).sort(([a], [b]) => a.localeCompare(b));
+    return Object.entries(map).sort(([a], [b]) => {
+      if (a === 'unscheduled') return 1;
+      if (b === 'unscheduled') return -1;
+      return a.localeCompare(b);
+    });
   }, [filtered]);
 
-  // Use allUsers so ALL drivers show regardless of current assignments
-  const uniqueDrivers = useMemo(() => {
-    return allUsers
-      .filter(u => (u.role === 'DRIVER' || u.role === 'MANAGER') && u.isActive)
-      .map(u => ({ id: u.id, name: u.name }));
-  }, [allUsers]);
-
-  const shiftDay = (n: number) => {
-    const d = new Date(selectedDate + 'T12:00:00');
-    d.setDate(d.getDate() + n);
-    setSelectedDate(d.toISOString().split('T')[0]);
-  };
-  const todayStr = new Date().toISOString().split('T')[0];
-  const fmtSelectedDate = (iso: string) => {
+  const fmtDateHeader = (iso: string) => {
+    if (iso === 'unscheduled') return { label: 'Unscheduled', sub: '', isToday: false, isTomorrow: false };
     const d = new Date(iso + 'T12:00:00');
     const isToday = iso === todayStr;
-    const isTomorrow = iso === new Date(Date.now()+86400000).toISOString().split('T')[0];
-    const isYesterday = iso === new Date(Date.now()-86400000).toISOString().split('T')[0];
-    const label = isToday ? 'Today' : isTomorrow ? 'Tomorrow' : isYesterday ? 'Yesterday' : '';
-    return { day: d.toLocaleDateString('en-US',{weekday:'short'}), date: d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}), label };
+    const isTomorrow = iso === tomorrowStr;
+    return {
+      label: isToday ? 'TODAY' : isTomorrow ? 'TOMORROW' : d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }).toUpperCase(),
+      sub: d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
+      isToday,
+      isTomorrow,
+    };
   };
-  const fmt = fmtSelectedDate(selectedDate);
-
-  const [schedStatusFilter, setSchedStatusFilter] = useState<'ALL'|'OPEN'|'SCHEDULED'|'FAILED'|'2ND'|'CLOSED'>('OPEN');
-  const [schedSearch, setSchedSearch] = useState('');
-  const [routeOptimized, setRouteOptimized] = useState(false);
-  const [routeOrder, setRouteOrder] = useState<string[]>([]);
-  const [routeTotalDist, setRouteTotalDist] = useState(0);
-  const [routeLoading, setRouteLoading] = useState(false);
-  const [showRouteMap, setShowRouteMap] = useState(false);
-  const [driverLat, setDriverLat] = useState(0);
-  const [driverLng, setDriverLng] = useState(0);
-  const [geocoding, setGeocoding] = useState(false);
-  const [navPref, setNavPref] = useState<'waze'|'google'>(() => {
-    try { return (localStorage.getItem('st_nav_pref') as 'waze'|'google') || 'waze'; } catch { return 'waze'; }
-  });
-
-  const SCHED_OPEN = ['PENDING','ASSIGNED','IN_TRANSIT'] as string[];
-  const SCHED_SCHEDULED = ['SCHEDULED'] as string[];
-  const SCHED_FAILED = ['FAILED'] as string[];
-  const SCHED_2ND = ['SECOND_ATTEMPT'] as string[];
-  const SCHED_CLOSED = ['DELIVERED','FAILED','SECOND_ATTEMPT','PENDING_RESCHEDULE','CLOSED'] as string[];
-
-  // ── Route optimization logic ──
-  const activeDeliveries = useMemo(() => {
-    return filtered.filter(d => !['DELIVERED','CLOSED'].includes(d.status));
-  }, [filtered]);
-
-  const optimizeRoute = useCallback(async () => {
-    if (activeDeliveries.length === 0) return;
-    setRouteLoading(true);
-
-    // Get driver's current location
-    let lat = 25.946, lng = -80.155; // fallback: store location
-    try {
-      const pos = await new Promise<GeolocationPosition>((resolve, reject) =>
-        navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 8000, enableHighAccuracy: true })
-      );
-      lat = pos.coords.latitude;
-      lng = pos.coords.longitude;
-    } catch { /* use fallback */ }
-    setDriverLat(lat);
-    setDriverLng(lng);
-
-    // Check which orders need geocoding (lat/lng = 0 or missing)
-    const needGeocode = activeDeliveries.filter(d => !d.address?.lat || !d.address?.lng || (d.address.lat === 0 && d.address.lng === 0));
-    if (needGeocode.length > 0) {
-      setGeocoding(true);
-      try {
-        const resp = await fetch('/api/geocode', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ addresses: needGeocode.map(d => ({ id: d.id, street: d.address?.street || '', city: d.address?.city || 'Miami', zip: d.address?.zip || '' })) })
-        });
-        const data = await resp.json();
-        // Update the deliveries in-memory with geocoded coords
-        if (data.results) {
-          needGeocode.forEach(d => {
-            if (data.results[d.id]) {
-              d.address.lat = data.results[d.id].lat;
-              d.address.lng = data.results[d.id].lng;
-            }
-          });
-        }
-      } catch { /* proceed with what we have */ }
-      setGeocoding(false);
-    }
-
-    // Build stops array with valid coords only
-    const stops = activeDeliveries
-      .filter(d => d.address?.lat && d.address?.lng && d.address.lat !== 0)
-      .map(d => ({ id: d.id, lat: d.address.lat, lng: d.address.lng }));
-
-    if (stops.length === 0) { setRouteLoading(false); return; }
-
-    try {
-      const resp = await fetch('/api/route/optimize', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ stops, startLat: lat, startLng: lng })
-      });
-      const data = await resp.json();
-      setRouteOrder(data.order || []);
-      setRouteTotalDist(data.totalDistance || 0);
-      setRouteOptimized(true);
-    } catch { /* fail silently */ }
-    setRouteLoading(false);
-  }, [activeDeliveries]);
-
-  // Auto-re-optimize when active deliveries change (order added/removed/completed)
-  const prevActiveCount = useRef(activeDeliveries.length);
-  useEffect(() => {
-    if (routeOptimized && activeDeliveries.length !== prevActiveCount.current) {
-      optimizeRoute();
-    }
-    prevActiveCount.current = activeDeliveries.length;
-  }, [activeDeliveries.length, routeOptimized, optimizeRoute]);
-
-  // Build sorted deliveries list: optimized order for active, then completed at bottom
-  const sortedDeliveries = useMemo(() => {
-    if (!routeOptimized || routeOrder.length === 0) return null; // null = don't override default
-    const active = activeDeliveries.slice();
-    const idxMap = new Map(routeOrder.map((id, i) => [id, i]));
-    active.sort((a, b) => { const ai: number = idxMap.has(a.id) ? (idxMap.get(a.id) as number) : 999; const bi: number = idxMap.has(b.id) ? (idxMap.get(b.id) as number) : 999; return ai - bi; });
-    return active;
-  }, [routeOptimized, routeOrder, activeDeliveries]);
-
-  // Build map stops data
-  const mapStops = useMemo(() => {
-    if (!sortedDeliveries) return [];
-    return sortedDeliveries
-      .filter(d => d.address?.lat && d.address?.lng && d.address.lat !== 0)
-      .map((d, i) => ({
-        id: d.id, lat: d.address.lat, lng: d.address.lng,
-        name: d.giftReceiverName || d.customer?.name || 'Recipient',
-        address: `${d.address?.street || ''}, ${d.address?.city || ''}`,
-        orderNumber: d.orderNumber || d.id,
-        stopNumber: i + 1
-      }));
-  }, [sortedDeliveries]);
-
-  // Navigation deep links
-  const startNavigation = (app: 'waze' | 'google') => {
-    localStorage.setItem('st_nav_pref', app);
-    setNavPref(app);
-    const stopsWithCoords = (sortedDeliveries || []).filter(d => d.address?.lat && d.address.lat !== 0);
-    if (stopsWithCoords.length === 0) return;
-
-    if (app === 'waze') {
-      // Waze supports one destination at a time, so open the first stop
-      const first = stopsWithCoords[0];
-      window.open(`https://waze.com/ul?ll=${first.address.lat},${first.address.lng}&navigate=yes`, '_blank');
-    } else {
-      // Google Maps supports multi-stop via waypoints
-      const dest = stopsWithCoords[stopsWithCoords.length - 1];
-      const waypoints = stopsWithCoords.slice(0, -1).map(d => `${d.address.lat},${d.address.lng}`).join('|');
-      const url = waypoints
-        ? `https://www.google.com/maps/dir/?api=1&destination=${dest.address.lat},${dest.address.lng}&waypoints=${encodeURIComponent(waypoints)}&travelmode=driving`
-        : `https://www.google.com/maps/dir/?api=1&destination=${dest.address.lat},${dest.address.lng}&travelmode=driving`;
-      window.open(url, '_blank');
-    }
-    setShowRouteMap(false);
-  };
-
-  const filteredForStatus = useMemo(() => filtered.filter(d => {
-    if (schedStatusFilter === 'OPEN') { if (!SCHED_OPEN.includes(d.status)) return false; }
-    else if (schedStatusFilter === 'SCHEDULED') { if (!SCHED_SCHEDULED.includes(d.status)) return false; }
-    else if (schedStatusFilter === 'FAILED') { if (!SCHED_FAILED.includes(d.status)) return false; }
-    else if (schedStatusFilter === '2ND') { if (!SCHED_2ND.includes(d.status)) return false; }
-    else if (schedStatusFilter === 'CLOSED') { if (!SCHED_CLOSED.includes(d.status)) return false; }
-    if (!schedSearch.trim()) return true;
-    const q = schedSearch.toLowerCase();
-    return (
-      (d.giftReceiverName || '').toLowerCase().includes(q) ||
-      (d.customer?.name || '').toLowerCase().includes(q) ||
-      (d.orderNumber || '').toLowerCase().includes(q) ||
-      (d.address?.street || '').toLowerCase().includes(q) ||
-      (d.address?.city || '').toLowerCase().includes(q) ||
-      (d.address?.zip || '').toLowerCase().includes(q) ||
-      (d.items?.[0]?.name || '').toLowerCase().includes(q) ||
-      (d.driverName || '').toLowerCase().includes(q)
-    );
-  }), [filtered, schedStatusFilter, schedSearch]);
-
-  const groupedForStatus = useMemo(() => {
-    const map: Record<string, Delivery[]> = {};
-    filteredForStatus.forEach(d => {
-      let date: string;
-      
-      // For completed orders, try completedAt first
-      const isCompleted = d.status === 'DELIVERED' || d.status === 'FAILED' || d.status === 'SECOND_ATTEMPT';
-      if (isCompleted && d.completedAt) {
-        const completedDate = d.completedAt.split('T')[0];
-        // Validate it's a proper date format (YYYY-MM-DD)
-        if (/^\d{4}-\d{2}-\d{2}$/.test(completedDate) && !isNaN(new Date(completedDate).getTime())) {
-          date = completedDate;
-        } else {
-          // completedAt is malformed, fall back to deliveryDate
-          date = (d.deliveryDate || new Date().toISOString()).split('T')[0];
-        }
-      } else {
-        // Not completed or no completedAt - use deliveryDate
-        date = (d.deliveryDate || new Date().toISOString()).split('T')[0];
-      }
-      
-      if (!map[date]) map[date] = [];
-      map[date].push(d);
-    });
-    return Object.entries(map).sort(([a], [b]) => b.localeCompare(a));
-  }, [filteredForStatus]);
 
   return (
-    <div className="flex flex-col h-full bg-white">
-      <div className="sticky top-0 bg-white z-10 border-b border-stone-200 px-4 pt-3 pb-3 space-y-2">
-        {/* Search bar — always visible at top */}
+    <div className="flex flex-col h-full bg-stone-50">
+
+      {/* ── STICKY HEADER ── */}
+      <div className="sticky top-0 z-10 bg-white border-b border-stone-200 px-4 pt-3 pb-3 space-y-2.5 shadow-sm">
+
+        {/* Search */}
         <div className="relative">
           <input
-            value={schedSearch}
-            onChange={e => setSchedSearch(e.target.value)}
-            placeholder="Search name, order #, address, city, ZIP..."
-            className="w-full bg-stone-50 border-2 border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black pr-9"
+            value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Search name, order #, city, ZIP, driver..."
+            className="w-full bg-stone-50 border-2 border-stone-200 rounded-xl px-4 py-2.5 text-sm font-bold outline-none focus:border-black pr-9"
           />
-          {schedSearch ? (
-            <button onClick={() => setSchedSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400">
-              <X size={16} />
-            </button>
-          ) : (
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-300">🔍</span>
-          )}
+          {search
+            ? <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400"><X size={16} /></button>
+            : <span className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-300 text-base">🔍</span>
+          }
         </div>
-        {/* Driver filter + view mode row */}
+
+        {/* Driver filter (admin only) + status toggle */}
         <div className="flex gap-2 items-center">
-          {isAdmin && uniqueDrivers.length > 0 && (
-            <select value={filterDriver} onChange={e => setFilterDriver(e.target.value)}
-              className="flex-1 bg-stone-50 border-2 border-stone-200 rounded-xl px-3 py-2.5 text-sm font-black outline-none focus:border-black">
-              <option value="ALL">All Drivers</option>
-              {uniqueDrivers.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+          {isAdmin && (
+            <select value={driverFilter} onChange={e => setDriverFilter(e.target.value)}
+              className="flex-1 bg-stone-50 border-2 border-stone-200 rounded-xl px-3 py-2 text-sm font-black outline-none focus:border-black">
+              <option value="ALL">All Drivers ({deliveries.filter(d => OPEN_STATUSES.includes(d.status)).length} open)</option>
+              {activeDrivers.map(u => (
+                <option key={u.id} value={u.id}>
+                  {u.name} ({deliveries.filter(d => d.driverId === u.id && OPEN_STATUSES.includes(d.status)).length} open)
+                </option>
+              ))}
             </select>
           )}
-          <div className="flex gap-1 shrink-0">
-            {(['DAY','WEEK','MONTH'] as ViewMode[]).map(m => (
-              <button key={m} onClick={() => setViewMode(m)}
-                className={`px-3 py-2.5 rounded-xl font-black uppercase text-[10px] transition-all ${viewMode === m ? 'bg-black text-white' : 'bg-stone-100 text-stone-500'}`}
-              >{m}</button>
-            ))}
-          </div>
         </div>
-        {/* Date nav — only visible in DAY mode */}
-        {viewMode === 'DAY' && (
-          <div className="flex items-center gap-2">
-            <button onClick={() => shiftDay(-1)} className="w-10 h-10 bg-stone-100 rounded-xl flex items-center justify-center active:bg-stone-200 shrink-0">
-              <ChevronLeft size={20} className="text-stone-700" />
-            </button>
-            <div className="flex-1 text-center">
-              {fmt.label && <p className="text-[9px] font-black uppercase text-black tracking-widest">{fmt.label}</p>}
-              <p className="text-sm font-black text-stone-900">{fmt.day}, {fmt.date}</p>
-            </div>
-            <button onClick={() => shiftDay(1)} className="w-10 h-10 bg-stone-100 rounded-xl flex items-center justify-center active:bg-stone-200 shrink-0">
-              <ChevronRight size={20} className="text-stone-700" />
-            </button>
-          </div>
-        )}
-        {/* Status filter */}
+
+        {/* Status tabs */}
         <div className="flex gap-1.5">
           {([
-            { key: 'OPEN', label: `Active (${filtered.filter(d => SCHED_OPEN.includes(d.status)).length})`, on: 'bg-black text-white' },
-            { key: 'FAILED', label: `Failed (${filtered.filter(d => d.status === 'FAILED').length})`, on: 'bg-red-600 text-white' },
-            { key: 'CLOSED', label: `Done (${filtered.filter(d => SCHED_CLOSED.includes(d.status)).length})`, on: 'bg-green-600 text-white' },
-            { key: 'ALL', label: `All (${filtered.length})`, on: 'bg-stone-600 text-white' },
+            { key: 'OPEN', label: `Active`, count: deliveries.filter(d => OPEN_STATUSES.includes(d.status) && (driverFilter === 'ALL' || d.driverId === driverFilter)).length },
+            { key: 'DONE', label: `Delivered`, count: deliveries.filter(d => DONE_STATUSES.includes(d.status) && (driverFilter === 'ALL' || d.driverId === driverFilter)).length },
+            { key: 'ALL',  label: `All`, count: deliveries.filter(d => driverFilter === 'ALL' || d.driverId === driverFilter).length },
           ] as const).map(f => (
-            <button key={f.key} onClick={() => setSchedStatusFilter(f.key as any)}
-              className={`flex-1 py-2 rounded-lg font-black text-[9px] uppercase transition-all ${schedStatusFilter === f.key ? f.on : 'bg-stone-100 text-stone-500'}`}>
-              {f.label}
+            <button key={f.key} onClick={() => setStatusFilter(f.key)}
+              className={`flex-1 py-2 rounded-xl font-black text-xs uppercase transition-all ${
+                statusFilter === f.key
+                  ? f.key === 'OPEN' ? 'bg-black text-white' : f.key === 'DONE' ? 'bg-green-600 text-white' : 'bg-stone-600 text-white'
+                  : 'bg-stone-100 text-stone-500'
+              }`}>
+              {f.label} ({f.count})
             </button>
           ))}
         </div>
       </div>
 
-      {/* Route Optimize Button */}
-      {activeDeliveries.length >= 2 && (
-        <div className="px-4 py-2 bg-stone-50 border-b border-stone-200">
-          {!routeOptimized ? (
-            <button onClick={optimizeRoute} disabled={routeLoading || geocoding}
-              className="w-full py-3 bg-black text-white rounded-2xl font-black uppercase text-xs flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50">
-              {routeLoading ? (
-                <><RefreshCw size={14} className="animate-spin" /> {geocoding ? 'Finding addresses...' : 'Optimizing...'}</>
-              ) : (
-                <><Route size={14} /> Optimize Route ({activeDeliveries.length} stops)</>
-              )}
-            </button>
-          ) : (
-            <div className="flex gap-2">
-              <button onClick={() => setShowRouteMap(true)}
-                className="flex-1 py-3 bg-black text-white rounded-2xl font-black uppercase text-xs flex items-center justify-center gap-2 active:scale-95">
-                <MapIcon size={14} /> View Map
-              </button>
-              <button onClick={() => startNavigation(navPref)}
-                className={`flex-1 py-3 ${navPref === 'waze' ? 'bg-[#33ccff]' : 'bg-[#4285F4]'} text-white rounded-2xl font-black uppercase text-xs flex items-center justify-center gap-2 active:scale-95`}>
-                <Navigation size={14} /> Start in {navPref === 'waze' ? 'Waze' : 'Maps'}
-              </button>
-              <button onClick={() => { setRouteOptimized(false); setRouteOrder([]); }}
-                className="w-11 h-11 bg-stone-200 rounded-2xl flex items-center justify-center active:scale-95 shrink-0">
-                <X size={16} className="text-stone-600" />
-              </button>
-            </div>
-          )}
-          {routeOptimized && (
-            <div className="flex items-center justify-between mt-1.5">
-              <p className="text-[10px] font-bold text-stone-400">
-                ✓ Optimized: {activeDeliveries.length} stops • ~{routeTotalDist} mi
-              </p>
-              <button onClick={() => setNavPref(p => { const n = p === 'waze' ? 'google' : 'waze'; localStorage.setItem('st_nav_pref', n); return n; })}
-                className="text-[10px] font-black text-blue-600 uppercase">
-                Switch to {navPref === 'waze' ? 'Google Maps' : 'Waze'}
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Column header */}
-      <div className="grid grid-cols-[1fr_80px] px-4 py-1.5 bg-stone-100 border-b border-stone-200">
-        <p className="text-[9px] font-black uppercase text-stone-500 tracking-widest">
-          {routeOptimized ? 'Optimized Stop Order' : 'Order / Address'}
-        </p>
-        <p className="text-[9px] font-black uppercase text-stone-500 tracking-widest text-right">Status</p>
-      </div>
-
-      <div className="flex-1 overflow-y-auto pb-24">
-        {/* Route-optimized flat list (no date grouping — shows stop numbers) */}
-        {routeOptimized && sortedDeliveries && sortedDeliveries.length > 0 ? (
-          <>
-            {sortedDeliveries.map((order, idx) => (
-              <div key={order.id} className="flex items-stretch border-b border-stone-100 bg-white active:bg-stone-50 cursor-pointer" onClick={() => onSelectOrder(order)}>
-                {/* Stop number badge */}
-                <div className="w-10 flex items-center justify-center shrink-0 bg-stone-50">
-                  <div className="w-7 h-7 bg-black rounded-full flex items-center justify-center">
-                    <span className="text-white font-black text-xs">{idx + 1}</span>
-                  </div>
+      {/* ── ORDER LIST ── */}
+      <div className="flex-1 overflow-y-auto pb-28">
+        {grouped.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-24">
+            <Package size={40} className="text-stone-200 mb-3" />
+            <p className="font-black text-stone-300 uppercase text-sm">No orders found</p>
+          </div>
+        ) : grouped.map(([dateKey, orders]) => {
+          const hdr = fmtDateHeader(dateKey);
+          return (
+            <div key={dateKey}>
+              {/* Date group header */}
+              <div className={`px-4 py-2.5 flex items-center justify-between sticky top-0 z-[5] ${hdr.isToday ? 'bg-black' : hdr.isTomorrow ? 'bg-stone-800' : 'bg-stone-700'}`}>
+                <div>
+                  <p className="text-white font-black text-sm tracking-wide">{hdr.label}</p>
+                  {hdr.sub && <p className="text-stone-400 text-[10px] font-bold">{hdr.sub}</p>}
                 </div>
-                {/* Order info */}
-                <div className="flex-1 px-3 py-2.5 min-w-0">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-black text-stone-900 leading-tight">{order.giftReceiverName || order.customer?.name || '—'}</p>
-                      <p className="text-base font-black text-black leading-tight">{order.address?.city} {order.address?.zip}</p>
-                      <p className="text-[10px] text-stone-400 truncate">{order.address?.street}</p>
-                      {order.items?.[0] && <p className="text-[10px] text-stone-500 truncate mt-0.5">{order.items[0].name}{order.items[0].quantity > 1 ? ` ×${order.items[0].quantity}` : ''}</p>}
-                      {order.deliveryInstructions && (
-                        <div className="flex items-center gap-1 mt-1 bg-red-50 border border-red-200 rounded px-2 py-1">
-                          <AlertTriangle size={10} className="text-red-600 shrink-0" />
-                          <p className="text-[10px] font-black text-red-700 leading-tight truncate">{order.deliveryInstructions}</p>
+                <div className="flex items-center gap-2">
+                  <span className="text-white font-black text-xs bg-white/20 px-2 py-0.5 rounded-full">{orders.length} orders</span>
+                  <span className="text-green-400 font-black text-xs">
+                    ${orders.reduce((s, o) => s + (o.deliveryFee || 0), 0).toFixed(2)} fees
+                  </span>
+                </div>
+              </div>
+
+              {/* Cards for this date */}
+              {orders.map(order => {
+                const name = order.giftReceiverName || order.customer?.name || '—';
+                const cleanNum = (order.orderNumber || order.id).replace(/^#+/, '');
+                const fee = order.deliveryFee || DELIVERY_FEES[order.address?.zip || ''] || 0;
+                const statusCfg = STATUS_CONFIG[order.status] || STATUS_CONFIG.PENDING;
+                const isDone = DONE_STATUSES.includes(order.status);
+
+                return (
+                  <div key={order.id} className={`border-b border-stone-100 ${isDone ? 'bg-green-50' : 'bg-white'}`}>
+                    {/* Main card row — tappable */}
+                    <div className="flex items-stretch cursor-pointer active:bg-stone-50" onClick={() => onSelectOrder(order)}>
+                      {/* Status stripe */}
+                      <div className={`w-1.5 shrink-0 ${statusCfg.bg}`} />
+                      <div className="flex-1 px-3 py-3 min-w-0">
+                        <div className="flex items-start gap-2">
+                          {/* Left: all order info */}
+                          <div className="flex-1 min-w-0">
+                            {/* Order number + status badge */}
+                            <div className="flex items-center gap-2 mb-0.5">
+                              <p className="text-[11px] font-black text-stone-400">#{cleanNum}</p>
+                              <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full ${statusCfg.bg} ${statusCfg.text}`}>{statusCfg.label}</span>
+                              {(order as any).isManual && <span className="text-[9px] font-black px-1.5 py-0.5 bg-violet-100 text-violet-700 rounded-full">Manual</span>}
+                            </div>
+                            {/* Recipient name */}
+                            <p className="text-base font-black text-stone-900 leading-tight truncate">{name}</p>
+                            {/* CITY — big and bold */}
+                            <p className="text-lg font-black text-black leading-tight">{order.address?.city || '—'} <span className="text-sm font-bold text-stone-400">{order.address?.zip}</span></p>
+                            {/* Street — small */}
+                            <p className="text-xs text-stone-400 font-medium truncate">{order.address?.street}{order.address?.unit ? `, ${order.address.unit}` : ''}</p>
+                            {/* Product */}
+                            {order.items?.[0] && <p className="text-[11px] text-stone-500 truncate mt-0.5">{order.items[0].name}</p>}
+                            {/* Real delivery instructions only */}
+                            {order.deliveryInstructions && (
+                              <div className="flex items-center gap-1 mt-1 bg-red-50 border border-red-200 rounded-lg px-2 py-1">
+                                <AlertTriangle size={10} className="text-red-600 shrink-0" />
+                                <p className="text-[10px] font-black text-red-700 truncate">{order.deliveryInstructions}</p>
+                              </div>
+                            )}
+                          </div>
+                          {/* Right: fee */}
+                          <div className="shrink-0 text-right pt-5">
+                            {fee > 0
+                              ? <p className="text-lg font-black text-green-700">${fee.toFixed(0)}</p>
+                              : <p className="text-xs text-stone-300 font-bold">—</p>
+                            }
+                            {isDone && <p className="text-[9px] font-black text-green-600 mt-0.5">✓ DONE</p>}
+                          </div>
                         </div>
-                      )}
+                      </div>
                     </div>
-                    <div className="shrink-0 text-right flex flex-col items-end gap-1">
-                      <p className="text-[11px] font-black text-stone-500">#{order.orderNumber?.replace(/^#+/, '') || order.id}</p>
-                      <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${(STATUS_CONFIG[order.status] || STATUS_CONFIG.PENDING).bg} ${(STATUS_CONFIG[order.status] || STATUS_CONFIG.PENDING).text}`}>
-                        {(STATUS_CONFIG[order.status] || STATUS_CONFIG.PENDING).label}
-                      </span>
-                    </div>
+
+                    {/* Driver assignment row — admin only, below the card, separate tap zone */}
+                    {isAdmin && (
+                      <div className="px-4 pb-2.5 pt-0 flex items-center gap-2 bg-inherit" onClick={e => e.stopPropagation()}>
+                        <Users size={13} className="text-stone-400 shrink-0" />
+                        <select
+                          value={order.driverId || ''}
+                          onChange={async e => {
+                            const u = allUsers.find(u => u.id === e.target.value);
+                            if (!u) return;
+                            onUpdateOrder(order.id, { driverId: u.id, driverName: u.name });
+                            const isManual = (order as any).isManual;
+                            await fetch(isManual ? `/api/manual-orders/${order.id}` : `/api/orders/${order.id}/assign`, {
+                              method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ driverId: u.id, driverName: u.name })
+                            });
+                          }}
+                          className="flex-1 bg-stone-50 border border-stone-200 rounded-lg px-2 py-1.5 text-sm font-black outline-none text-stone-700 focus:border-black"
+                        >
+                          <option value="">— Assign Driver —</option>
+                          {activeDrivers.map(u => (
+                            <option key={u.id} value={u.id}>{u.name}{order.driverId === u.id ? ' ✓' : ''}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
                   </div>
-                </div>
-              </div>
-            ))}
-            {/* Show completed orders below the optimized list */}
-            {filtered.filter(d => ['DELIVERED','CLOSED'].includes(d.status)).length > 0 && (
-              <div>
-                <div className="px-4 py-2 bg-stone-200 border-b border-stone-300">
-                  <p className="text-[10px] font-black uppercase text-stone-500">Completed Today</p>
-                </div>
-                {filtered.filter(d => ['DELIVERED','CLOSED'].includes(d.status)).map(order => (
-                  <OrderCard key={order.id} order={order} role={role} onTap={() => onSelectOrder(order)} allUsers={allUsers} onUpdate={onUpdateOrder} />
-                ))}
-              </div>
-            )}
-          </>
-        ) : (
-          /* Default grouped-by-date view */
-          groupedForStatus.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-24">
-              <Calendar size={36} className="text-stone-200 mb-3" />
-              <p className="text-[11px] font-black uppercase text-stone-300">No deliveries in this range</p>
+                );
+              })}
             </div>
-          ) : groupedForStatus.map(([date, orders]) => {
-            const parsedDate = new Date(date + 'T12:00:00');
-            const isValidDate = !isNaN(parsedDate.getTime());
-            
-            return (
-              <div key={date}>
-                <div className="px-4 py-2.5 bg-stone-900 flex items-center justify-between sticky top-0 z-[5]">
-                  <p className="text-sm font-black text-white">
-                    {isValidDate 
-                      ? parsedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
-                      : date}
-                  </p>
-                  <span className="text-[10px] font-black text-stone-400 bg-stone-800 px-2 py-0.5 rounded-full">{orders.length}</span>
-                </div>
-                {orders.map(order => <OrderCard key={order.id} order={order} role={role} onTap={() => onSelectOrder(order)} allUsers={allUsers} onUpdate={onUpdateOrder} />)}
-              </div>
-            );
-          })
-        )}
+          );
+        })}
       </div>
-
-      {/* Route Map Overlay */}
-      {showRouteMap && routeOptimized && (
-        <RouteMapPanel
-          stops={mapStops}
-          driverLat={driverLat}
-          driverLng={driverLng}
-          onClose={() => setShowRouteMap(false)}
-          onStartNav={startNavigation}
-          totalDistance={routeTotalDist}
-        />
-      )}
     </div>
   );
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// PENDING RESCHEDULE QUEUE (Katie's Dashboard)
-// ─────────────────────────────────────────────────────────────────────────────
-
-const PendingRescheduleQueue: React.FC<{ allUsers: UserAccount[] }> = ({ allUsers }) => {
-  const [queue, setQueue] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetch('/api/reschedule/pending').then(r => r.json()).then(d => { setQueue(d.queue || []); setLoading(false); });
-  }, []);
-
-  const updateEntry = async (id: string, updates: any) => {
-    const res = await fetch(`/api/reschedule/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updates) });
-    const data = await res.json();
-    setQueue(prev => prev.map(e => e.id === id ? data.entry : e));
-  };
-
-  const pending = queue.filter(e => e.status === 'PENDING');
-
-  if (loading) return <div className="flex items-center justify-center py-24"><RefreshCw size={24} className="animate-spin text-stone-300" /></div>;
-
-  return (
-    <div className="p-5 space-y-4">
-      <div className="flex items-center gap-2 mb-2">
-        <Inbox size={18} className="text-amber-500" />
-        <h3 className="font-black uppercase text-stone-800">Pending Reschedule</h3>
-        {pending.length > 0 && <span className="bg-amber-100 text-amber-700 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">{pending.length}</span>}
-      </div>
-
-      {pending.length === 0 && (
-        <div className="text-center py-12">
-          <Check size={32} className="mx-auto text-green-300 mb-2" />
-          <p className="text-[11px] font-black uppercase text-stone-300">All clear — no pending reschedules</p>
-        </div>
-      )}
-
-      {pending.map(entry => (
-        <div key={entry.id} className="p-5 bg-white border border-amber-200 rounded-[28px] shadow-sm space-y-3">
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="font-black text-stone-900">{entry.customer?.name}</p>
-              <p className="text-xs text-stone-500">{entry.address?.street}, {entry.address?.city}</p>
-              <p className="text-xs text-stone-400">{entry.customer?.phone || entry.customer?.email}</p>
-            </div>
-            <span className="text-[9px] font-black uppercase bg-amber-100 text-amber-700 px-2 py-1 rounded-full">Pending</span>
-          </div>
-          <div className="p-3 bg-red-50 rounded-xl border border-red-100">
-            <p className="text-[9px] font-black uppercase text-red-400 mb-1">Failure</p>
-            <p className="text-xs font-black text-stone-800">{FAILURE_REASON_LABELS[entry.failureReason as FailureReason] || entry.failureReason}</p>
-            {entry.driverNotes && <p className="text-xs text-stone-500 italic mt-1">"{entry.driverNotes}"</p>}
-            <p className="text-[10px] text-stone-400 mt-1">Driver: {entry.driverName} • {entry.submittedAt ? formatDate(entry.submittedAt) : ''}</p>
-          </div>
-          {entry.photo && <img src={entry.photo} className="w-full rounded-xl max-h-32 object-cover border border-stone-100" alt="Proof" />}
-          <div className="grid grid-cols-3 gap-2">
-            <button onClick={() => updateEntry(entry.id, { status: 'REASSIGNED' })}
-              className="py-3 bg-black text-white rounded-2xl font-black uppercase text-[10px] active:scale-95">Reassign</button>
-            <button onClick={() => { const addr = prompt('New address:'); if (addr) updateEntry(entry.id, { status: 'REASSIGNED', newAddress: addr }); }}
-              className="py-3 bg-stone-100 text-stone-700 rounded-2xl font-black uppercase text-[10px] active:scale-95">Edit Addr</button>
-            <button onClick={() => updateEntry(entry.id, { status: 'CANCELLED' })}
-              className="py-3 bg-red-50 text-red-500 rounded-2xl font-black uppercase text-[10px] active:scale-95">Cancel</button>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
-// DRIVER PAY CARD — collapsible per-delivery fees row
-// ─────────────────────────────────────────────────────────────────────────────
-
-const DriverPayCard: React.FC<{
-  row: { id: string; name: string; count: number; total: number; stops: Delivery[] }
-}> = ({ row }) => {
-  const [open, setOpen] = useState(false);
-
-  return (
-    <div className="bg-white border border-stone-100 rounded-[28px] shadow-sm overflow-hidden">
-      {/* Summary row — always visible */}
-      <button onClick={() => setOpen(o => !o)}
-        className="w-full p-5 flex items-center justify-between active:bg-stone-50 transition-all">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-stone-100 rounded-full flex items-center justify-center shrink-0">
-            <User size={18} className="text-stone-500" />
-          </div>
-          <div className="text-left">
-            <p className="font-black text-stone-900">{row.name}</p>
-            <p className="text-[10px] font-black text-stone-400 uppercase">
-              {row.count} {row.count === 1 ? 'delivery' : 'deliveries'}
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-3">
-          <span className="text-2xl font-black text-stone-900">${row.total.toFixed(2)}</span>
-          <ChevronRight size={16} className={`text-stone-300 transition-transform ${open ? 'rotate-90' : ''}`} />
-        </div>
-      </button>
-
-      {/* Drill-down — each delivery */}
-      {open && (
-        <div className="border-t border-stone-50">
-          {row.stops.map((d, i) => (
-            <div key={d.id}
-              className={`flex items-center justify-between px-5 py-3.5 ${i % 2 === 0 ? 'bg-white' : 'bg-stone-50/50'}`}>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-black text-stone-800 truncate">
-                  {d.giftReceiverName || d.customer.name}
-                </p>
-                <p className="text-[10px] text-stone-400 font-medium">
-                  #{d.orderNumber} · {d.address.city} {d.address.zip}
-                </p>
-                {d.completedAt && (
-                  <p className="text-[9px] font-black text-stone-300 uppercase mt-0.5">
-                    {new Date(d.completedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} at {formatTime(d.completedAt)}
-                  </p>
-                )}
-              </div>
-              <span className="text-sm font-black text-green-700 ml-3 shrink-0">
-                ${(d.deliveryFee || 0).toFixed(2)}
-              </span>
-            </div>
-          ))}
-
-          {/* Driver subtotal footer */}
-          <div className="flex items-center justify-between px-5 py-4 bg-stone-900 rounded-b-[28px]">
-            <span className="text-[10px] font-black uppercase text-white/60">
-              Total owed to {row.name}
-            </span>
-            <span className="text-xl font-black text-white">${row.total.toFixed(2)}</span>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
 
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -4526,10 +4168,10 @@ export default function App() {
   const [defaultDriver, setDefaultDriver] = useState<{ driverId: string | null; driverName: string | null }>({ driverId: null, driverName: null });
   // Global manual delivery state — accessible from any tab
   const [showGlobalAddManual, setShowGlobalAddManual] = useState(false);
-  const [globalManualForm, setGlobalManualForm] = useState({ recipientName: '', recipientPhone: '', recipientEmail: '', street: '', unit: '', city: '', zip: '', deliveryDate: new Date().toISOString().split('T')[0], deliveryInstructions: '', itemDescription: '', orderTotal: '', giftSenderName: '', giftMessage: '', driverId: '', driverName: '' });
+  const [globalManualForm, setGlobalManualForm] = useState({ recipientName: '', recipientPhone: '', recipientEmail: '', street: '', unit: '', city: '', zip: '', deliveryFee: '', deliveryDate: new Date().toISOString().split('T')[0], deliveryInstructions: '', itemDescription: '', orderTotal: '', giftSenderName: '', giftMessage: '', driverId: '', driverName: '' });
   const [globalManualSaving, setGlobalManualSaving] = useState(false);
   const [globalManualError, setGlobalManualError] = useState('');
-  const openAddManual = () => { setGlobalManualForm({ recipientName: '', recipientPhone: '', recipientEmail: '', street: '', unit: '', city: '', zip: '', deliveryDate: new Date().toISOString().split('T')[0], deliveryInstructions: '', itemDescription: '', orderTotal: '', giftSenderName: '', giftMessage: '', driverId: '', driverName: '' }); setGlobalManualError(''); setShowGlobalAddManual(true); };
+  const openAddManual = () => { setGlobalManualForm({ recipientName: '', recipientPhone: '', recipientEmail: '', street: '', unit: '', city: '', zip: '', deliveryFee: '', deliveryDate: new Date().toISOString().split('T')[0], deliveryInstructions: '', itemDescription: '', orderTotal: '', giftSenderName: '', giftMessage: '', driverId: '', driverName: '' }); setGlobalManualError(''); setShowGlobalAddManual(true); };
 
   useEffect(() => {
     if (currentUser) {
@@ -4688,32 +4330,90 @@ export default function App() {
               <button onClick={() => setShowGlobalAddManual(false)} className="w-8 h-8 flex items-center justify-center bg-stone-100 rounded-full"><X size={14} /></button>
             </div>
             <div className="overflow-y-auto flex-1 px-5 py-4 space-y-3">
-              <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest">Recipient</p>
-              <input value={globalManualForm.recipientName} onChange={e => setGlobalManualForm(f => ({ ...f, recipientName: e.target.value }))} placeholder="Recipient Name *" className="w-full border border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black" />
-              <input value={globalManualForm.recipientPhone} onChange={e => setGlobalManualForm(f => ({ ...f, recipientPhone: e.target.value }))} placeholder="Recipient Phone" type="tel" className="w-full border border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black" />
-              <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest pt-1">Delivery Address</p>
-              <input value={globalManualForm.street} onChange={e => setGlobalManualForm(f => ({ ...f, street: e.target.value }))} placeholder="Street Address *" className="w-full border border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black" />
-              <input value={globalManualForm.unit} onChange={e => setGlobalManualForm(f => ({ ...f, unit: e.target.value }))} placeholder="Unit / Apt / Suite" className="w-full border border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black" />
+
+              {/* Recipient */}
+              <p className="text-[10px] font-black uppercase text-stone-400 tracking-widest">Recipient</p>
+              <input value={globalManualForm.recipientName} onChange={e => setGlobalManualForm(f => ({ ...f, recipientName: e.target.value }))}
+                placeholder="Recipient Name *" className="w-full border-2 border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black" />
+              <input value={globalManualForm.recipientPhone} onChange={e => setGlobalManualForm(f => ({ ...f, recipientPhone: e.target.value }))}
+                placeholder="Recipient Phone" type="tel" className="w-full border-2 border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black" />
+
+              {/* Address */}
+              <p className="text-[10px] font-black uppercase text-stone-400 tracking-widest pt-1">Delivery Address</p>
+              <input value={globalManualForm.street} onChange={e => setGlobalManualForm(f => ({ ...f, street: e.target.value }))}
+                placeholder="Street Address *" className="w-full border-2 border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black" />
+              <input value={globalManualForm.unit} onChange={e => setGlobalManualForm(f => ({ ...f, unit: e.target.value }))}
+                placeholder="Unit / Apt / Suite" className="w-full border-2 border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black" />
               <div className="flex gap-2">
-                <input value={globalManualForm.city} onChange={e => setGlobalManualForm(f => ({ ...f, city: e.target.value }))} placeholder="City *" className="flex-1 border border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black" />
-                <input value={globalManualForm.zip} onChange={e => setGlobalManualForm(f => ({ ...f, zip: e.target.value }))} placeholder="ZIP *" maxLength={5} className="w-24 border border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black" />
+                <input value={globalManualForm.city} onChange={e => setGlobalManualForm(f => ({ ...f, city: e.target.value }))}
+                  placeholder="City *" className="flex-1 border-2 border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black" />
+                <input value={globalManualForm.zip}
+                  onChange={e => {
+                    const zip = e.target.value.replace(/\D/g,'').slice(0,5);
+                    const autoFee = zip.length === 5 ? (DELIVERY_FEES[zip] ?? null) : null;
+                    setGlobalManualForm(f => ({ ...f, zip, deliveryFee: autoFee !== null ? String(autoFee) : f.deliveryFee }));
+                  }}
+                  placeholder="ZIP *" maxLength={5} inputMode="numeric"
+                  className="w-24 border-2 border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black" />
               </div>
-              <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest pt-1">Delivery Details</p>
-              <input type="date" value={globalManualForm.deliveryDate} onChange={e => setGlobalManualForm(f => ({ ...f, deliveryDate: e.target.value }))} className="w-full border border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black" />
-              <textarea value={globalManualForm.deliveryInstructions} onChange={e => setGlobalManualForm(f => ({ ...f, deliveryInstructions: e.target.value }))} placeholder="Delivery Instructions (gate code, call before, etc.)" rows={2} className="w-full border border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black resize-none" />
-              <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest pt-1">Order Info</p>
-              <textarea value={globalManualForm.itemDescription} onChange={e => setGlobalManualForm(f => ({ ...f, itemDescription: e.target.value }))} placeholder="Item description (e.g. 3 Gift Baskets — Shiva, Dairy) *" rows={2} className="w-full border border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black resize-none" />
-              <input value={globalManualForm.orderTotal} onChange={e => setGlobalManualForm(f => ({ ...f, orderTotal: e.target.value }))} placeholder="Order Total ($)" type="number" className="w-full border border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black" />
-              <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest pt-1">Sender & Gift Message</p>
-              <input value={globalManualForm.giftSenderName} onChange={e => setGlobalManualForm(f => ({ ...f, giftSenderName: e.target.value }))} placeholder="Gift Sender Name" className="w-full border border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black" />
-              <textarea value={globalManualForm.giftMessage} onChange={e => setGlobalManualForm(f => ({ ...f, giftMessage: e.target.value }))} placeholder="Gift Message" rows={2} className="w-full border border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black resize-none" />
-              <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest pt-1">Assign Driver</p>
-              <select value={globalManualForm.driverId} onChange={e => { const u = allUsers.find(u => u.id === e.target.value); setGlobalManualForm(f => ({ ...f, driverId: e.target.value, driverName: u?.name || '' })); }} className="w-full border border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black bg-white">
+
+              {/* Delivery Fee — auto-calculated from ZIP, editable */}
+              <div className={`rounded-xl border-2 px-4 py-3 ${globalManualForm.deliveryFee ? 'border-green-400 bg-green-50' : 'border-stone-200'}`}>
+                <p className="text-[10px] font-black uppercase tracking-widest mb-1 ${globalManualForm.deliveryFee ? 'text-green-700' : 'text-stone-400'}">
+                  💰 Delivery Fee {globalManualForm.zip.length === 5 && !DELIVERY_FEES[globalManualForm.zip] ? '(ZIP not in table — enter manually)' : globalManualForm.zip.length === 5 ? '(auto-calculated from ZIP)' : ''}
+                </p>
+                <div className="flex items-center gap-2">
+                  <span className="text-xl font-black text-stone-400">$</span>
+                  <input
+                    value={globalManualForm.deliveryFee}
+                    onChange={e => setGlobalManualForm(f => ({ ...f, deliveryFee: e.target.value }))}
+                    placeholder="0"
+                    type="number"
+                    className="flex-1 bg-transparent text-2xl font-black outline-none text-green-700 placeholder-stone-300"
+                  />
+                </div>
+              </div>
+
+              {/* Delivery Details */}
+              <p className="text-[10px] font-black uppercase text-stone-400 tracking-widest pt-1">Delivery Details</p>
+              <div>
+                <p className="text-xs font-black text-stone-500 mb-1">Delivery Date *</p>
+                <input type="date" value={globalManualForm.deliveryDate} onChange={e => setGlobalManualForm(f => ({ ...f, deliveryDate: e.target.value }))}
+                  className="w-full border-2 border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black" />
+              </div>
+              <textarea value={globalManualForm.deliveryInstructions} onChange={e => setGlobalManualForm(f => ({ ...f, deliveryInstructions: e.target.value }))}
+                placeholder="⚠️ Delivery Instructions — gate code, call before, etc." rows={2}
+                className="w-full border-2 border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black resize-none" />
+
+              {/* Order Info */}
+              <p className="text-[10px] font-black uppercase text-stone-400 tracking-widest pt-1">Order Info</p>
+              <textarea value={globalManualForm.itemDescription} onChange={e => setGlobalManualForm(f => ({ ...f, itemDescription: e.target.value }))}
+                placeholder="What's in the order? (e.g. Gift Basket — Large Oval, Dairy) *" rows={2}
+                className="w-full border-2 border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black resize-none" />
+              <input value={globalManualForm.orderTotal} onChange={e => setGlobalManualForm(f => ({ ...f, orderTotal: e.target.value }))}
+                placeholder="Order Total e.g. 850" type="number"
+                className="w-full border-2 border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black" />
+
+              {/* Sender */}
+              <p className="text-[10px] font-black uppercase text-stone-400 tracking-widest pt-1">Gift Sender (optional)</p>
+              <input value={globalManualForm.giftSenderName} onChange={e => setGlobalManualForm(f => ({ ...f, giftSenderName: e.target.value }))}
+                placeholder="Sender Name" className="w-full border-2 border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black" />
+              <textarea value={globalManualForm.giftMessage} onChange={e => setGlobalManualForm(f => ({ ...f, giftMessage: e.target.value }))}
+                placeholder="Gift Message" rows={2}
+                className="w-full border-2 border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black resize-none" />
+
+              {/* Driver */}
+              <p className="text-[10px] font-black uppercase text-stone-400 tracking-widest pt-1">Assign Driver *</p>
+              <select value={globalManualForm.driverId}
+                onChange={e => { const u = allUsers.find(u => u.id === e.target.value); setGlobalManualForm(f => ({ ...f, driverId: e.target.value, driverName: u?.name || '' })); }}
+                className="w-full border-2 border-stone-200 rounded-xl px-4 py-3 text-sm font-black outline-none focus:border-black bg-white">
                 <option value="">— Select Driver —</option>
                 {allUsers.filter(u => (u.role === 'DRIVER' || u.role === 'MANAGER') && u.isActive).map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
               </select>
-              {globalManualError && <p className="text-xs font-black text-red-600 text-center">{globalManualError}</p>}
+
+              {globalManualError && <p className="text-sm font-black text-red-600 text-center bg-red-50 rounded-xl py-3">{globalManualError}</p>}
             </div>
+
             <div className="px-5 pt-3 shrink-0 border-t border-stone-100">
               <button disabled={globalManualSaving} onClick={async () => {
                 setGlobalManualError('');
@@ -4722,9 +4422,13 @@ export default function App() {
                 if (!globalManualForm.city.trim()) { setGlobalManualError('City is required.'); return; }
                 if (!globalManualForm.zip.trim()) { setGlobalManualError('ZIP code is required.'); return; }
                 if (!globalManualForm.itemDescription.trim()) { setGlobalManualError('Item description is required.'); return; }
+                if (!globalManualForm.deliveryFee) { setGlobalManualError('Delivery fee is required.'); return; }
                 setGlobalManualSaving(true);
                 try {
-                  const resp = await fetch('/api/manual-orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...globalManualForm, driverId: globalManualForm.driverId || 'manager_1', driverName: globalManualForm.driverName || 'Katie' }) });
+                  const resp = await fetch('/api/manual-orders', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ...globalManualForm, deliveryFee: globalManualForm.deliveryFee, driverId: globalManualForm.driverId || 'manager_1', driverName: globalManualForm.driverName || 'Katie' })
+                  });
                   const data = await resp.json();
                   if (!data.success) throw new Error(data.error || 'Save failed');
                   window.location.reload();
