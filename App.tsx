@@ -1057,14 +1057,9 @@ const OrderDetail: React.FC<{
                   <Navigation size={11} /> Get Directions
                 </span>
               </div>
-              <p className="text-xl font-black text-stone-900 mt-1 leading-snug">{order.address.street}</p>
-              {order.address.unit && (
-                <span className="inline-flex items-center gap-1 mt-1 bg-amber-100 border border-amber-300 text-amber-900 text-sm font-black px-2.5 py-0.5 rounded-md">
-                  🏢 {order.address.unit}
-                </span>
-              )}
+              <p className="text-xl font-black text-stone-900 mt-1 leading-snug">{order.address.street}{order.address.unit ? ` #${order.address.unit}` : ''}</p>
               {order.address.company && <p className="text-sm font-bold text-blue-700 mt-1">📍 {order.address.company}</p>}
-              <p className="text-base font-bold text-stone-600 mt-0.5">{order.address.city}, {order.address.zip}</p>
+              <p className="text-2xl font-black text-black mt-1">{order.address.city}, {order.address.zip}</p>
             </button>
 
             {/* Items with SKU — parcels count */}
@@ -1693,7 +1688,7 @@ const OrdersView: React.FC<OrdersViewProps> = ({
                       {renderAttemptBadge(order)}
                       {(order as any).isManual && <span className="px-1 py-0.5 bg-violet-100 text-violet-700 text-[8px] font-black rounded">Manual</span>}
                     </div>
-                    <p className="text-base font-black text-black mt-0.5 leading-tight">{order.address?.city}{order.address?.zip ? ` ${order.address.zip}` : ''}</p>
+                    <p className="text-xl font-black text-black mt-0.5 leading-tight">{order.address?.city}{order.address?.zip ? ` ${order.address.zip}` : ''}</p>
                     <p className="text-[10px] text-stone-400 truncate">{order.address?.street}</p>
                     {order.items?.[0] && <p className="text-[10px] text-stone-500 truncate">{order.items[0].name}</p>}
                     {order.deliveryInstructions && (
@@ -1764,7 +1759,7 @@ const OrdersView: React.FC<OrdersViewProps> = ({
                       {renderAttemptBadge(order)}
                       {(order as any).isManual && <span className="px-1 py-0.5 bg-violet-100 text-violet-700 text-[8px] font-black rounded">Manual</span>}
                     </div>
-                    <p className="text-base font-black text-black mt-0.5 leading-tight">{order.address?.city}{order.address?.zip ? ` ${order.address.zip}` : ''}</p>
+                    <p className="text-xl font-black text-black mt-0.5 leading-tight">{order.address?.city}{order.address?.zip ? ` ${order.address.zip}` : ''}</p>
                     <p className="text-[10px] text-stone-400 truncate">{order.address?.street}</p>
                     {order.items?.[0] && <p className="text-[10px] text-stone-500 truncate">{order.items[0].name}</p>}
                     {order.deliveryInstructions && (
@@ -2353,7 +2348,7 @@ const ScheduleView: React.FC<{
                             {/* Recipient name */}
                             <p className="text-base font-black text-stone-900 leading-tight truncate">{name}</p>
                             {/* CITY — big and bold */}
-                            <p className="text-lg font-black text-black leading-tight">{order.address?.city || '—'} <span className="text-sm font-bold text-stone-400">{order.address?.zip}</span></p>
+                            <p className="text-2xl font-black text-black leading-tight">{order.address?.city || '—'} <span className="text-base font-bold text-stone-500">{order.address?.zip}</span></p>
                             {/* Street — small */}
                             <p className="text-xs text-stone-400 font-medium truncate">{order.address?.street}{order.address?.unit ? `, ${order.address.unit}` : ''}</p>
                             {/* Product */}
@@ -2378,31 +2373,71 @@ const ScheduleView: React.FC<{
                       </div>
                     </div>
 
-                    {/* Driver assignment row — admin only, below the card, separate tap zone */}
-                    {isAdmin && (
-                      <div className="px-4 pb-2.5 pt-0 flex items-center gap-2 bg-inherit" onClick={e => e.stopPropagation()}>
-                        <Users size={13} className="text-stone-400 shrink-0" />
-                        <select
-                          value={order.driverId || ''}
-                          onChange={async e => {
-                            const u = allUsers.find(u => u.id === e.target.value);
-                            if (!u) return;
-                            onUpdateOrder(order.id, { driverId: u.id, driverName: u.name });
-                            const isManual = (order as any).isManual;
-                            await fetch(isManual ? `/api/manual-orders/${order.id}` : `/api/orders/${order.id}/assign`, {
-                              method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({ driverId: u.id, driverName: u.name })
-                            });
-                          }}
-                          className="flex-1 bg-stone-50 border border-stone-200 rounded-lg px-2 py-1.5 text-sm font-black outline-none text-stone-700 focus:border-black"
-                        >
-                          <option value="">— Assign Driver —</option>
-                          {activeDrivers.map(u => (
-                            <option key={u.id} value={u.id}>{u.name}{order.driverId === u.id ? ' ✓' : ''}</option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
+                    {/* Admin action row: driver + date change */}
+                    {isAdmin && (() => {
+                      const [localDate, setLocalDate] = React.useState(order.deliveryDate || '');
+                      const [showDateInput, setShowDateInput] = React.useState(false);
+                      return (
+                        <div className="px-3 pb-3 pt-0 space-y-1.5 bg-inherit" onClick={e => e.stopPropagation()}>
+                          {/* Driver dropdown */}
+                          <div className="flex items-center gap-2">
+                            <Users size={13} className="text-stone-400 shrink-0" />
+                            <select
+                              value={order.driverId || ''}
+                              onChange={async e => {
+                                const u = allUsers.find(u => u.id === e.target.value);
+                                if (!u) return;
+                                onUpdateOrder(order.id, { driverId: u.id, driverName: u.name });
+                                const isManual = (order as any).isManual;
+                                await fetch(isManual ? `/api/manual-orders/${order.id}` : `/api/orders/${order.id}/assign`, {
+                                  method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ driverId: u.id, driverName: u.name })
+                                });
+                              }}
+                              className="flex-1 bg-stone-50 border border-stone-200 rounded-lg px-2 py-2 text-sm font-black outline-none text-stone-700 focus:border-black"
+                            >
+                              <option value="">— Assign Driver —</option>
+                              {activeDrivers.map(u => (
+                                <option key={u.id} value={u.id}>{u.name}{order.driverId === u.id ? ' ✓' : ''}</option>
+                              ))}
+                            </select>
+                          </div>
+                          {/* Date change */}
+                          {!showDateInput ? (
+                            <button
+                              onClick={() => setShowDateInput(true)}
+                              className="w-full text-left flex items-center gap-2 px-2 py-1.5 bg-stone-50 border border-stone-200 rounded-lg"
+                            >
+                              <Calendar size={13} className="text-stone-400 shrink-0" />
+                              <span className="text-sm font-black text-stone-600">
+                                📅 {order.deliveryDate ? new Date(order.deliveryDate + 'T12:00:00').toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric' }) : 'No date set'}
+                              </span>
+                              <span className="ml-auto text-[10px] font-black text-blue-600 uppercase">Change</span>
+                            </button>
+                          ) : (
+                            <div className="flex gap-2 items-center">
+                              <Calendar size={13} className="text-stone-400 shrink-0" />
+                              <input type="date" value={localDate} onChange={e => setLocalDate(e.target.value)}
+                                className="flex-1 bg-white border-2 border-blue-400 rounded-lg px-2 py-1.5 text-sm font-black outline-none" autoFocus />
+                              <button
+                                onClick={async () => {
+                                  if (!localDate) return;
+                                  onUpdateOrder(order.id, { deliveryDate: localDate });
+                                  const isManual = (order as any).isManual;
+                                  await fetch(isManual ? `/api/manual-orders/${order.id}` : `/api/orders/${order.id}/edit`, {
+                                    method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ deliveryDate: localDate })
+                                  });
+                                  setShowDateInput(false);
+                                }}
+                                className="px-3 py-1.5 bg-green-600 text-white rounded-lg font-black text-xs"
+                              >✓</button>
+                              <button onClick={() => setShowDateInput(false)} className="px-2 py-1.5 bg-stone-200 rounded-lg font-black text-xs">✕</button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                 );
               })}
