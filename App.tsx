@@ -1637,11 +1637,10 @@ const OrdersView: React.FC<OrdersViewProps> = ({
         </div>
 
         {/* Table header */}
-        <div className="grid grid-cols-[80px_1fr_90px_130px] bg-stone-50 border-b border-stone-200 px-3 py-2">
-          <p className="text-[9px] font-black uppercase text-stone-600">Order # / Date</p>
-          <p className="text-[9px] font-black uppercase text-stone-600">Customer</p>
-          <p className="text-[9px] font-black uppercase text-stone-600">Driver</p>
-          <p className="text-[9px] font-black uppercase text-stone-600 text-right">Status</p>
+        <div className="grid grid-cols-[70px_1fr_100px] bg-stone-50 border-b border-stone-200 px-3 py-2">
+          <p className="text-[9px] font-black uppercase text-stone-600">Order #</p>
+          <p className="text-[9px] font-black uppercase text-stone-600">Recipient · City · Product</p>
+          <p className="text-[9px] font-black uppercase text-stone-600 text-right">Driver · Status</p>
         </div>
 
         {/* Rows with day separators */}
@@ -1657,61 +1656,51 @@ const OrdersView: React.FC<OrdersViewProps> = ({
               const statusCfg = STATUSES_FOR_DROPDOWN.find(s => s.value === order.status) || STATUSES_FOR_DROPDOWN[0];
               return (
                 <div key={order.id}
-                  className={`grid grid-cols-[90px_1fr_90px_130px] px-3 py-3 border-b border-stone-100 transition-all ${idx % 2 === 0 ? 'bg-white' : 'bg-stone-50/40'}`}>
-                  <div className="cursor-pointer" onClick={() => onSelectOrder(order)}>
-                    <p className="text-sm font-black text-black">#{order.orderNumber?.replace(/^#+/, '') || order.id}</p>
-                    {isAdmin ? (
-                      <button className="text-xs font-bold text-amber-700 mt-0.5 underline decoration-dotted underline-offset-2 active:opacity-60" onClick={e => { e.stopPropagation(); setRescheduleOrder(order); setRescheduleDate(order.deliveryDate || ''); }}>
-                        {order.deliveryDate ? fmtDate(order.deliveryDate) : '—'} <span className="text-[8px] no-underline">✏️</span>
-                      </button>
-                    ) : (
-                      <p className="text-xs font-bold text-stone-700 mt-0.5">{order.deliveryDate ? fmtDate(order.deliveryDate) : '—'}</p>
-                    )}
+                  className={`grid grid-cols-[70px_1fr_100px] px-3 py-3 border-b border-stone-100 active:bg-stone-50 cursor-pointer ${idx % 2 === 0 ? 'bg-white' : 'bg-stone-50/30'}`}
+                  onClick={() => onSelectOrder(order)}>
+                  {/* Col 1: order# + date */}
+                  <div>
+                    <p className="text-sm font-black text-black leading-tight">#{order.orderNumber?.replace(/^#+/, '') || order.id}</p>
+                    <p className="text-[10px] font-bold text-stone-500 mt-0.5">{order.deliveryDate ? fmtDate(order.deliveryDate) : '—'}</p>
                   </div>
-                  <div className="pr-2 min-w-0 cursor-pointer" onClick={() => onSelectOrder(order)}>
-                    <p className="text-sm font-bold text-stone-900 truncate">{order.giftReceiverName || order.customer?.name}</p>
-                    {renderAttemptBadge(order)}
-                    {(order as any).isManual && <span className="inline-block ml-1 px-1.5 py-0.5 bg-violet-100 text-violet-700 text-[8px] font-black uppercase rounded">Manual</span>}
-                    <p className="text-[10px] text-stone-400 truncate">{order.address?.street}, {order.address?.city}</p>
-                    {order.items?.[0] && (
-                      <p className="text-[10px] font-black text-stone-600 truncate">{order.items[0].name} — ${order.items[0].price.toFixed(2)}</p>
-                    )}
+                  {/* Col 2: recipient name + city + product */}
+                  <div className="min-w-0 px-2">
+                    <div className="flex items-center gap-1 flex-wrap">
+                      <p className="text-sm font-black text-stone-900 leading-tight truncate">{order.giftReceiverName || order.customer?.name}</p>
+                      {renderAttemptBadge(order)}
+                      {(order as any).isManual && <span className="px-1 py-0.5 bg-violet-100 text-violet-700 text-[8px] font-black rounded">Manual</span>}
+                    </div>
+                    <p className="text-xs font-bold text-stone-600 mt-0.5">{order.address?.city}{order.address?.zip ? ` ${order.address.zip}` : ''}</p>
+                    {order.items?.[0] && <p className="text-[10px] text-stone-400 truncate mt-0.5">{order.items[0].name}</p>}
                     {order.deliveryInstructions && (
-                      <div className="flex items-center gap-1 mt-0.5 bg-amber-100 rounded px-1.5 py-0.5">
-                        <AlertTriangle size={9} className="text-amber-700 shrink-0" />
-                        <p className="text-[9px] text-amber-800 font-black leading-tight">{order.deliveryInstructions}</p>
+                      <div className="flex items-center gap-1 mt-0.5 bg-amber-50 rounded px-1.5 py-0.5">
+                        <AlertTriangle size={8} className="text-amber-600 shrink-0" />
+                        <p className="text-[9px] font-black text-amber-700 truncate">{order.deliveryInstructions}</p>
                       </div>
                     )}
                   </div>
-                  <div className="cursor-pointer" onClick={() => onSelectOrder(order)}>
-                    <p className="text-xs font-bold text-stone-700 truncate">{order.driverName || ''}</p>
-                  </div>
-                  <div onClick={e => e.stopPropagation()}>
+                  {/* Col 3: driver + status dot (no big badge) */}
+                  <div className="text-right" onClick={e => e.stopPropagation()}>
+                    <p className="text-[10px] font-bold text-stone-500 truncate">{order.driverName || '—'}</p>
                     <select
                       value={order.status}
                       onChange={e => {
                         const newStatus = e.target.value as DeliveryStatus;
                         onUpdateOrder(order.id, { status: newStatus });
                         const isManualOrder = (order as any).isManual;
-                        const statusUrl = isManualOrder
-                          ? `/api/manual-orders/${order.id}`
-                          : `/api/orders/${order.id}/status`;
-                        fetch(statusUrl, {
-                          method: isManualOrder ? 'PATCH' : 'PATCH',
-                          headers: { 'Content-Type': 'application/json' },
+                        fetch(isManualOrder ? `/api/manual-orders/${order.id}` : `/api/orders/${order.id}/status`, {
+                          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({ status: newStatus })
                         }).catch(() => {});
                       }}
                       style={{ backgroundColor: statusCfg.color, color: 'white' }}
-                      className="w-full text-[10px] font-black rounded-lg px-2 py-1.5 outline-none border-0 appearance-none cursor-pointer"
+                      className="mt-1 w-full text-[9px] font-black rounded-lg px-1 py-1 outline-none border-0 appearance-none cursor-pointer"
                     >
                       {STATUSES_FOR_DROPDOWN.map(s => (
-                        <option key={s.value} value={s.value} style={{ backgroundColor: s.color, color: 'white' }}>
-                          {s.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                        <option key={s.value} value={s.value} style={{ backgroundColor: s.color, color: 'white' }}>{s.label}</option>
+                      ))}
+                    </select>
+                  </div>
               </div>
               );
             })
@@ -1737,61 +1726,51 @@ const OrdersView: React.FC<OrdersViewProps> = ({
               const statusCfg = STATUSES_FOR_DROPDOWN.find(s => s.value === order.status) || STATUSES_FOR_DROPDOWN[0];
               rows.push(
                 <div key={order.id}
-                  className={`grid grid-cols-[90px_1fr_90px_130px] px-3 py-3 border-b border-stone-100 transition-all ${idx % 2 === 0 ? 'bg-white' : 'bg-stone-50/40'}`}>
-                  <div className="cursor-pointer" onClick={() => onSelectOrder(order)}>
-                    <p className="text-sm font-black text-black">#{order.orderNumber?.replace(/^#+/, '') || order.id}</p>
-                    {isAdmin ? (
-                      <button className="text-xs font-bold text-amber-700 mt-0.5 underline decoration-dotted underline-offset-2 active:opacity-60" onClick={e => { e.stopPropagation(); setRescheduleOrder(order); setRescheduleDate(order.deliveryDate || ''); }}>
-                        {order.deliveryDate ? fmtDate(order.deliveryDate) : '—'} <span className="text-[8px] no-underline">✏️</span>
-                      </button>
-                    ) : (
-                      <p className="text-xs font-bold text-stone-700 mt-0.5">{order.deliveryDate ? fmtDate(order.deliveryDate) : '—'}</p>
-                    )}
+                  className={`grid grid-cols-[70px_1fr_100px] px-3 py-3 border-b border-stone-100 active:bg-stone-50 cursor-pointer ${idx % 2 === 0 ? 'bg-white' : 'bg-stone-50/30'}`}
+                  onClick={() => onSelectOrder(order)}>
+                  {/* Col 1: order# + date */}
+                  <div>
+                    <p className="text-sm font-black text-black leading-tight">#{order.orderNumber?.replace(/^#+/, '') || order.id}</p>
+                    <p className="text-[10px] font-bold text-stone-500 mt-0.5">{order.deliveryDate ? fmtDate(order.deliveryDate) : '—'}</p>
                   </div>
-                  <div className="pr-2 min-w-0 cursor-pointer" onClick={() => onSelectOrder(order)}>
-                    <p className="text-sm font-bold text-stone-900 truncate">{order.giftReceiverName || order.customer?.name}</p>
-                    {renderAttemptBadge(order)}
-                    {(order as any).isManual && <span className="inline-block ml-1 px-1.5 py-0.5 bg-violet-100 text-violet-700 text-[8px] font-black uppercase rounded">Manual</span>}
-                    <p className="text-[10px] text-stone-400 truncate">{order.address?.street}, {order.address?.city}</p>
-                    {order.items?.[0] && (
-                      <p className="text-[10px] font-black text-stone-600 truncate">{order.items[0].name} — ${order.items[0].price.toFixed(2)}</p>
-                    )}
+                  {/* Col 2: recipient name + city + product */}
+                  <div className="min-w-0 px-2">
+                    <div className="flex items-center gap-1 flex-wrap">
+                      <p className="text-sm font-black text-stone-900 leading-tight truncate">{order.giftReceiverName || order.customer?.name}</p>
+                      {renderAttemptBadge(order)}
+                      {(order as any).isManual && <span className="px-1 py-0.5 bg-violet-100 text-violet-700 text-[8px] font-black rounded">Manual</span>}
+                    </div>
+                    <p className="text-xs font-bold text-stone-600 mt-0.5">{order.address?.city}{order.address?.zip ? ` ${order.address.zip}` : ''}</p>
+                    {order.items?.[0] && <p className="text-[10px] text-stone-400 truncate mt-0.5">{order.items[0].name}</p>}
                     {order.deliveryInstructions && (
-                      <div className="flex items-center gap-1 mt-0.5 bg-amber-100 rounded px-1.5 py-0.5">
-                        <AlertTriangle size={9} className="text-amber-700 shrink-0" />
-                        <p className="text-[9px] text-amber-800 font-black leading-tight">{order.deliveryInstructions}</p>
+                      <div className="flex items-center gap-1 mt-0.5 bg-amber-50 rounded px-1.5 py-0.5">
+                        <AlertTriangle size={8} className="text-amber-600 shrink-0" />
+                        <p className="text-[9px] font-black text-amber-700 truncate">{order.deliveryInstructions}</p>
                       </div>
                     )}
                   </div>
-                  <div className="cursor-pointer" onClick={() => onSelectOrder(order)}>
-                    <p className="text-xs font-bold text-stone-700 truncate">{order.driverName || ''}</p>
-                  </div>
-                  <div onClick={e => e.stopPropagation()}>
+                  {/* Col 3: driver + status dot (no big badge) */}
+                  <div className="text-right" onClick={e => e.stopPropagation()}>
+                    <p className="text-[10px] font-bold text-stone-500 truncate">{order.driverName || '—'}</p>
                     <select
                       value={order.status}
                       onChange={e => {
                         const newStatus = e.target.value as DeliveryStatus;
                         onUpdateOrder(order.id, { status: newStatus });
                         const isManualOrder = (order as any).isManual;
-                        const statusUrl = isManualOrder
-                          ? `/api/manual-orders/${order.id}`
-                          : `/api/orders/${order.id}/status`;
-                        fetch(statusUrl, {
-                          method: isManualOrder ? 'PATCH' : 'PATCH',
-                          headers: { 'Content-Type': 'application/json' },
+                        fetch(isManualOrder ? `/api/manual-orders/${order.id}` : `/api/orders/${order.id}/status`, {
+                          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({ status: newStatus })
                         }).catch(() => {});
                       }}
                       style={{ backgroundColor: statusCfg.color, color: 'white' }}
-                      className="w-full text-[10px] font-black rounded-lg px-2 py-1.5 outline-none border-0 appearance-none cursor-pointer"
+                      className="mt-1 w-full text-[9px] font-black rounded-lg px-1 py-1 outline-none border-0 appearance-none cursor-pointer"
                     >
                       {STATUSES_FOR_DROPDOWN.map(s => (
-                        <option key={s.value} value={s.value} style={{ backgroundColor: s.color, color: 'white' }}>
-                          {s.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                        <option key={s.value} value={s.value} style={{ backgroundColor: s.color, color: 'white' }}>{s.label}</option>
+                      ))}
+                    </select>
+                  </div>
               </div>
               );
             });
@@ -4581,6 +4560,12 @@ export default function App() {
   const [zipRate, setZipRate] = useState<number | null | undefined>(undefined);
   const [showZipBar, setShowZipBar] = useState(false);
   const [defaultDriver, setDefaultDriver] = useState<{ driverId: string | null; driverName: string | null }>({ driverId: null, driverName: null });
+  // Global manual delivery state — accessible from any tab
+  const [showGlobalAddManual, setShowGlobalAddManual] = useState(false);
+  const [globalManualForm, setGlobalManualForm] = useState({ recipientName: '', recipientPhone: '', recipientEmail: '', street: '', unit: '', city: '', zip: '', deliveryDate: new Date().toISOString().split('T')[0], deliveryInstructions: '', itemDescription: '', orderTotal: '', giftSenderName: '', giftMessage: '', driverId: '', driverName: '' });
+  const [globalManualSaving, setGlobalManualSaving] = useState(false);
+  const [globalManualError, setGlobalManualError] = useState('');
+  const openAddManual = () => { setGlobalManualForm({ recipientName: '', recipientPhone: '', recipientEmail: '', street: '', unit: '', city: '', zip: '', deliveryDate: new Date().toISOString().split('T')[0], deliveryInstructions: '', itemDescription: '', orderTotal: '', giftSenderName: '', giftMessage: '', driverId: '', driverName: '' }); setGlobalManualError(''); setShowGlobalAddManual(true); };
 
   useEffect(() => {
     if (currentUser) {
@@ -4727,6 +4712,75 @@ export default function App() {
                 </div>
               : <p className="mt-2 text-xs font-black text-red-500 text-center">ZIP {zipQuery} not in rate table</p>
           )}
+        </div>
+      )}
+
+      {/* Global floating + Add Delivery button — admin only, visible on any tab */}
+      {isAdmin && !selectedOrder && (
+        <button
+          onClick={openAddManual}
+          className="fixed bottom-20 right-4 z-40 w-14 h-14 bg-black text-white rounded-full shadow-2xl flex items-center justify-center active:scale-95 transition-all"
+          title="Add Delivery Manually"
+        >
+          <Plus size={24} />
+        </button>
+      )}
+
+      {/* Global manual delivery modal */}
+      {showGlobalAddManual && isAdmin && (
+        <div className="fixed inset-0 z-[999] bg-black/60 flex items-end justify-center" onClick={() => setShowGlobalAddManual(false)}>
+          <div className="bg-white w-full max-w-md rounded-t-3xl pb-10 flex flex-col" style={{ maxHeight: '92vh' }} onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-stone-100 shrink-0">
+              <p className="font-black text-base uppercase tracking-wide">➕ Add Delivery Manually</p>
+              <button onClick={() => setShowGlobalAddManual(false)} className="w-8 h-8 flex items-center justify-center bg-stone-100 rounded-full"><X size={14} /></button>
+            </div>
+            <div className="overflow-y-auto flex-1 px-5 py-4 space-y-3">
+              <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest">Recipient</p>
+              <input value={globalManualForm.recipientName} onChange={e => setGlobalManualForm(f => ({ ...f, recipientName: e.target.value }))} placeholder="Recipient Name *" className="w-full border border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black" />
+              <input value={globalManualForm.recipientPhone} onChange={e => setGlobalManualForm(f => ({ ...f, recipientPhone: e.target.value }))} placeholder="Recipient Phone" type="tel" className="w-full border border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black" />
+              <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest pt-1">Delivery Address</p>
+              <input value={globalManualForm.street} onChange={e => setGlobalManualForm(f => ({ ...f, street: e.target.value }))} placeholder="Street Address *" className="w-full border border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black" />
+              <input value={globalManualForm.unit} onChange={e => setGlobalManualForm(f => ({ ...f, unit: e.target.value }))} placeholder="Unit / Apt / Suite" className="w-full border border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black" />
+              <div className="flex gap-2">
+                <input value={globalManualForm.city} onChange={e => setGlobalManualForm(f => ({ ...f, city: e.target.value }))} placeholder="City *" className="flex-1 border border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black" />
+                <input value={globalManualForm.zip} onChange={e => setGlobalManualForm(f => ({ ...f, zip: e.target.value }))} placeholder="ZIP *" maxLength={5} className="w-24 border border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black" />
+              </div>
+              <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest pt-1">Delivery Details</p>
+              <input type="date" value={globalManualForm.deliveryDate} onChange={e => setGlobalManualForm(f => ({ ...f, deliveryDate: e.target.value }))} className="w-full border border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black" />
+              <textarea value={globalManualForm.deliveryInstructions} onChange={e => setGlobalManualForm(f => ({ ...f, deliveryInstructions: e.target.value }))} placeholder="Delivery Instructions (gate code, call before, etc.)" rows={2} className="w-full border border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black resize-none" />
+              <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest pt-1">Order Info</p>
+              <textarea value={globalManualForm.itemDescription} onChange={e => setGlobalManualForm(f => ({ ...f, itemDescription: e.target.value }))} placeholder="Item description (e.g. 3 Gift Baskets — Shiva, Dairy) *" rows={2} className="w-full border border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black resize-none" />
+              <input value={globalManualForm.orderTotal} onChange={e => setGlobalManualForm(f => ({ ...f, orderTotal: e.target.value }))} placeholder="Order Total ($)" type="number" className="w-full border border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black" />
+              <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest pt-1">Sender & Gift Message</p>
+              <input value={globalManualForm.giftSenderName} onChange={e => setGlobalManualForm(f => ({ ...f, giftSenderName: e.target.value }))} placeholder="Gift Sender Name" className="w-full border border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black" />
+              <textarea value={globalManualForm.giftMessage} onChange={e => setGlobalManualForm(f => ({ ...f, giftMessage: e.target.value }))} placeholder="Gift Message" rows={2} className="w-full border border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black resize-none" />
+              <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest pt-1">Assign Driver</p>
+              <select value={globalManualForm.driverId} onChange={e => { const u = allUsers.find(u => u.id === e.target.value); setGlobalManualForm(f => ({ ...f, driverId: e.target.value, driverName: u?.name || '' })); }} className="w-full border border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black bg-white">
+                <option value="">— Select Driver —</option>
+                {allUsers.filter(u => (u.role === 'DRIVER' || u.role === 'MANAGER') && u.isActive).map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+              </select>
+              {globalManualError && <p className="text-xs font-black text-red-600 text-center">{globalManualError}</p>}
+            </div>
+            <div className="px-5 pt-3 shrink-0 border-t border-stone-100">
+              <button disabled={globalManualSaving} onClick={async () => {
+                setGlobalManualError('');
+                if (!globalManualForm.recipientName.trim()) { setGlobalManualError('Recipient name is required.'); return; }
+                if (!globalManualForm.street.trim()) { setGlobalManualError('Street address is required.'); return; }
+                if (!globalManualForm.city.trim()) { setGlobalManualError('City is required.'); return; }
+                if (!globalManualForm.zip.trim()) { setGlobalManualError('ZIP code is required.'); return; }
+                if (!globalManualForm.itemDescription.trim()) { setGlobalManualError('Item description is required.'); return; }
+                setGlobalManualSaving(true);
+                try {
+                  const resp = await fetch('/api/manual-orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...globalManualForm, driverId: globalManualForm.driverId || 'manager_1', driverName: globalManualForm.driverName || 'Katie' }) });
+                  const data = await resp.json();
+                  if (!data.success) throw new Error(data.error || 'Save failed');
+                  window.location.reload();
+                } catch (e: any) { setGlobalManualError(e.message || 'Something went wrong.'); setGlobalManualSaving(false); }
+              }} className={`w-full py-4 rounded-2xl font-black text-base transition-all active:scale-95 ${globalManualSaving ? 'bg-stone-300 text-stone-500' : 'bg-black text-white'}`}>
+                {globalManualSaving ? 'Saving...' : '✓ Save Delivery'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
