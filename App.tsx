@@ -1082,7 +1082,10 @@ const OrderDetail: React.FC<{
                     )}
                     {item.properties && item.properties.length > 0 && (
                       <div className="mt-1.5 space-y-0.5">
-                        {item.properties.map((prop, pi) => (
+                        {item.properties.filter((prop: any) => {
+                          const n = prop.name?.toLowerCase() || '';
+                          return !n.includes('delivery fee') && !n.includes('_') && prop.value && prop.value !== 'null';
+                        }).map((prop: any, pi: number) => (
                           <div key={pi} className="flex items-baseline gap-1.5">
                             <span className="text-[10px] font-black uppercase text-stone-400 tracking-wide shrink-0">{prop.name}:</span>
                             <span className="text-xs font-bold text-stone-700">{prop.value}</span>
@@ -2313,12 +2316,7 @@ const ScheduleView: React.FC<{
                   <p className="text-white font-black text-sm tracking-wide">{hdr.label}</p>
                   {hdr.sub && <p className="text-stone-400 text-[10px] font-bold">{hdr.sub}</p>}
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-white font-black text-xs bg-white/20 px-2 py-0.5 rounded-full">{orders.length} orders</span>
-                  <span className="text-green-400 font-black text-xs">
-                    ${orders.reduce((s, o) => s + (o.deliveryFee || 0), 0).toFixed(2)} fees
-                  </span>
-                </div>
+                <span className="text-white font-black text-xs bg-white/20 px-2 py-0.5 rounded-full">{orders.length} orders</span>
               </div>
 
               {/* Cards for this date */}
@@ -2339,10 +2337,12 @@ const ScheduleView: React.FC<{
                         <div className="flex items-start gap-2">
                           {/* Left: all order info */}
                           <div className="flex-1 min-w-0">
-                            {/* Order number + status badge */}
+                            {/* Order number + status badge (only if not Assigned/Pending) */}
                             <div className="flex items-center gap-2 mb-0.5">
                               <p className="text-[11px] font-black text-stone-400">#{cleanNum}</p>
-                              <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full ${statusCfg.bg} ${statusCfg.text}`}>{statusCfg.label}</span>
+                              {!['PENDING','ASSIGNED'].includes(order.status) && (
+                                <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full ${statusCfg.bg} ${statusCfg.text}`}>{statusCfg.label}</span>
+                              )}
                               {(order as any).isManual && <span className="text-[9px] font-black px-1.5 py-0.5 bg-violet-100 text-violet-700 rounded-full">Manual</span>}
                             </div>
                             {/* Recipient name */}
@@ -2361,14 +2361,12 @@ const ScheduleView: React.FC<{
                               </div>
                             )}
                           </div>
-                          {/* Right: fee */}
-                          <div className="shrink-0 text-right pt-5">
-                            {fee > 0
-                              ? <p className="text-lg font-black text-green-700">${fee.toFixed(0)}</p>
-                              : <p className="text-xs text-stone-300 font-bold">—</p>
-                            }
-                            {isDone && <p className="text-[9px] font-black text-green-600 mt-0.5">✓ DONE</p>}
-                          </div>
+                          {/* Right: done indicator only */}
+                          {isDone && (
+                            <div className="shrink-0 text-right pt-5">
+                              <p className="text-[10px] font-black text-green-600">✓ DONE</p>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
