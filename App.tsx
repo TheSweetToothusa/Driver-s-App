@@ -736,6 +736,26 @@ const OrderDetail: React.FC<{
   const isAdmin = role === 'SUPER_ADMIN' || role === 'MANAGER';
   const isCompleted = order.status === DeliveryStatus.DELIVERED || order.status === DeliveryStatus.FAILED || order.status === DeliveryStatus.PENDING_RESCHEDULE || order.status === DeliveryStatus.SECOND_ATTEMPT;
 
+  // When opening a delivered order, fetch fresh POD data from DB
+  useEffect(() => {
+    if (isCompleted && order.id) {
+      fetch(`/api/pod/${order.id}`)
+        .then(r => r.ok ? r.json() : null)
+        .then(data => {
+          if (data && data.pod) {
+            const pod = data.pod;
+            const photo = pod.confirmationPhoto || pod.photo || null;
+            const sig = pod.confirmationSignature || pod.signature || null;
+            if (photo && !order.confirmationPhoto) onUpdate(order.id, { confirmationPhoto: photo });
+            if (sig && !order.confirmationSignature) onUpdate(order.id, { confirmationSignature: sig });
+            if (pod.completedAt && !order.completedAt) onUpdate(order.id, { completedAt: pod.completedAt });
+            if (pod.driverNotes || pod.notes) onUpdate(order.id, { driverNotes: pod.driverNotes || pod.notes });
+          }
+        })
+        .catch(() => {});
+    }
+  }, [order.id, isCompleted]);
+
   const handlePhoto = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]; if (!f) return;
     const r = new FileReader(); r.onloadend = () => { setPhotoData(r.result as string); setPhotoTimestamp(new Date().toISOString()); }; r.readAsDataURL(f);
@@ -2165,6 +2185,79 @@ const RouteMapPanel: React.FC<{
   );
 };
 
+// Sub-component for admin action row on each delivery card
+// Must be a proper component (not inline) so React hooks rules are satisfied
+const OrderAdminRow: React.FC<{
+  order: Delivery;
+  allUsers: UserAccount[];
+  activeDrivers: UserAccount[];
+  onUpdateOrder: (id: string, updates: Partial<Delivery>) => void;
+}> = ({ order, allUsers, activeDrivers, onUpdateOrder }) => {
+  const [localDate, setLocalDate] = useState(order.deliveryDate || '');
+  const [showDateInput, setShowDateInput] = useState(false);
+
+  return (
+    <div className="px-3 pb-3 pt-0 space-y-1.5 bg-inherit" onClick={e => e.stopPropagation()}>
+      {/* Driver dropdown */}
+      <div className="flex items-center gap-2">
+        <Users size={13} className="text-stone-400 shrink-0" />
+        <select
+          value={order.driverId || ''}
+          onChange={async e => {
+            const u = allUsers.find(u => u.id === e.target.value);
+            if (!u) return;
+            onUpdateOrder(order.id, { driverId: u.id, driverName: u.name });
+            const isManual = (order as any).isManual;
+            await fetch(isManual ? `/api/manual-orders/${order.id}` : `/api/orders/${order.id}/assign`, {
+              method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ driverId: u.id, driverName: u.name })
+            });
+          }}
+          className="flex-1 bg-stone-50 border border-stone-200 rounded-lg px-2 py-2 text-sm font-black outline-none text-stone-700 focus:border-black"
+        >
+          <option value="">— Assign Driver —</option>
+          {activeDrivers.map(u => (
+            <option key={u.id} value={u.id}>{u.name}{order.driverId === u.id ? ' ✓' : ''}</option>
+          ))}
+        </select>
+      </div>
+      {/* Date change */}
+      {!showDateInput ? (
+        <button
+          onClick={() => setShowDateInput(true)}
+          className="w-full text-left flex items-center gap-2 px-2 py-1.5 bg-stone-50 border border-stone-200 rounded-lg"
+        >
+          <Calendar size={13} className="text-stone-400 shrink-0" />
+          <span className="text-sm font-black text-stone-600">
+            📅 {order.deliveryDate ? new Date(order.deliveryDate + 'T12:00:00').toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric' }) : 'No date set'}
+          </span>
+          <span className="ml-auto text-[10px] font-black text-blue-600 uppercase">Change</span>
+        </button>
+      ) : (
+        <div className="flex gap-2 items-center">
+          <Calendar size={13} className="text-stone-400 shrink-0" />
+          <input type="date" value={localDate} onChange={e => setLocalDate(e.target.value)}
+            className="flex-1 bg-white border-2 border-blue-400 rounded-lg px-2 py-1.5 text-sm font-black outline-none" autoFocus />
+          <button
+            onClick={async () => {
+              if (!localDate) return;
+              onUpdateOrder(order.id, { deliveryDate: localDate });
+              const isManual = (order as any).isManual;
+              await fetch(isManual ? `/api/manual-orders/${order.id}` : `/api/orders/${order.id}/edit`, {
+                method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ deliveryDate: localDate })
+              });
+              setShowDateInput(false);
+            }}
+            className="px-3 py-1.5 bg-green-600 text-white rounded-lg font-black text-xs"
+          >✓</button>
+          <button onClick={() => setShowDateInput(false)} className="px-2 py-1.5 bg-stone-200 rounded-lg font-black text-xs">✕</button>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const ScheduleView: React.FC<{
   deliveries: Delivery[];
   role: AppRole;
@@ -3214,8 +3307,8 @@ const DriverHomeView: React.FC<DriverHomeProps> = ({ currentUser, deliveries, on
     setSelectedDate(d.toISOString().split('T')[0]);
   };
 
-  const myDeliveries = isDriver
-    ? deliveries.filter(d => d.driverId === currentUser.id)
+  const myDeliveries = (isDriver || currentUser.role === 'MANAGER')
+    ? deliveries.filter(d => d.driverId === currentUser.id || d.driverId === 'manager_1' && currentUser.role === 'MANAGER')
     : deliveries;
 
   // Stats (all time / today)
@@ -4193,7 +4286,7 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [dataSource, setDataSource] = useState<'LIVE' | 'MOCK' | 'ERROR'>('MOCK');
-  const [tab, setTab] = useState<'HOME' | 'ORDERS' | 'SCHEDULE' | 'ADMIN' | 'DRIVERS' | 'PROJECTS'>('SCHEDULE');
+  const [tab, setTab] = useState<'HOME' | 'ORDERS' | 'SCHEDULE' | 'ADMIN' | 'DRIVERS' | 'PROJECTS'>('HOME');
   const isAdmin = currentUser?.role === 'SUPER_ADMIN' || currentUser?.role === 'MANAGER';
   const [zipQuery, setZipQuery] = useState('');
   const [zipRate, setZipRate] = useState<number | null | undefined>(undefined);
@@ -4474,29 +4567,36 @@ export default function App() {
         </div>
       )}
 
-      {/* ── BOTTOM NAV — 3 tabs only ── */}
+      {/* ── BOTTOM NAV ── */}
       <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-white border-t border-stone-200 z-50 flex">
 
-        {/* DELIVERIES — the main tab everyone uses */}
+        {/* HOME — dashboard, shown for all users */}
+        <button onClick={() => setTab('HOME')}
+          className={`flex-1 py-3 flex flex-col items-center gap-0.5 transition-all ${tab === 'HOME' ? 'text-black' : 'text-stone-300'}`}>
+          <Home size={22} />
+          <span className="text-[9px] font-black uppercase">Home</span>
+        </button>
+
+        {/* DELIVERIES */}
         <button onClick={() => setTab('SCHEDULE')}
           className={`flex-1 py-3 flex flex-col items-center gap-0.5 transition-all relative ${tab === 'SCHEDULE' ? 'text-black' : 'text-stone-300'}`}>
-          <Truck size={22} className={tab === 'SCHEDULE' ? 'text-black' : ''} />
+          <Truck size={22} />
           <span className="text-[9px] font-black uppercase">Deliveries</span>
           {activeOrders.length > 0 && (
-            <span className="absolute top-1.5 right-3 min-w-[18px] h-[18px] bg-black text-white text-[9px] font-black rounded-full flex items-center justify-center px-1">
+            <span className="absolute top-1.5 right-2 min-w-[18px] h-[18px] bg-black text-white text-[9px] font-black rounded-full flex items-center justify-center px-1">
               {activeOrders.length > 99 ? '99+' : activeOrders.length}
             </span>
           )}
         </button>
 
-        {/* HISTORY — closed/delivered orders */}
+        {/* HISTORY */}
         <button onClick={() => setTab('ORDERS')}
           className={`flex-1 py-3 flex flex-col items-center gap-0.5 transition-all ${tab === 'ORDERS' ? 'text-black' : 'text-stone-300'}`}>
           <CheckCircle2 size={22} />
           <span className="text-[9px] font-black uppercase">History</span>
         </button>
 
-        {/* MANAGE — admin: drivers, add manual, projects, admin panel */}
+        {/* MANAGE — admin only */}
         {isAdmin && (
           <button onClick={() => setTab('ADMIN')}
             className={`flex-1 py-3 flex flex-col items-center gap-0.5 transition-all ${tab === 'ADMIN' ? 'text-black' : 'text-stone-300'}`}>
@@ -4509,7 +4609,16 @@ export default function App() {
 
       <main className="flex-1 overflow-y-auto pb-20">
 
-        {/* ── DELIVERIES TAB — Schedule view is the workhorse ── */}
+        {/* ── HOME TAB — dashboard for all users ── */}
+        {tab === 'HOME' && (
+          <DriverHomeView
+            currentUser={currentUser}
+            deliveries={deliveries}
+            onSelectOrder={setSelectedOrder}
+          />
+        )}
+
+        {/* ── DELIVERIES TAB ── */}
         {tab === 'SCHEDULE' && (
           <ScheduleView
             deliveries={deliveries}
@@ -4521,7 +4630,7 @@ export default function App() {
           />
         )}
 
-        {/* ── HISTORY TAB — closed/delivered, searchable ── */}
+        {/* ── HISTORY TAB ── */}
         {tab === 'ORDERS' && (
           <OrdersView
             deliveries={deliveries}
@@ -4537,10 +4646,9 @@ export default function App() {
           />
         )}
 
-        {/* ── MANAGE TAB — admin: everything in one place ── */}
+        {/* ── MANAGE TAB — admin only ── */}
         {tab === 'ADMIN' && isAdmin && (
           <div className="pb-24">
-            {/* Quick stats */}
             <div className="grid grid-cols-3 border-b border-stone-100">
               {[
                 { label: 'Open', val: activeOrders.length, color: 'text-black' },
@@ -4553,50 +4661,25 @@ export default function App() {
                 </div>
               ))}
             </div>
-
-            {/* Section: Add delivery */}
             <div className="px-4 pt-4 pb-2">
-              <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest mb-2">Quick Actions</p>
               <button onClick={openAddManual}
                 className="w-full py-4 bg-black text-white rounded-2xl font-black text-sm flex items-center justify-center gap-2 active:scale-95 transition-all">
                 <Plus size={18} /> Add Delivery Manually
               </button>
             </div>
-
-            {/* Section: Drivers */}
             <div className="px-4 pt-3 pb-2">
               <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest mb-2">Drivers & Settings</p>
               <DriversView allUsers={allUsers} setAllUsers={setAllUsers} currentUser={currentUser} />
             </div>
-
-            {/* Section: Projects (Berkowitz etc) */}
             <div className="px-0 pt-2 pb-2">
-              <div className="px-4 mb-2">
-                <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest">Bulk Projects</p>
-              </div>
+              <div className="px-4 mb-2"><p className="text-[9px] font-black uppercase text-stone-400 tracking-widest">Bulk Projects</p></div>
               <BulkProjectsView currentUser={currentUser} allUsers={allUsers} />
             </div>
-
-            {/* Section: Admin panel (fees, messages, reschedule queue) */}
             <div className="px-0 pt-2">
-              <div className="px-4 mb-2">
-                <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest">Admin Tools</p>
-              </div>
+              <div className="px-4 mb-2"><p className="text-[9px] font-black uppercase text-stone-400 tracking-widest">Admin Tools</p></div>
               <AdminPanel role={currentUser.role} deliveries={deliveries} allUsers={allUsers} setAllUsers={setAllUsers} />
             </div>
           </div>
-        )}
-
-        {/* Catch-all: if somehow on HOME/DRIVERS/PROJECTS tab, redirect to SCHEDULE */}
-        {(tab === 'HOME' || tab === 'DRIVERS' || tab === 'PROJECTS') && (
-          <ScheduleView
-            deliveries={deliveries}
-            role={currentUser.role}
-            currentUserId={currentUser.id}
-            allUsers={allUsers}
-            onSelectOrder={setSelectedOrder}
-            onUpdateOrder={handleUpdateOrder}
-          />
         )}
 
       </main>

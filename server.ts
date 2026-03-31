@@ -537,6 +537,21 @@ async function startServer() {
 
   // ── POD ─────────────────────────────────────────────────────────────────────
 
+  app.get("/api/pod/:orderId", async (req, res) => {
+    try {
+      const pod = await readPodOrder(req.params.orderId);
+      if (pod && Object.keys(pod).length > 0) {
+        // Normalize field names before returning
+        if (pod.photo && !pod.confirmationPhoto) pod.confirmationPhoto = pod.photo;
+        if (pod.signature && !pod.confirmationSignature) pod.confirmationSignature = pod.signature;
+        if (pod.notes && !pod.driverNotes) pod.driverNotes = pod.notes;
+        res.json({ pod });
+      } else {
+        res.json({ pod: null });
+      }
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
   app.post("/api/pod", async (req, res) => {
     const { orderId, photo, signature, notes, completedAt, status, driverId, driverName, failureReason } = req.body;
     try {
