@@ -431,12 +431,13 @@ const OrderCard: React.FC<{ order: Delivery; role: AppRole; onTap: () => void; i
                 <span className="text-[9px] font-black bg-red-100 text-red-700 px-1.5 py-0.5 rounded uppercase">{attemptBadge} attempt</span>
               )}
             </div>
-            <p className="text-xs text-stone-400 leading-tight mt-0.5 truncate">{order.address?.street}, {order.address?.city} {order.address?.zip}</p>
-            {product && <p className="text-[11px] text-stone-500 truncate mt-0.5">{product.name}{product.quantity > 1 ? ` ×${product.quantity}` : ''}</p>}
+            <p className="text-base font-black text-black mt-0.5 leading-tight">{order.address?.city} {order.address?.zip}</p>
+            <p className="text-[10px] text-stone-400 leading-tight truncate">{order.address?.street}</p>
+            {product && <p className="text-[10px] text-stone-500 truncate mt-0.5">{product.name}{product.quantity > 1 ? ` ×${product.quantity}` : ''}</p>}
             {order.deliveryInstructions && (
-              <div className="flex items-center gap-1 mt-1 bg-amber-100 rounded px-2 py-1">
-                <AlertTriangle size={10} className="text-amber-700 shrink-0" />
-                <p className="text-[10px] font-black text-amber-800 leading-tight truncate">{order.deliveryInstructions}</p>
+              <div className="flex items-center gap-1 mt-1 bg-red-50 border border-red-200 rounded px-2 py-1">
+                <AlertTriangle size={10} className="text-red-600 shrink-0" />
+                <p className="text-[10px] font-black text-red-700 leading-tight truncate">{order.deliveryInstructions}</p>
               </div>
             )}
           </div>
@@ -1617,15 +1618,15 @@ const OrdersView: React.FC<OrdersViewProps> = ({
             className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-2.5 text-sm font-bold outline-none focus:border-black">
             {uniqueOrderDrivers.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
           </select>
-          {/* Delivered / Active toggle */}
+          {/* Active / Delivered toggle — Active on left */}
           <div className="flex gap-2">
-            <button onClick={() => setStatusFilter('CLOSED')}
-              className={`flex-1 py-2.5 rounded-xl font-black text-xs uppercase transition-all ${statusFilter === 'CLOSED' ? 'bg-green-600 text-white' : 'bg-stone-100 text-stone-500'}`}>
-              ✓ Delivered ({deliveries.filter(d => CLOSED_STATUSES.includes(d.status)).length})
-            </button>
             <button onClick={() => setStatusFilter('OPEN')}
               className={`flex-1 py-2.5 rounded-xl font-black text-xs uppercase transition-all ${statusFilter === 'OPEN' ? 'bg-blue-600 text-white' : 'bg-stone-100 text-stone-500'}`}>
               Active ({deliveries.filter(d => OPEN_STATUSES.includes(d.status)).length})
+            </button>
+            <button onClick={() => setStatusFilter('CLOSED')}
+              className={`flex-1 py-2.5 rounded-xl font-black text-xs uppercase transition-all ${statusFilter === 'CLOSED' ? 'bg-green-600 text-white' : 'bg-stone-100 text-stone-500'}`}>
+              ✓ Delivered ({deliveries.filter(d => CLOSED_STATUSES.includes(d.status)).length})
             </button>
           </div>
           {/* Text search */}
@@ -1670,12 +1671,13 @@ const OrdersView: React.FC<OrdersViewProps> = ({
                       {renderAttemptBadge(order)}
                       {(order as any).isManual && <span className="px-1 py-0.5 bg-violet-100 text-violet-700 text-[8px] font-black rounded">Manual</span>}
                     </div>
-                    <p className="text-xs font-bold text-stone-600 mt-0.5">{order.address?.city}{order.address?.zip ? ` ${order.address.zip}` : ''}</p>
-                    {order.items?.[0] && <p className="text-[10px] text-stone-400 truncate mt-0.5">{order.items[0].name}</p>}
+                    <p className="text-base font-black text-black mt-0.5 leading-tight">{order.address?.city}{order.address?.zip ? ` ${order.address.zip}` : ''}</p>
+                    <p className="text-[10px] text-stone-400 truncate">{order.address?.street}</p>
+                    {order.items?.[0] && <p className="text-[10px] text-stone-500 truncate">{order.items[0].name}</p>}
                     {order.deliveryInstructions && (
-                      <div className="flex items-center gap-1 mt-0.5 bg-amber-50 rounded px-1.5 py-0.5">
-                        <AlertTriangle size={8} className="text-amber-600 shrink-0" />
-                        <p className="text-[9px] font-black text-amber-700 truncate">{order.deliveryInstructions}</p>
+                      <div className="flex items-center gap-1 mt-0.5 bg-red-50 border border-red-200 rounded px-1.5 py-0.5">
+                        <AlertTriangle size={8} className="text-red-600 shrink-0" />
+                        <p className="text-[9px] font-black text-red-700 truncate">{order.deliveryInstructions}</p>
                       </div>
                     )}
                   </div>
@@ -1740,12 +1742,13 @@ const OrdersView: React.FC<OrdersViewProps> = ({
                       {renderAttemptBadge(order)}
                       {(order as any).isManual && <span className="px-1 py-0.5 bg-violet-100 text-violet-700 text-[8px] font-black rounded">Manual</span>}
                     </div>
-                    <p className="text-xs font-bold text-stone-600 mt-0.5">{order.address?.city}{order.address?.zip ? ` ${order.address.zip}` : ''}</p>
-                    {order.items?.[0] && <p className="text-[10px] text-stone-400 truncate mt-0.5">{order.items[0].name}</p>}
+                    <p className="text-base font-black text-black mt-0.5 leading-tight">{order.address?.city}{order.address?.zip ? ` ${order.address.zip}` : ''}</p>
+                    <p className="text-[10px] text-stone-400 truncate">{order.address?.street}</p>
+                    {order.items?.[0] && <p className="text-[10px] text-stone-500 truncate">{order.items[0].name}</p>}
                     {order.deliveryInstructions && (
-                      <div className="flex items-center gap-1 mt-0.5 bg-amber-50 rounded px-1.5 py-0.5">
-                        <AlertTriangle size={8} className="text-amber-600 shrink-0" />
-                        <p className="text-[9px] font-black text-amber-700 truncate">{order.deliveryInstructions}</p>
+                      <div className="flex items-center gap-1 mt-0.5 bg-red-50 border border-red-200 rounded px-1.5 py-0.5">
+                        <AlertTriangle size={8} className="text-red-600 shrink-0" />
+                        <p className="text-[9px] font-black text-red-700 truncate">{order.deliveryInstructions}</p>
                       </div>
                     )}
                   </div>
@@ -2532,12 +2535,13 @@ const ScheduleView: React.FC<{
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-black text-stone-900 leading-tight">{order.giftReceiverName || order.customer?.name || '—'}</p>
-                      <p className="text-xs text-stone-400 leading-tight mt-0.5 truncate">{order.address?.street}, {order.address?.city} {order.address?.zip}</p>
-                      {order.items?.[0] && <p className="text-[11px] text-stone-500 truncate mt-0.5">{order.items[0].name}{order.items[0].quantity > 1 ? ` ×${order.items[0].quantity}` : ''}</p>}
+                      <p className="text-base font-black text-black leading-tight">{order.address?.city} {order.address?.zip}</p>
+                      <p className="text-[10px] text-stone-400 truncate">{order.address?.street}</p>
+                      {order.items?.[0] && <p className="text-[10px] text-stone-500 truncate mt-0.5">{order.items[0].name}{order.items[0].quantity > 1 ? ` ×${order.items[0].quantity}` : ''}</p>}
                       {order.deliveryInstructions && (
-                        <div className="flex items-center gap-1 mt-1 bg-amber-100 rounded px-2 py-1">
-                          <AlertTriangle size={10} className="text-amber-700 shrink-0" />
-                          <p className="text-[10px] font-black text-amber-800 leading-tight truncate">{order.deliveryInstructions}</p>
+                        <div className="flex items-center gap-1 mt-1 bg-red-50 border border-red-200 rounded px-2 py-1">
+                          <AlertTriangle size={10} className="text-red-600 shrink-0" />
+                          <p className="text-[10px] font-black text-red-700 leading-tight truncate">{order.deliveryInstructions}</p>
                         </div>
                       )}
                     </div>
@@ -4610,11 +4614,11 @@ export default function App() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {/* Rate by ZIP pill — admin only */}
+          {/* Delivery Fee ZIP lookup — admin only */}
           {isAdmin && (
             <button onClick={() => { setShowZipBar(s => !s); setZipQuery(''); setZipRate(undefined); }}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-black text-[10px] uppercase transition-all border ${showZipBar ? 'bg-black text-white border-black' : 'bg-stone-50 text-stone-700 border-stone-200'}`}>
-              <MapPin size={11} /> Delivery Fee
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl font-black text-[11px] uppercase transition-all border-2 ${showZipBar ? 'bg-black text-white border-black' : 'bg-amber-400 text-black border-amber-400'}`}>
+              <DollarSign size={13} /> Fee by ZIP
             </button>
           )}
           <span className={`w-2 h-2 rounded-full ${isLoading ? 'bg-amber-400 animate-pulse' : dataSource === 'LIVE' ? 'bg-green-500' : 'bg-red-400'}`} />
@@ -4647,17 +4651,6 @@ export default function App() {
               : <p className="mt-2 text-xs font-black text-red-500 text-center">ZIP {zipQuery} not in rate table</p>
           )}
         </div>
-      )}
-
-      {/* Global floating + Add Delivery button — admin only, visible on any tab */}
-      {isAdmin && !selectedOrder && (
-        <button
-          onClick={openAddManual}
-          className="fixed bottom-20 right-4 z-40 w-14 h-14 bg-black text-white rounded-full shadow-2xl flex items-center justify-center active:scale-95 transition-all"
-          title="Add Delivery Manually"
-        >
-          <Plus size={24} />
-        </button>
       )}
 
       {/* Global manual delivery modal */}
