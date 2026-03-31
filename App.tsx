@@ -4497,9 +4497,18 @@ export default function App() {
                 if (!globalManualForm.deliveryFee) { setGlobalManualError('Delivery fee is required.'); return; }
                 setGlobalManualSaving(true);
                 try {
+                  const selectedDriver = allUsers.find(u => u.id === globalManualForm.driverId);
+                  const finalDriverId = globalManualForm.driverId || 'manager_1';
+                  const finalDriverName = selectedDriver?.name || globalManualForm.driverName || 'Katie';
+                  console.log('Saving manual order with driver:', finalDriverId, finalDriverName);
                   const resp = await fetch('/api/manual-orders', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ ...globalManualForm, deliveryFee: globalManualForm.deliveryFee, driverId: globalManualForm.driverId || 'manager_1', driverName: globalManualForm.driverName || 'Katie' })
+                    body: JSON.stringify({
+                      ...globalManualForm,
+                      deliveryFee: globalManualForm.deliveryFee,
+                      driverId: finalDriverId,
+                      driverName: finalDriverName,
+                    })
                   });
                   const data = await resp.json();
                   if (!data.success) throw new Error(data.error || 'Save failed');
