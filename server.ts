@@ -535,7 +535,21 @@ async function startServer() {
     const { orderId, photo, signature, notes, completedAt, status, driverId, driverName, failureReason } = req.body;
     try {
       const existingPod = await readPodOrder(orderId);
-      const updated = { ...existingPod, photo, signature, notes, completedAt, submittedAt: new Date().toISOString(), status, driverId, driverName, failureReason };
+      const updated = {
+        ...existingPod,
+        photo,
+        signature,
+        confirmationPhoto: photo || null,
+        confirmationSignature: signature || null,
+        notes,
+        driverNotes: notes || null,
+        completedAt,
+        submittedAt: new Date().toISOString(),
+        status,
+        driverId,
+        driverName,
+        failureReason
+      };
       await writePodOrder(orderId, updated);
 
       // Write status + completedAt back to Shopify as order tags so it survives server restarts

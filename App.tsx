@@ -1275,34 +1275,58 @@ const OrderDetail: React.FC<{
         )}
 
         {/* ── COMPLETED: POD summary ── */}
-        {isCompleted && (
+        {isCompleted && (() => {
+          // Support both old field name (photo) and new (confirmationPhoto)
+          const podPhoto = order.confirmationPhoto || (order as any).photo || null;
+          const podSig = order.confirmationSignature || (order as any).signature || null;
+          const podNotes = order.driverNotes || (order as any).notes || null;
+          return (
           <div className="mx-3 mt-3 mb-4 space-y-2">
+            {/* Status + timestamp card */}
             <div className="bg-white rounded-xl border border-stone-200 px-4 py-3">
-              <StatusBadge status={order.status} />
+              <div className="flex items-center justify-between">
+                <StatusBadge status={order.status} />
+                <span className="text-[10px] font-black uppercase text-stone-400">Proof of Delivery</span>
+              </div>
               {order.completedAt && (
-                <p className="text-xs text-stone-500 mt-1">
-                  {formatDate(order.completedAt)} at {formatTime(order.completedAt)}
+                <p className="text-xs font-bold text-stone-600 mt-2">
+                  🕐 {new Date(order.completedAt).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })} at {new Date(order.completedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
                 </p>
               )}
-              {order.driverNotes && <p className="text-sm italic text-stone-600 mt-2">"{order.driverNotes}"</p>}
+              {!order.completedAt && (
+                <p className="text-[10px] text-stone-400 mt-1 italic">No timestamp recorded</p>
+              )}
+              {podNotes && <p className="text-sm italic text-stone-600 mt-2">"{podNotes}"</p>}
+              {order.driverId && <p className="text-[10px] text-stone-400 mt-1">Driver: {order.driverName || order.driverId}</p>}
             </div>
-            {order.confirmationPhoto && (
+            {/* Photo */}
+            {podPhoto ? (
               <div className="rounded-xl overflow-hidden border border-stone-200">
-                <img src={order.confirmationPhoto} className="w-full max-h-48 object-cover" alt="Photo" />
-                {order.completedAt && (
-                  <div className="bg-stone-900 px-3 py-1.5 flex items-center gap-2">
-                    <span className="text-green-400 text-[10px]">●</span>
-                    <p className="text-white text-[11px] font-black">
-                      {new Date(order.completedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} at {new Date(order.completedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-                    </p>
-                  </div>
-                )}
+                <div className="bg-stone-100 px-3 py-2">
+                  <p className="text-[9px] font-black uppercase text-stone-500">📷 Delivery Photo</p>
+                </div>
+                <img src={podPhoto} className="w-full max-h-64 object-cover" alt="Delivery Photo" />
+              </div>
+            ) : (
+              <div className="rounded-xl border border-dashed border-stone-200 px-4 py-3 flex items-center gap-2">
+                <span className="text-lg">📷</span>
+                <p className="text-xs text-stone-400 font-bold">No delivery photo on file</p>
               </div>
             )}
-            {order.confirmationSignature && (
-              <div className="bg-white border border-stone-200 rounded-xl p-3">
-                <p className="text-[9px] font-black uppercase text-stone-400 mb-1">Signature</p>
-                <img src={order.confirmationSignature} className="w-full max-h-16 object-contain" alt="Sig" />
+            {/* Signature */}
+            {podSig ? (
+              <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
+                <div className="bg-stone-100 px-3 py-2">
+                  <p className="text-[9px] font-black uppercase text-stone-500">✍️ Signature</p>
+                </div>
+                <div className="p-3">
+                  <img src={podSig} className="w-full max-h-24 object-contain" alt="Signature" />
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-xl border border-dashed border-stone-200 px-4 py-3 flex items-center gap-2">
+                <span className="text-lg">✍️</span>
+                <p className="text-xs text-stone-400 font-bold">No signature on file</p>
               </div>
             )}
             {/* Admin: REVERT accidentally confirmed delivery */}
@@ -1358,7 +1382,8 @@ const OrderDetail: React.FC<{
               <p className="text-center text-xs font-bold text-green-600">✓ Delivery confirmation sent</p>
             )}
           </div>
-        )}
+          );
+        })()}
 
         {/* ── PREVIOUS ATTEMPTS ── */}
         {order.attempts && order.attempts.length > 0 && (
@@ -1580,18 +1605,26 @@ const OrdersView: React.FC<OrdersViewProps> = ({
 
     return (<>
       <div className="flex flex-col h-full">
-        {/* Stats */}
-        <div className="grid grid-cols-3 border-b border-stone-200">
-          {[
-            { label: 'Open', val: deliveries.filter(d => OPEN_STATUSES.includes(d.status)).length, color: 'text-blue-600' },
-            { label: 'Out for Delivery', val: inTransitCount, color: 'text-black' },
-            { label: 'Done Today', val: deliveredTodayCount, color: 'text-green-600' },
-          ].map(s => (
-            <div key={s.label} className="py-3 text-center border-r border-stone-100 last:border-0">
-              <p className={`text-xl font-black ${s.color}`}>{s.val}</p>
-              <p className="text-[8px] font-black uppercase text-stone-400 leading-tight px-1">{s.label}</p>
-            </div>
-          ))}
+        {/* Stats + Add button */}
+        <div className="border-b border-stone-200">
+          <div className="grid grid-cols-3 border-b border-stone-100">
+            {[
+              { label: 'Open', val: deliveries.filter(d => OPEN_STATUSES.includes(d.status)).length, color: 'text-blue-600' },
+              { label: 'Out for Delivery', val: inTransitCount, color: 'text-black' },
+              { label: 'Done Today', val: deliveredTodayCount, color: 'text-green-600' },
+            ].map(s => (
+              <div key={s.label} className="py-3 text-center border-r border-stone-100 last:border-0">
+                <p className={`text-xl font-black ${s.color}`}>{s.val}</p>
+                <p className="text-[8px] font-black uppercase text-stone-400 leading-tight px-1">{s.label}</p>
+              </div>
+            ))}
+          </div>
+          <button
+            onClick={() => { setManualForm({ recipientName: '', recipientPhone: '', recipientEmail: '', street: '', unit: '', city: '', zip: '', deliveryDate: new Date().toISOString().split('T')[0], deliveryInstructions: '', itemDescription: '', orderTotal: '', giftSenderName: '', giftMessage: '', driverId: '', driverName: '' }); setManualError(''); setShowAddManual(true); }}
+            className="w-full py-2.5 bg-black text-white font-black text-xs uppercase flex items-center justify-center gap-2 active:opacity-80 transition-all"
+          >
+            <Plus size={13} /> Add Delivery Manually
+          </button>
         </div>
 
         {/* Filters + Search */}
@@ -1618,13 +1651,6 @@ const OrdersView: React.FC<OrdersViewProps> = ({
             placeholder="Search name, order #, address, status..."
             className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-black"
           />
-          {/* Add Manual Delivery button — admin only */}
-          <button
-            onClick={() => { setManualForm({ recipientName: '', recipientPhone: '', recipientEmail: '', street: '', unit: '', city: '', zip: '', deliveryDate: new Date().toISOString().split('T')[0], deliveryInstructions: '', itemDescription: '', orderTotal: '', giftSenderName: '', giftMessage: '', driverId: '', driverName: '' }); setManualError(''); setShowAddManual(true); }}
-            className="w-full py-2.5 bg-black text-white rounded-xl font-black text-xs uppercase flex items-center justify-center gap-2 active:scale-95 transition-all"
-          >
-            <Plus size={14} /> Add Delivery Manually
-          </button>
         </div>
 
         {/* Table header */}

@@ -27,10 +27,12 @@ export const getDeliveries = async (): Promise<Delivery[]> => {
         const delivery = mapShopifyOrder(order);
         if (podData[delivery.id]) {
           const pod = podData[delivery.id];
-          // Map POD field names to delivery field names
+          // Normalize POD field names — DB may store as photo/signature or confirmationPhoto/confirmationSignature
           if (pod.photo && !pod.confirmationPhoto) pod.confirmationPhoto = pod.photo;
           if (pod.signature && !pod.confirmationSignature) pod.confirmationSignature = pod.signature;
           if (pod.notes && !pod.driverNotes) pod.driverNotes = pod.notes;
+          // Also normalize completedAt from status tag if missing
+          if (!pod.completedAt && delivery.completedAt) pod.completedAt = delivery.completedAt;
           return { ...delivery, ...pod };
         }
         return delivery;
