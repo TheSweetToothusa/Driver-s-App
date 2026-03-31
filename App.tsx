@@ -1485,6 +1485,17 @@ const OrdersView: React.FC<OrdersViewProps> = ({
   const [rescheduleOrder, setRescheduleOrder] = useState<Delivery | null>(null);
   const [rescheduleDate, setRescheduleDate] = useState('');
   const [rescheduleSaved, setRescheduleSaved] = useState(false);
+  const [showAddManual, setShowAddManual] = useState(false);
+  const [manualForm, setManualForm] = useState({
+    recipientName: '', recipientPhone: '', recipientEmail: '',
+    street: '', unit: '', city: '', zip: '',
+    deliveryDate: new Date().toISOString().split('T')[0],
+    deliveryInstructions: '', itemDescription: '', orderTotal: '',
+    giftSenderName: '', giftMessage: '',
+    driverId: '', driverName: '',
+  });
+  const [manualSaving, setManualSaving] = useState(false);
+  const [manualError, setManualError] = useState('');
 
   const shiftDate = (days: number) => {
     const d = new Date(driverDate + 'T12:00:00');
@@ -1581,6 +1592,13 @@ const OrdersView: React.FC<OrdersViewProps> = ({
             placeholder="Search name, order #, address, status..."
             className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-black"
           />
+          {/* Add Manual Delivery button — admin only */}
+          <button
+            onClick={() => { setManualForm({ recipientName: '', recipientPhone: '', recipientEmail: '', street: '', unit: '', city: '', zip: '', deliveryDate: new Date().toISOString().split('T')[0], deliveryInstructions: '', itemDescription: '', orderTotal: '', giftSenderName: '', giftMessage: '', driverId: '', driverName: '' }); setManualError(''); setShowAddManual(true); }}
+            className="w-full py-2.5 bg-black text-white rounded-xl font-black text-xs uppercase flex items-center justify-center gap-2 active:scale-95 transition-all"
+          >
+            <Plus size={14} /> Add Delivery Manually
+          </button>
         </div>
 
         {/* Table header */}
@@ -1618,6 +1636,7 @@ const OrdersView: React.FC<OrdersViewProps> = ({
                   <div className="pr-2 min-w-0 cursor-pointer" onClick={() => onSelectOrder(order)}>
                     <p className="text-sm font-bold text-stone-900 truncate">{order.giftReceiverName || order.customer?.name}</p>
                     {renderAttemptBadge(order)}
+                    {(order as any).isManual && <span className="inline-block ml-1 px-1.5 py-0.5 bg-violet-100 text-violet-700 text-[8px] font-black uppercase rounded">Manual</span>}
                     <p className="text-[10px] text-stone-400 truncate">{order.address?.street}, {order.address?.city}</p>
                     {order.items?.[0] && (
                       <p className="text-[10px] font-black text-stone-600 truncate">{order.items[0].name} — ${order.items[0].price.toFixed(2)}</p>
@@ -1693,6 +1712,7 @@ const OrdersView: React.FC<OrdersViewProps> = ({
                   <div className="pr-2 min-w-0 cursor-pointer" onClick={() => onSelectOrder(order)}>
                     <p className="text-sm font-bold text-stone-900 truncate">{order.giftReceiverName || order.customer?.name}</p>
                     {renderAttemptBadge(order)}
+                    {(order as any).isManual && <span className="inline-block ml-1 px-1.5 py-0.5 bg-violet-100 text-violet-700 text-[8px] font-black uppercase rounded">Manual</span>}
                     <p className="text-[10px] text-stone-400 truncate">{order.address?.street}, {order.address?.city}</p>
                     {order.items?.[0] && (
                       <p className="text-[10px] font-black text-stone-600 truncate">{order.items[0].name} — ${order.items[0].price.toFixed(2)}</p>
@@ -1770,6 +1790,121 @@ const OrdersView: React.FC<OrdersViewProps> = ({
       {rescheduleSaved && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[999] bg-green-600 text-white px-6 py-3 rounded-2xl shadow-lg font-black text-sm flex items-center gap-2 animate-bounce">
           ✓ Delivery rescheduled successfully
+        </div>
+      )}
+
+      {/* ── MANUAL DELIVERY MODAL ── */}
+      {showAddManual && (
+        <div className="fixed inset-0 z-[999] bg-black/60 flex items-end justify-center" onClick={() => setShowAddManual(false)}>
+          <div className="bg-white w-full max-w-md rounded-t-3xl pb-10 flex flex-col" style={{ maxHeight: '92vh' }} onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-stone-100 shrink-0">
+              <p className="font-black text-base uppercase tracking-wide">Add Delivery Manually</p>
+              <button onClick={() => setShowAddManual(false)} className="w-8 h-8 flex items-center justify-center bg-stone-100 rounded-full text-stone-500 font-black"><X size={14} /></button>
+            </div>
+            {/* Scrollable form */}
+            <div className="overflow-y-auto flex-1 px-5 py-4 space-y-4">
+
+              {/* Section: Recipient */}
+              <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest">Recipient Info</p>
+              <input value={manualForm.recipientName} onChange={e => setManualForm(f => ({ ...f, recipientName: e.target.value }))}
+                placeholder="Recipient Name *" className="w-full border border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black" />
+              <input value={manualForm.recipientPhone} onChange={e => setManualForm(f => ({ ...f, recipientPhone: e.target.value }))}
+                placeholder="Recipient Phone" type="tel" className="w-full border border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black" />
+
+              {/* Section: Address */}
+              <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest mt-2">Delivery Address</p>
+              <input value={manualForm.street} onChange={e => setManualForm(f => ({ ...f, street: e.target.value }))}
+                placeholder="Street Address *" className="w-full border border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black" />
+              <input value={manualForm.unit} onChange={e => setManualForm(f => ({ ...f, unit: e.target.value }))}
+                placeholder="Unit / Apt / Suite" className="w-full border border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black" />
+              <div className="flex gap-2">
+                <input value={manualForm.city} onChange={e => setManualForm(f => ({ ...f, city: e.target.value }))}
+                  placeholder="City *" className="flex-1 border border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black" />
+                <input value={manualForm.zip} onChange={e => setManualForm(f => ({ ...f, zip: e.target.value }))}
+                  placeholder="ZIP *" maxLength={5} className="w-24 border border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black" />
+              </div>
+
+              {/* Section: Delivery */}
+              <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest mt-2">Delivery Details</p>
+              <div>
+                <p className="text-[10px] font-black text-stone-500 mb-1">Delivery Date *</p>
+                <input type="date" value={manualForm.deliveryDate} onChange={e => setManualForm(f => ({ ...f, deliveryDate: e.target.value }))}
+                  className="w-full border border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black" />
+              </div>
+              <textarea value={manualForm.deliveryInstructions} onChange={e => setManualForm(f => ({ ...f, deliveryInstructions: e.target.value }))}
+                placeholder="Delivery Instructions (gate code, call before, etc.)" rows={2}
+                className="w-full border border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black resize-none" />
+
+              {/* Section: Order */}
+              <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest mt-2">Order Info</p>
+              <textarea value={manualForm.itemDescription} onChange={e => setManualForm(f => ({ ...f, itemDescription: e.target.value }))}
+                placeholder="Item Description (e.g. 3 Gift Baskets — Shiva, Dairy) *" rows={2}
+                className="w-full border border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black resize-none" />
+              <input value={manualForm.orderTotal} onChange={e => setManualForm(f => ({ ...f, orderTotal: e.target.value }))}
+                placeholder="Order Total (e.g. 850)" type="number" className="w-full border border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black" />
+
+              {/* Section: Sender & Message */}
+              <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest mt-2">Sender & Gift Message</p>
+              <input value={manualForm.giftSenderName} onChange={e => setManualForm(f => ({ ...f, giftSenderName: e.target.value }))}
+                placeholder="Gift Sender Name" className="w-full border border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black" />
+              <textarea value={manualForm.giftMessage} onChange={e => setManualForm(f => ({ ...f, giftMessage: e.target.value }))}
+                placeholder="Gift Message" rows={2}
+                className="w-full border border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black resize-none" />
+
+              {/* Section: Driver */}
+              <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest mt-2">Assign Driver</p>
+              <select value={manualForm.driverId} onChange={e => {
+                const u = allUsers.find(u => u.id === e.target.value);
+                setManualForm(f => ({ ...f, driverId: e.target.value, driverName: u?.name || '' }));
+              }} className="w-full border border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black bg-white">
+                <option value="">— Select Driver —</option>
+                {allUsers.filter(u => (u.role === 'DRIVER' || u.role === 'MANAGER') && u.isActive).map(u => (
+                  <option key={u.id} value={u.id}>{u.name}</option>
+                ))}
+              </select>
+
+              {manualError && <p className="text-xs font-black text-red-600 text-center">{manualError}</p>}
+            </div>
+
+            {/* Save button */}
+            <div className="px-5 pt-3 shrink-0 border-t border-stone-100">
+              <button
+                disabled={manualSaving}
+                onClick={async () => {
+                  setManualError('');
+                  if (!manualForm.recipientName.trim()) { setManualError('Recipient name is required.'); return; }
+                  if (!manualForm.street.trim()) { setManualError('Street address is required.'); return; }
+                  if (!manualForm.city.trim()) { setManualError('City is required.'); return; }
+                  if (!manualForm.zip.trim()) { setManualError('ZIP code is required.'); return; }
+                  if (!manualForm.itemDescription.trim()) { setManualError('Item description is required.'); return; }
+                  if (!manualForm.deliveryDate) { setManualError('Delivery date is required.'); return; }
+                  setManualSaving(true);
+                  try {
+                    const resp = await fetch('/api/manual-orders', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        ...manualForm,
+                        driverId: manualForm.driverId || 'manager_1',
+                        driverName: manualForm.driverName || 'Katie',
+                      }),
+                    });
+                    const data = await resp.json();
+                    if (!data.success) throw new Error(data.error || 'Save failed');
+                    // Reload orders so the new manual order appears
+                    window.location.reload();
+                  } catch (e: any) {
+                    setManualError(e.message || 'Something went wrong. Try again.');
+                    setManualSaving(false);
+                  }
+                }}
+                className={`w-full py-4 rounded-2xl font-black text-base transition-all active:scale-95 ${manualSaving ? 'bg-stone-300 text-stone-500' : 'bg-black text-white'}`}
+              >
+                {manualSaving ? 'Saving...' : '✓ Save Delivery'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </>);

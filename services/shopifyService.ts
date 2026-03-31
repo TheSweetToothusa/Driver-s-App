@@ -3,11 +3,23 @@ import { DELIVERY_FEES } from '../src/constants';
 
 export const getDeliveries = async (): Promise<Delivery[]> => {
   try {
-    const response = await fetch('/api/orders');
+    const [response, manualResp] = await Promise.all([
+      fetch('/api/orders'),
+      fetch('/api/manual-orders'),
+    ]);
     if (!response.ok) throw new Error("Connection failed");
     const data = await response.json();
     const orders = data.orders || [];
     const podData = data.podData || {};
+
+    // Fetch manual orders (never throw if this fails)
+    let manualOrders: Delivery[] = [];
+    try {
+      if (manualResp.ok) {
+        const manualData = await manualResp.json();
+        manualOrders = (manualData.orders || []) as Delivery[];
+      }
+    } catch { /* ignore */ }
 
     // If Shopify returns real orders, use them
     if (orders.length > 0) {
@@ -23,11 +35,11 @@ export const getDeliveries = async (): Promise<Delivery[]> => {
         }
         return delivery;
       });
-      return mapped;
+      return [...mapped, ...manualOrders];
     }
 
-    // Otherwise fall back to samples (for testing)
-    return getSamples();
+    // Otherwise fall back to samples (for testing) + manual orders
+    return [...getSamples(), ...manualOrders];
   } catch (error) {
     console.warn("Shopify unavailable, using samples", error);
     return getSamples();

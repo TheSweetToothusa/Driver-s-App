@@ -1071,6 +1071,87 @@ async function startServer() {
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
+  // ── MANUAL ORDERS ───────────────────────────────────────────────────────────
+
+  app.get('/api/manual-orders', async (_req, res) => {
+    try {
+      const orders = await dbGet('manual_orders') || [];
+      res.json({ orders });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  app.post('/api/manual-orders', async (req, res) => {
+    try {
+      const orders = await dbGet('manual_orders') || [];
+      const now = new Date().toISOString();
+      const id = `manual_${Date.now()}`;
+      const order = {
+        id,
+        orderNumber: req.body.orderNumber || `M-${Date.now().toString().slice(-5)}`,
+        isManual: true,
+        customer: {
+          name: req.body.recipientName || '',
+          phone: req.body.recipientPhone || '',
+          email: req.body.recipientEmail || '',
+        },
+        address: {
+          street: req.body.street || '',
+          unit: req.body.unit || '',
+          company: req.body.company || '',
+          city: req.body.city || '',
+          zip: req.body.zip || '',
+          lat: 0,
+          lng: 0,
+        },
+        items: [{
+          id: 'manual_item_1',
+          name: req.body.itemDescription || 'Manual Order',
+          quantity: 1,
+          sku: '',
+          price: parseFloat(req.body.orderTotal) || 0,
+        }],
+        deliveryInstructions: req.body.deliveryInstructions || '',
+        status: req.body.status || 'PENDING',
+        deliveryDate: req.body.deliveryDate || new Date().toISOString().split('T')[0],
+        priority: req.body.priority || 'Standard',
+        deliveryFee: parseFloat(req.body.deliveryFee) || 0,
+        driverId: req.body.driverId || 'manager_1',
+        driverName: req.body.driverName || 'Katie',
+        giftMessage: req.body.giftMessage || '',
+        giftSenderName: req.body.giftSenderName || '',
+        giftSenderPhone: req.body.giftSenderPhone || '',
+        giftReceiverName: req.body.recipientName || '',
+        orderTotal: parseFloat(req.body.orderTotal) || 0,
+        attempts: [],
+        internalNotes: [],
+        createdAt: now,
+      };
+      orders.push(order);
+      await dbSet('manual_orders', orders);
+      res.json({ success: true, order });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  app.patch('/api/manual-orders/:id', async (req, res) => {
+    try {
+      const orders = await dbGet('manual_orders') || [];
+      const idx = orders.findIndex((o: any) => o.id === req.params.id);
+      if (idx === -1) return res.status(404).json({ error: 'Not found' });
+      orders[idx] = { ...orders[idx], ...req.body };
+      await dbSet('manual_orders', orders);
+      res.json({ success: true, order: orders[idx] });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  app.delete('/api/manual-orders/:id', async (req, res) => {
+    try {
+      const orders = await dbGet('manual_orders') || [];
+      const filtered = orders.filter((o: any) => o.id !== req.params.id);
+      await dbSet('manual_orders', filtered);
+      res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
   // ── STATIC / VITE ───────────────────────────────────────────────────────────
 
   if (process.env.NODE_ENV !== "production") {

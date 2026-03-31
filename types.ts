@@ -124,6 +124,7 @@ export interface Delivery {
   failureNotificationSent?: boolean;
   orderTotal?: number;
   createdAt?: string;
+  isManual?: boolean;
 }
 
 export interface MessageTemplate {
