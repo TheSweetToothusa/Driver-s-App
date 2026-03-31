@@ -2509,7 +2509,8 @@ const ScheduleView: React.FC<{
           <button
             onClick={optimizeRoute}
             disabled={routeLoading}
-            className="w-full py-4 bg-black text-white rounded-2xl font-black text-sm flex items-center justify-center gap-2 active:scale-95 disabled:opacity-60 transition-all"
+            className="w-full py-4 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 active:scale-95 disabled:opacity-60 transition-all text-white"
+            style={{ background: routeLoading ? '#5F6368' : '#1A73E8' }}
           >
             {routeLoading ? (
               <><RefreshCw size={16} className="animate-spin" /> {routeStatus || 'Loading...'}</>
@@ -2553,69 +2554,69 @@ const ScheduleView: React.FC<{
               </div>
 
               {/* Cards for this date */}
+              <div className="px-4 py-2 space-y-4">
               {orders.map(order => {
                 const name = order.giftReceiverName || order.customer?.name || '—';
                 const cleanNum = (order.orderNumber || order.id).replace(/^#+/, '');
-                const fee = order.deliveryFee || DELIVERY_FEES[order.address?.zip || ''] || 0;
                 const statusCfg = STATUS_CONFIG[order.status] || STATUS_CONFIG.PENDING;
                 const isDone = DONE_STATUSES.includes(order.status);
+                const showStatus = !['PENDING','ASSIGNED'].includes(order.status);
 
                 return (
-                  <div key={order.id} className={`border-b border-stone-100 ${isDone ? 'bg-green-50' : 'bg-white'}`}>
-                    {/* Main card row — tappable */}
-                    <div className="flex items-stretch cursor-pointer active:bg-stone-50" onClick={() => onSelectOrder(order)}>
-                      {/* Status stripe */}
-                      <div className={`w-1.5 shrink-0 ${statusCfg.bg}`} />
-                      <div className="flex-1 px-3 py-3 min-w-0">
-                        <div className="flex items-start gap-2">
-                          {/* Left: all order info */}
-                          <div className="flex-1 min-w-0">
-                            {/* Order number + status badge (only if not Assigned/Pending) */}
-                            <div className="flex items-center gap-2 mb-0.5">
-                              <p className="text-[11px] font-black text-stone-400">#{cleanNum}</p>
-                              {!['PENDING','ASSIGNED'].includes(order.status) && (
-                                <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full ${statusCfg.bg} ${statusCfg.text}`}>{statusCfg.label}</span>
-                              )}
-                              {(order as any).isManual && <span className="text-[9px] font-black px-1.5 py-0.5 bg-violet-100 text-violet-700 rounded-full">Manual</span>}
-                            </div>
-                            {/* Recipient name */}
-                            <p className="text-base font-black text-stone-900 leading-tight truncate">{name}</p>
-                            {/* CITY — big and bold */}
-                            <p className="text-2xl font-black text-black leading-tight">{order.address?.city || '—'} <span className="text-base font-bold text-stone-500">{order.address?.zip}</span></p>
-                            {/* Street — small */}
-                            <p className="text-xs text-stone-400 font-medium truncate">{order.address?.street}{order.address?.unit ? `, ${order.address.unit}` : ''}</p>
-                            {/* Product */}
-                            {order.items?.[0] && <p className="text-[11px] text-stone-500 truncate mt-0.5">{order.items[0].name}</p>}
-                            {/* Real delivery instructions only */}
-                            {order.deliveryInstructions && (
-                              <div className="flex items-center gap-1 mt-1 bg-red-50 border border-red-200 rounded-lg px-2 py-1">
-                                <AlertTriangle size={10} className="text-red-600 shrink-0" />
-                                <p className="text-[10px] font-black text-red-700 truncate">{order.deliveryInstructions}</p>
-                              </div>
-                            )}
-                          </div>
-                          {/* Right: done indicator only */}
-                          {isDone && (
-                            <div className="shrink-0 text-right pt-5">
-                              <p className="text-[10px] font-black text-green-600">✓ DONE</p>
-                            </div>
+                  <div key={order.id}
+                    style={{ border: '1px solid #e0e0e0', borderRadius: 12, background: isDone ? '#f0fdf4' : '#ffffff', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
+                    {/* Tappable card body */}
+                    <div className="cursor-pointer active:opacity-80" onClick={() => onSelectOrder(order)}
+                      style={{ borderLeft: `4px solid ${statusCfg.color || '#1A73E8'}`, padding: '14px 16px 12px 14px' }}>
+                      {/* Row 1: order number + status badge */}
+                      <div className="flex items-center justify-between mb-1">
+                        <span style={{ fontSize: 11, fontWeight: 500, color: '#5F6368' }}>#{cleanNum}</span>
+                        <div className="flex items-center gap-1.5">
+                          {showStatus && (
+                            <span style={{ fontSize: 10, fontWeight: 700, color: '#fff', background: statusCfg.color || '#1A73E8', padding: '2px 8px', borderRadius: 99 }}>{statusCfg.label}</span>
                           )}
+                          {isDone && <span style={{ fontSize: 10, fontWeight: 700, color: '#16a34a' }}>✓ DONE</span>}
+                          {(order as any).isManual && <span style={{ fontSize: 10, fontWeight: 700, color: '#7c3aed', background: '#ede9fe', padding: '2px 6px', borderRadius: 99 }}>Manual</span>}
                         </div>
                       </div>
+                      {/* Row 2: recipient name */}
+                      <p style={{ fontSize: 16, fontWeight: 700, color: '#202124', lineHeight: 1.2, marginBottom: 2 }} className="truncate">{name}</p>
+                      {/* Row 3: CITY — largest, boldest */}
+                      <p style={{ fontSize: 26, fontWeight: 800, color: '#202124', lineHeight: 1.1, letterSpacing: '-0.5px' }}>
+                        {order.address?.city || '—'} <span style={{ fontSize: 15, fontWeight: 500, color: '#5F6368' }}>{order.address?.zip}</span>
+                      </p>
+                      {/* Row 4: street address */}
+                      <p style={{ fontSize: 12, fontWeight: 400, color: '#5F6368', marginTop: 2 }} className="truncate">
+                        {order.address?.street}{order.address?.unit ? ` #${order.address.unit}` : ''}
+                      </p>
+                      {/* Row 5: product */}
+                      {order.items?.[0] && (
+                        <p style={{ fontSize: 11, fontWeight: 400, color: '#80868b', marginTop: 3 }} className="truncate">{order.items[0].name}</p>
+                      )}
+                      {/* Row 6: delivery instructions — red alert */}
+                      {order.deliveryInstructions && (
+                        <div style={{ marginTop: 6, background: '#fff1f2', border: '1px solid #fecdd3', borderRadius: 8, padding: '5px 10px', display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <AlertTriangle size={11} style={{ color: '#dc2626', flexShrink: 0 }} />
+                          <p style={{ fontSize: 11, fontWeight: 700, color: '#dc2626' }} className="truncate">{order.deliveryInstructions}</p>
+                        </div>
+                      )}
                     </div>
 
-                    {/* Admin action row: driver + date change */}
+                    {/* Admin action row: driver + date */}
                     {isAdmin && (
-                      <OrderAdminRow
-                        order={order}
-                        allUsers={allUsers}
-                        activeDrivers={activeDrivers}
-                        onUpdateOrder={onUpdateOrder}
-                      />
+                      <div style={{ borderTop: '1px solid #f0f0f0', background: '#fafafa', padding: '8px 14px' }}>
+                        <OrderAdminRow
+                          order={order}
+                          allUsers={allUsers}
+                          activeDrivers={activeDrivers}
+                          onUpdateOrder={onUpdateOrder}
+                        />
+                      </div>
                     )}
                   </div>
                 );
               })}
+              </div>
             </div>
           );
         })}
@@ -4372,6 +4373,7 @@ export default function App() {
   const [dataSource, setDataSource] = useState<'LIVE' | 'MOCK' | 'ERROR'>('MOCK');
   const [tab, setTab] = useState<'HOME' | 'ORDERS' | 'SCHEDULE' | 'ADMIN' | 'DRIVERS' | 'PROJECTS'>('SCHEDULE');
   const isAdmin = currentUser?.role === 'SUPER_ADMIN' || currentUser?.role === 'MANAGER';
+  const [viewAsUserId, setViewAsUserId] = useState<string>(''); // empty = own view
   const [zipQuery, setZipQuery] = useState('');
   const [zipRate, setZipRate] = useState<number | null | undefined>(undefined);
   const [showZipBar, setShowZipBar] = useState(false);
@@ -4483,25 +4485,44 @@ export default function App() {
   return (
     <div className="max-w-md mx-auto min-h-screen bg-white flex flex-col">
       {/* Top bar */}
-      <div className="bg-white border-b border-stone-100 py-3 px-4 flex items-center justify-between shadow-sm sticky top-0 z-50">
+      <div className="bg-white border-b border-[#e0e0e0] py-3 px-4 flex items-center justify-between shadow-sm sticky top-0 z-50">
         <div className="flex items-center gap-2.5">
           <img src={BRAND_LOGO} alt="Sweet Tooth" className="h-9 w-auto object-contain" />
           <div>
-            <p className="text-[8px] font-black uppercase text-stone-400 leading-none">{currentUser.role.replace('_', ' ')}</p>
-            <p className="text-sm font-black text-stone-900 leading-tight">{currentUser.name}</p>
+            {isAdmin && viewAsUserId ? (
+              <p className="text-[9px] font-bold uppercase text-blue-600 leading-none">Viewing as driver</p>
+            ) : (
+              <p className="text-[9px] font-bold uppercase text-[#5F6368] leading-none">{currentUser.role.replace('_', ' ')}</p>
+            )}
+            <p className="text-sm font-bold text-[#202124] leading-tight">
+              {viewAsUserId ? (allUsers.find(u => u.id === viewAsUserId)?.name || currentUser.name) : currentUser.name}
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {/* View-as-driver toggle — super admin only */}
+          {isAdmin && (
+            <select
+              value={viewAsUserId}
+              onChange={e => setViewAsUserId(e.target.value)}
+              className={`text-[11px] font-bold rounded-xl px-2 py-1.5 outline-none border-2 transition-all ${viewAsUserId ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-[#e0e0e0] bg-[#f8f9fa] text-[#5F6368]'}`}
+            >
+              <option value="">👁 My View</option>
+              {allUsers.filter(u => u.id !== currentUser.id && (u.role === 'DRIVER' || u.role === 'MANAGER') && u.isActive).map(u => (
+                <option key={u.id} value={u.id}>👤 {u.name}</option>
+              ))}
+            </select>
+          )}
           {/* Delivery Fee ZIP lookup — admin only */}
           {isAdmin && (
             <button onClick={() => { setShowZipBar(s => !s); setZipQuery(''); setZipRate(undefined); }}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl font-black text-[11px] uppercase transition-all border-2 ${showZipBar ? 'bg-black text-white border-black' : 'bg-amber-400 text-black border-amber-400'}`}>
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl font-bold text-[11px] uppercase transition-all border-2 ${showZipBar ? 'bg-black text-white border-black' : 'bg-amber-400 text-black border-amber-400'}`}>
               <DollarSign size={13} /> Fee by ZIP
             </button>
           )}
           <span className={`w-2 h-2 rounded-full ${isLoading ? 'bg-amber-400 animate-pulse' : dataSource === 'LIVE' ? 'bg-green-500' : 'bg-red-400'}`} />
-          <button onClick={fetchOrders} className={`p-1.5 text-stone-400 ${isLoading ? 'animate-spin' : ''}`}><RefreshCw size={15} /></button>
-          <button onClick={logout} className="flex items-center gap-1 px-3 py-2 bg-red-50 text-red-500 rounded-xl font-black uppercase text-[10px] active:scale-95 border border-red-100">
+          <button onClick={fetchOrders} className={`p-1.5 text-[#5F6368] ${isLoading ? 'animate-spin' : ''}`}><RefreshCw size={15} /></button>
+          <button onClick={logout} className="flex items-center gap-1 px-3 py-2 bg-red-50 text-red-500 rounded-xl font-bold uppercase text-[10px] active:scale-95 border border-red-100">
             <LogOut size={13} /> Out
           </button>
         </div>
@@ -4703,7 +4724,7 @@ export default function App() {
           <ScheduleView
             deliveries={deliveries}
             role={currentUser.role}
-            currentUserId={currentUser.id}
+            currentUserId={viewAsUserId || currentUser.id}
             allUsers={allUsers}
             onSelectOrder={setSelectedOrder}
             onUpdateOrder={handleUpdateOrder}
@@ -4715,7 +4736,7 @@ export default function App() {
           <ScheduleView
             deliveries={deliveries}
             role={currentUser.role}
-            currentUserId={currentUser.id}
+            currentUserId={viewAsUserId || currentUser.id}
             allUsers={allUsers}
             onSelectOrder={setSelectedOrder}
             onUpdateOrder={handleUpdateOrder}
