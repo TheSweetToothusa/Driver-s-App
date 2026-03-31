@@ -1962,8 +1962,10 @@ const OrdersView: React.FC<OrdersViewProps> = ({
                     });
                     const data = await resp.json();
                     if (!data.success) throw new Error(data.error || 'Save failed');
-                    // Reload orders so the new manual order appears
-                    window.location.reload();
+                    // Close modal and show success — user taps refresh to see new order
+                    setShowAddManual(false);
+                    setManualSaving(false);
+                    alert('✓ Delivery saved! Tap the refresh button (↺) to see it in the list.');
                   } catch (e: any) {
                     setManualError(e.message || 'Something went wrong. Try again.');
                     setManualSaving(false);
@@ -4230,7 +4232,7 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [dataSource, setDataSource] = useState<'LIVE' | 'MOCK' | 'ERROR'>('MOCK');
-  const [tab, setTab] = useState<'HOME' | 'ORDERS' | 'SCHEDULE' | 'ADMIN' | 'DRIVERS' | 'PROJECTS'>('HOME');
+  const [tab, setTab] = useState<'HOME' | 'ORDERS' | 'SCHEDULE' | 'ADMIN' | 'DRIVERS' | 'PROJECTS'>('SCHEDULE');
   const isAdmin = currentUser?.role === 'SUPER_ADMIN' || currentUser?.role === 'MANAGER';
   const [zipQuery, setZipQuery] = useState('');
   const [zipRate, setZipRate] = useState<number | null | undefined>(undefined);
@@ -4238,10 +4240,10 @@ export default function App() {
   const [defaultDriver, setDefaultDriver] = useState<{ driverId: string | null; driverName: string | null }>({ driverId: null, driverName: null });
   // Global manual delivery state — accessible from any tab
   const [showGlobalAddManual, setShowGlobalAddManual] = useState(false);
-  const [globalManualForm, setGlobalManualForm] = useState({ recipientName: '', recipientPhone: '', recipientEmail: '', street: '', unit: '', city: '', zip: '', deliveryFee: '', deliveryDate: new Date().toISOString().split('T')[0], deliveryInstructions: '', itemDescription: '', orderTotal: '', giftSenderName: '', giftMessage: '', driverId: '', driverName: '' });
+  const [globalManualForm, setGlobalManualForm] = useState({ recipientName: '', recipientPhone: '', recipientEmail: '', street: '', unit: '', city: '', zip: '', deliveryFee: '', deliveryDate: new Date(Date.now() + 86400000).toISOString().split('T')[0], deliveryInstructions: '', itemDescription: '', orderTotal: '', giftSenderName: '', giftMessage: '', driverId: '', driverName: '' });
   const [globalManualSaving, setGlobalManualSaving] = useState(false);
   const [globalManualError, setGlobalManualError] = useState('');
-  const openAddManual = () => { setGlobalManualForm({ recipientName: '', recipientPhone: '', recipientEmail: '', street: '', unit: '', city: '', zip: '', deliveryFee: '', deliveryDate: new Date().toISOString().split('T')[0], deliveryInstructions: '', itemDescription: '', orderTotal: '', giftSenderName: '', giftMessage: '', driverId: '', driverName: '' }); setGlobalManualError(''); setShowGlobalAddManual(true); };
+  const openAddManual = () => { setGlobalManualForm({ recipientName: '', recipientPhone: '', recipientEmail: '', street: '', unit: '', city: '', zip: '', deliveryFee: '', deliveryDate: new Date(Date.now() + 86400000).toISOString().split('T')[0], deliveryInstructions: '', itemDescription: '', orderTotal: '', giftSenderName: '', giftMessage: '', driverId: '', driverName: '' }); setGlobalManualError(''); setShowGlobalAddManual(true); };
 
   useEffect(() => {
     if (currentUser) {
@@ -4501,7 +4503,10 @@ export default function App() {
                   });
                   const data = await resp.json();
                   if (!data.success) throw new Error(data.error || 'Save failed');
-                  window.location.reload();
+                  // Refresh orders without reloading the page, stay on Deliveries tab
+                  setShowGlobalAddManual(false);
+                  setTab('SCHEDULE');
+                  await fetchOrders();
                 } catch (e: any) { setGlobalManualError(e.message || 'Something went wrong.'); setGlobalManualSaving(false); }
               }} className={`w-full py-4 rounded-2xl font-black text-base transition-all active:scale-95 ${globalManualSaving ? 'bg-stone-300 text-stone-500' : 'bg-black text-white'}`}>
                 {globalManualSaving ? 'Saving...' : '✓ Save Delivery'}
@@ -4513,13 +4518,6 @@ export default function App() {
 
       {/* ── BOTTOM NAV ── */}
       <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-white border-t border-stone-200 z-50 flex">
-
-        {/* HOME — dashboard, shown for all users */}
-        <button onClick={() => setTab('HOME')}
-          className={`flex-1 py-3 flex flex-col items-center gap-0.5 transition-all ${tab === 'HOME' ? 'text-black' : 'text-stone-300'}`}>
-          <Home size={22} />
-          <span className="text-[9px] font-black uppercase">Home</span>
-        </button>
 
         {/* DELIVERIES */}
         <button onClick={() => setTab('SCHEDULE')}
@@ -4555,10 +4553,13 @@ export default function App() {
 
         {/* ── HOME TAB — dashboard for all users ── */}
         {tab === 'HOME' && (
-          <DriverHomeView
-            currentUser={currentUser}
+          <ScheduleView
             deliveries={deliveries}
+            role={currentUser.role}
+            currentUserId={currentUser.id}
+            allUsers={allUsers}
             onSelectOrder={setSelectedOrder}
+            onUpdateOrder={handleUpdateOrder}
           />
         )}
 
