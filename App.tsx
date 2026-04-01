@@ -2485,33 +2485,43 @@ const ScheduleView: React.FC<{
     const storeLat = 25.946;
     const storeLng = -80.155;
 
-    // Geocode all stops
-    const withDist: { id: string; dist: number }[] = [];
-    for (const d of optimizableStops) {
-      const addrStr = `${d.address?.street || ''}, ${d.address?.city || ''}, FL ${d.address?.zip || ''}`;
-      try {
-        const resp = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addrStr)}&limit=1`);
-        const data = await resp.json();
-        if (data && data[0]) {
-          const lat = parseFloat(data[0].lat);
-          const lng = parseFloat(data[0].lon);
-          // Haversine distance
+    // Use server-side geocoding (which uses Google if available)
+    const addresses = optimizableStops.map(d => ({
+      id: d.id,
+      street: d.address?.street || '',
+      city: d.address?.city || '',
+      zip: d.address?.zip || ''
+    }));
+
+    try {
+      const resp = await fetch('/api/geocode/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ addresses })
+      });
+      const { results } = await resp.json();
+
+      // Calculate distances
+      const withDist: { id: string; dist: number }[] = [];
+      for (const d of optimizableStops) {
+        const coords = results[d.id];
+        if (coords) {
           const R = 3959;
-          const dLat = (lat - storeLat) * Math.PI / 180;
-          const dLng = (lng - storeLng) * Math.PI / 180;
-          const a = Math.sin(dLat/2)**2 + Math.cos(storeLat * Math.PI / 180) * Math.cos(lat * Math.PI / 180) * Math.sin(dLng/2)**2;
+          const dLat = (coords.lat - storeLat) * Math.PI / 180;
+          const dLng = (coords.lng - storeLng) * Math.PI / 180;
+          const a = Math.sin(dLat/2)**2 + Math.cos(storeLat * Math.PI / 180) * Math.cos(coords.lat * Math.PI / 180) * Math.sin(dLng/2)**2;
           const dist = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
           withDist.push({ id: d.id, dist });
         } else {
           withDist.push({ id: d.id, dist: 9999 }); // No coords = end of list
         }
-      } catch {
-        withDist.push({ id: d.id, dist: 9999 });
       }
+      // Sort by distance ascending
+      withDist.sort((a, b) => a.dist - b.dist);
+      setCustomOrder(withDist.map(x => x.id));
+    } catch {
+      console.error('Sort by distance failed');
     }
-    // Sort by distance ascending
-    withDist.sort((a, b) => a.dist - b.dist);
-    setCustomOrder(withDist.map(x => x.id));
     setRouteLoading(false);
     setRouteStatus('');
   };

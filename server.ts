@@ -794,18 +794,41 @@ async function startServer() {
     const { addresses } = req.body; // Array of { id, street, city, zip }
     if (!Array.isArray(addresses)) return res.status(400).json({ error: "addresses array required" });
     const results: Record<string, { lat: number; lng: number }> = {};
+    const GOOGLE_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
+    
     for (const addr of addresses) {
       try {
         const q = encodeURIComponent(`${addr.street}, ${addr.city}, FL ${addr.zip}`);
-        const resp = await fetch(`https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=1`, {
-          headers: { 'User-Agent': 'SweetToothDriverApp/1.0' }
-        });
-        const data = await resp.json();
-        if (data && data[0]) {
-          results[addr.id] = { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+        let lat: number | null = null;
+        let lng: number | null = null;
+        
+        // Try Google Geocoding first (if API key exists)
+        if (GOOGLE_API_KEY) {
+          const gResp = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${q}&key=${GOOGLE_API_KEY}`);
+          const gData = await gResp.json();
+          if (gData.status === 'OK' && gData.results?.[0]?.geometry?.location) {
+            lat = gData.results[0].geometry.location.lat;
+            lng = gData.results[0].geometry.location.lng;
+          }
         }
-        // Nominatim rate limit: 1 req/sec
-        await new Promise(r => setTimeout(r, 1100));
+        
+        // Fallback to Nominatim if Google fails or no key
+        if (lat === null && lng === null) {
+          const resp = await fetch(`https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=1`, {
+            headers: { 'User-Agent': 'SweetToothDriverApp/1.0' }
+          });
+          const data = await resp.json();
+          if (data && data[0]) {
+            lat = parseFloat(data[0].lat);
+            lng = parseFloat(data[0].lon);
+          }
+          // Nominatim rate limit: 1 req/sec
+          await new Promise(r => setTimeout(r, 1100));
+        }
+        
+        if (lat !== null && lng !== null) {
+          results[addr.id] = { lat, lng };
+        }
       } catch (e) {
         console.error('Geocode failed for', addr.id, e);
       }
