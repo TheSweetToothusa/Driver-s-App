@@ -2171,7 +2171,8 @@ const RouteMapPanel: React.FC<{
   onClose: () => void;
   onStartNav: (app: 'waze' | 'google') => void;
   totalDistance: number;
-}> = ({ stops, driverLat, driverLng, onClose, onStartNav, totalDistance }) => {
+  onReorder: (newStops: { id: string; lat: number; lng: number; name: string; address: string; orderNumber: string; stopNumber: number }[]) => void;
+}> = ({ stops, driverLat, driverLng, onClose, onStartNav, totalDistance, onReorder }) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstance = useRef<any>(null);
 
@@ -2240,7 +2241,10 @@ const RouteMapPanel: React.FC<{
 
       {/* Stop list */}
       <div className="bg-white max-h-[35vh] overflow-y-auto border-t border-stone-200">
-        {stops.map(s => (
+        <div className="px-4 py-1.5 bg-stone-50 border-b border-stone-200">
+          <p className="text-[10px] font-black text-stone-400 uppercase tracking-wide">Tap ▲▼ to adjust stop order</p>
+        </div>
+        {stops.map((s, idx) => (
           <div key={s.id} className={`flex items-center gap-3 px-4 py-2.5 border-b border-stone-100 ${s.lat === 0 ? 'bg-amber-50' : ''}`}>
             <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${s.lat === 0 ? 'bg-amber-500' : 'bg-black'}`}>
               <span className="text-white font-black text-xs">{s.lat === 0 ? '?' : s.stopNumber}</span>
@@ -2249,7 +2253,27 @@ const RouteMapPanel: React.FC<{
               <p className="text-xs font-black text-stone-900 truncate">{s.name}</p>
               <p className={`text-[10px] truncate ${s.lat === 0 ? 'text-amber-600 font-bold' : 'text-stone-400'}`}>{s.address}</p>
             </div>
-            <p className="text-[10px] font-black text-stone-400">#{s.orderNumber?.replace(/^#+/, '')}</p>
+            <p className="text-[10px] font-black text-stone-400 mr-1">#{s.orderNumber?.replace(/^#+/, '')}</p>
+            <div className="flex flex-col gap-0.5">
+              <button
+                disabled={idx === 0}
+                onClick={() => {
+                  const next = [...stops];
+                  [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
+                  onReorder(next.map((stop, i) => ({ ...stop, stopNumber: i + 1 })));
+                }}
+                className={`w-6 h-5 rounded flex items-center justify-center text-[10px] font-black leading-none ${idx === 0 ? 'text-stone-200 bg-stone-100' : 'text-stone-700 bg-stone-200 active:bg-stone-400'}`}
+              >▲</button>
+              <button
+                disabled={idx === stops.length - 1}
+                onClick={() => {
+                  const next = [...stops];
+                  [next[idx], next[idx + 1]] = [next[idx + 1], next[idx]];
+                  onReorder(next.map((stop, i) => ({ ...stop, stopNumber: i + 1 })));
+                }}
+                className={`w-6 h-5 rounded flex items-center justify-center text-[10px] font-black leading-none ${idx === stops.length - 1 ? 'text-stone-200 bg-stone-100' : 'text-stone-700 bg-stone-200 active:bg-stone-400'}`}
+              >▼</button>
+            </div>
           </div>
         ))}
       </div>
@@ -2778,6 +2802,10 @@ const ScheduleView: React.FC<{
           totalDistance={routeTotalDist}
           onClose={() => setShowRouteMap(false)}
           onStartNav={startNavigation}
+          onReorder={(newStops) => {
+            setRouteStops(newStops);
+            setCustomOrder(newStops.map((s: any) => s.id));
+          }}
         />
       )}
 
