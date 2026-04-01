@@ -2192,8 +2192,11 @@ const RouteMapPanel: React.FC<{
     L.marker([driverLat, driverLng], { icon: driverIcon }).addTo(map).bindPopup('<b>You are here</b>');
 
     // Stop markers (numbered)
+    // Only show stops with valid Florida-area coordinates on the map
+    const validStops = stops.filter(s => s.lat > 24 && s.lat < 31 && s.lng > -88 && s.lng < -79);
+    
     const allPoints: [number, number][] = [[driverLat, driverLng]];
-    stops.forEach(s => {
+    validStops.forEach(s => {
       const stopIcon = L.divIcon({
         html: `<div style="width:30px;height:30px;background:#111;border:3px solid #fff;border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:13px;font-family:system-ui">${s.stopNumber}</div>`,
         iconSize: [30, 30], iconAnchor: [15, 15], className: ''
