@@ -2354,6 +2354,7 @@ const ScheduleView: React.FC<{
   const [driverFilter, setDriverFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState<'OPEN'|'DONE'|'ALL'>('OPEN');
   const [sortBy, setSortBy] = useState<'date'|'city'|'zip'|'name'|'driver'>('date');
+  const [customOrder, setCustomOrder] = useState<string[]>([]); // manual sort by order ID
 
   // Route optimization state
   const [routeLoading, setRouteLoading] = useState(false);
@@ -2409,9 +2410,18 @@ const ScheduleView: React.FC<{
       if (!map[key]) map[key] = [];
       map[key].push(d);
     });
-    // Sort within each date group by sortBy
+    // Sort within each date group - custom order takes priority, then sortBy
     Object.values(map).forEach(group => {
       group.sort((a, b) => {
+        // If custom order exists, use it first
+        if (customOrder.length > 0) {
+          const aIdx = customOrder.indexOf(a.id);
+          const bIdx = customOrder.indexOf(b.id);
+          if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
+          if (aIdx !== -1) return -1;
+          if (bIdx !== -1) return 1;
+        }
+        // Fallback to sortBy
         if (sortBy === 'city') return (a.address?.city || '').localeCompare(b.address?.city || '');
         if (sortBy === 'zip') return (a.address?.zip || '').localeCompare(b.address?.zip || '');
         if (sortBy === 'name') return (a.giftReceiverName || a.customer?.name || '').localeCompare(b.giftReceiverName || b.customer?.name || '');
@@ -2425,7 +2435,28 @@ const ScheduleView: React.FC<{
       if (b === 'unscheduled') return -1;
       return a.localeCompare(b);
     });
-  }, [filtered, sortBy]);
+  }, [filtered, sortBy, customOrder]);
+  
+  // Move order up/down in the list
+  const moveOrder = (orderId: string, direction: 'up' | 'down', dateOrders: Delivery[]) => {
+    const currentList = customOrder.length > 0 
+      ? customOrder.filter(id => dateOrders.some(d => d.id === id))
+      : dateOrders.map(o => o.id);
+    // Add any orders not in customOrder yet
+    dateOrders.forEach(o => {
+      if (!currentList.includes(o.id)) currentList.push(o.id);
+    });
+    const idx = currentList.indexOf(orderId);
+    if (idx === -1) return;
+    if (direction === 'up' && idx === 0) return;
+    if (direction === 'down' && idx === currentList.length - 1) return;
+    const newList = [...currentList];
+    const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+    [newList[idx], newList[swapIdx]] = [newList[swapIdx], newList[idx]];
+    // Merge with existing customOrder for other dates
+    const otherDates = customOrder.filter(id => !dateOrders.some(d => d.id === id));
+    setCustomOrder([...otherDates, ...newList]);
+  };
 
   // Get active (not delivered) stops for route optimization
   const optimizableStops = useMemo(() =>
@@ -2644,8 +2675,8 @@ const ScheduleView: React.FC<{
               </div>
 
               {/* Cards for this date */}
-              <div className="px-4 py-2 space-y-4">
-              {orders.map(order => {
+              <div className="px-4 py-2 space-y-3">
+              {orders.map((order, idx) => {
                 const name = order.giftReceiverName || order.customer?.name || '—';
                 const cleanNum = (order.orderNumber || order.id).replace(/^#+/, '');
                 const statusCfg = STATUS_CONFIG[order.status] || STATUS_CONFIG.PENDING;
@@ -2653,11 +2684,33 @@ const ScheduleView: React.FC<{
                 const showStatus = !['PENDING','ASSIGNED'].includes(order.status);
 
                 return (
-                  <div key={order.id}
-                    style={{ border: '1px solid #e0e0e0', borderRadius: 12, background: isDone ? '#F8F9FA' : '#ffffff', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
-                    {/* Tappable card body */}
-                    <div className="cursor-pointer active:opacity-80" onClick={() => onSelectOrder(order)}
-                      style={{ borderLeft: `4px solid ${statusCfg.color || '#1A73E8'}`, padding: '14px 16px 12px 14px' }}>
+                  <div key={order.id} className="flex gap-2 items-stretch">
+                    {/* Reorder buttons - only for active orders */}
+                    {!isDone && (
+                      <div className="flex flex-col justify-center gap-1 shrink-0">
+                        <button
+                          onClick={() => moveOrder(order.id, 'up', orders)}
+                          disabled={idx === 0}
+                          className={`w-8 h-8 flex items-center justify-center rounded-lg ${idx === 0 ? 'bg-stone-100 text-stone-300' : 'bg-stone-200 text-stone-600 active:bg-stone-300'}`}
+                        >
+                          <ChevronUp size={18} />
+                        </button>
+                        <span className="text-center text-sm font-black text-stone-400">{idx + 1}</span>
+                        <button
+                          onClick={() => moveOrder(order.id, 'down', orders)}
+                          disabled={idx === orders.length - 1}
+                          className={`w-8 h-8 flex items-center justify-center rounded-lg ${idx === orders.length - 1 ? 'bg-stone-100 text-stone-300' : 'bg-stone-200 text-stone-600 active:bg-stone-300'}`}
+                        >
+                          <ChevronDown size={18} />
+                        </button>
+                      </div>
+                    )}
+                    {/* Order card */}
+                    <div className="flex-1"
+                      style={{ border: '1px solid #e0e0e0', borderRadius: 12, background: isDone ? '#F8F9FA' : '#ffffff', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
+                      {/* Tappable card body */}
+                      <div className="cursor-pointer active:opacity-80" onClick={() => onSelectOrder(order)}
+                        style={{ borderLeft: `4px solid ${statusCfg.color || '#1A73E8'}`, padding: '14px 16px 12px 14px' }}>
                       {/* Row 1: order number (BIG & BOLD) + status badge */}
                       <div className="flex items-center justify-between mb-2">
                         <span style={{ fontSize: 28, fontWeight: 800, color: '#202124', letterSpacing: '-0.5px' }}>#{cleanNum}</span>
@@ -2710,6 +2763,7 @@ const ScheduleView: React.FC<{
                         />
                       </div>
                     )}
+                    </div>
                   </div>
                 );
               })}
@@ -4861,10 +4915,6 @@ export default function App() {
             <div className="px-4 pt-3 pb-2">
               <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest mb-2">Drivers & Settings</p>
               <DriversView allUsers={allUsers} setAllUsers={setAllUsers} currentUser={currentUser} />
-            </div>
-            <div className="px-0 pt-2 pb-2">
-              <div className="px-4 mb-2"><p className="text-[9px] font-black uppercase text-stone-400 tracking-widest">Bulk Projects</p></div>
-              <BulkProjectsView currentUser={currentUser} allUsers={allUsers} />
             </div>
             <div className="px-0 pt-2">
               <div className="px-4 mb-2"><p className="text-[9px] font-black uppercase text-stone-400 tracking-widest">Admin Tools</p></div>
