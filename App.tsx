@@ -1105,16 +1105,37 @@ const OrderDetail: React.FC<{
                         {item.properties.filter((prop: any) => {
                           const n = prop.name?.toLowerCase() || '';
                           return !n.includes('delivery fee') && !n.includes('_') && prop.value && prop.value !== 'null';
-                        }).map((prop: any, pi: number) => (
-                          <div key={pi} className="flex items-baseline gap-1.5">
-                            <span className="text-[10px] font-black uppercase text-stone-400 tracking-wide shrink-0">{prop.name}:</span>
-                            <span className="text-xs font-bold text-stone-700">{prop.value}</span>
-                          </div>
-                        ))}
+                        }).map((prop: any, pi: number) => {
+                          const isSpecialInstruction = prop.name?.toLowerCase().includes('special instruction') || prop.name?.toLowerCase().includes('special_instruction');
+                          return isSpecialInstruction ? (
+                            <div key={pi} className="flex items-start gap-2 mt-2 rounded-xl px-3 py-2.5" style={{ background: '#fff7ed', border: '2px solid #f97316' }}>
+                              <AlertTriangle size={14} style={{ color: '#ea580c', flexShrink: 0, marginTop: 1 }} />
+                              <div>
+                                <p style={{ fontSize: 10, fontWeight: 800, color: '#c2410c', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>Special Instructions</p>
+                                <p style={{ fontSize: 14, fontWeight: 700, color: '#9a3412' }}>{prop.value}</p>
+                              </div>
+                            </div>
+                          ) : (
+                            <div key={pi} className="flex items-baseline gap-1.5">
+                              <span className="text-[10px] font-black uppercase text-stone-400 tracking-wide shrink-0">{prop.name}:</span>
+                              <span className="text-xs font-bold text-stone-700">{prop.value}</span>
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
                 ))}
+                {/* Delivery fee — shown just below items, above gift section */}
+                {(() => {
+                  const fee = order.deliveryFee || DELIVERY_FEES[order.address?.zip || ''] || 0;
+                  return fee > 0 ? (
+                    <div className="flex items-center justify-between pt-2 mt-1 border-t border-stone-100">
+                      <span className="text-[10px] font-black uppercase text-stone-400 tracking-widest">Delivery Fee</span>
+                      <span className="text-sm font-black text-green-700">${fee.toFixed(2)}</span>
+                    </div>
+                  ) : null;
+                })()}
               </div>
             )}
 
@@ -2275,6 +2296,7 @@ const ScheduleView: React.FC<{
   const [search, setSearch] = useState('');
   const [driverFilter, setDriverFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState<'OPEN'|'DONE'|'ALL'>('OPEN');
+  const [sortBy, setSortBy] = useState<'date'|'city'|'zip'|'name'|'driver'>('date');
 
   // Route optimization state
   const [routeLoading, setRouteLoading] = useState(false);
@@ -2330,12 +2352,23 @@ const ScheduleView: React.FC<{
       if (!map[key]) map[key] = [];
       map[key].push(d);
     });
+    // Sort within each date group by sortBy
+    Object.values(map).forEach(group => {
+      group.sort((a, b) => {
+        if (sortBy === 'city') return (a.address?.city || '').localeCompare(b.address?.city || '');
+        if (sortBy === 'zip') return (a.address?.zip || '').localeCompare(b.address?.zip || '');
+        if (sortBy === 'name') return (a.giftReceiverName || a.customer?.name || '').localeCompare(b.giftReceiverName || b.customer?.name || '');
+        if (sortBy === 'driver') return (a.driverName || '').localeCompare(b.driverName || '');
+        // default: date order (by order number)
+        return (a.orderNumber || '').localeCompare(b.orderNumber || '');
+      });
+    });
     return Object.entries(map).sort(([a], [b]) => {
       if (a === 'unscheduled') return 1;
       if (b === 'unscheduled') return -1;
       return a.localeCompare(b);
     });
-  }, [filtered]);
+  }, [filtered, sortBy]);
 
   // Get active (not delivered) stops for route optimization
   const optimizableStops = useMemo(() =>
@@ -2500,6 +2533,25 @@ const ScheduleView: React.FC<{
               {f.label} ({f.count})
             </button>
           ))}
+        </div>
+        {/* Sort control */}
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-black uppercase text-[#5F6368] tracking-widest shrink-0">Sort by</span>
+          <div className="flex gap-1.5 flex-1">
+            {([
+              { key: 'date', label: 'Order #' },
+              { key: 'city', label: 'City' },
+              { key: 'zip', label: 'ZIP' },
+              { key: 'name', label: 'Name' },
+              { key: 'driver', label: 'Driver' },
+            ] as const).map(s => (
+              <button key={s.key} onClick={() => setSortBy(s.key)}
+                className="flex-1 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all"
+                style={{ background: sortBy === s.key ? '#1A73E8' : '#f1f3f4', color: sortBy === s.key ? '#fff' : '#5F6368' }}>
+                {s.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
