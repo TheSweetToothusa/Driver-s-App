@@ -2062,11 +2062,11 @@ const OrdersView: React.FC<OrdersViewProps> = ({
           const isDelivered = order.status === DeliveryStatus.DELIVERED;
           return (
             <div key={order.id} onClick={() => onSelectOrder(order)}
-              className="mx-3 mb-2 bg-white rounded-xl border border-stone-200 overflow-hidden active:scale-[0.99] transition-all cursor-pointer">
-              {/* Status bar */}
-              <div className={`${cardBg} px-3 py-1.5 flex items-center justify-between`}>
+              className={`mx-3 mb-2 rounded-xl border border-stone-200 overflow-hidden active:scale-[0.99] transition-all cursor-pointer ${isDelivered ? 'bg-[#F8F9FA]' : 'bg-white'}`}>
+              {/* Status bar with BIG order number */}
+              <div className={`${cardBg} px-3 py-2 flex items-center justify-between`}>
                 <span className={`text-[10px] font-black uppercase tracking-widest ${isDelivered ? 'text-stone-500' : 'text-white'}`}>{labelText}</span>
-                <span className={`text-xs font-black ${isDelivered ? 'text-stone-500' : 'text-white'}`}>#{order.orderNumber?.replace(/^#+/, '') || order.id}</span>
+                <span className={`text-xl font-black ${isDelivered ? 'text-stone-500' : 'text-white'}`}>#{order.orderNumber?.replace(/^#+/, '') || order.id}</span>
               </div>
               <div className="px-3 py-2.5 flex items-center gap-3">
                 {/* Stop number */}
@@ -2075,7 +2075,16 @@ const OrdersView: React.FC<OrdersViewProps> = ({
                   {/* RECIPIENT NAME — first and largest */}
                   <p className="text-base font-black text-stone-900 leading-tight">{order.giftReceiverName || order.customer?.name}</p>
                   {renderAttemptBadge(order)}
-                  <p className="text-sm text-stone-500 truncate">{order.address?.street}, {order.address?.city}</p>
+                  {/* Address — tappable Google Maps link */}
+                  <a
+                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${order.address?.street || ''}, ${order.address?.city || ''}, FL ${order.address?.zip || ''}`)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={e => e.stopPropagation()}
+                    className="text-sm font-semibold text-blue-600 underline truncate block"
+                  >
+                    📍 {order.address?.street}, {order.address?.city}
+                  </a>
                   {order.items?.[0] && (
                     <p className="text-xs text-stone-400 truncate">{order.items[0].name} — ${(order.items[0].price * order.items[0].quantity).toFixed(2)}</p>
                   )}
@@ -2597,13 +2606,13 @@ const ScheduleView: React.FC<{
 
                 return (
                   <div key={order.id}
-                    style={{ border: '1px solid #e0e0e0', borderRadius: 12, background: isDone ? '#f0fdf4' : '#ffffff', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
+                    style={{ border: '1px solid #e0e0e0', borderRadius: 12, background: isDone ? '#F8F9FA' : '#ffffff', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
                     {/* Tappable card body */}
                     <div className="cursor-pointer active:opacity-80" onClick={() => onSelectOrder(order)}
                       style={{ borderLeft: `4px solid ${statusCfg.color || '#1A73E8'}`, padding: '14px 16px 12px 14px' }}>
-                      {/* Row 1: order number + status badge */}
-                      <div className="flex items-center justify-between mb-1">
-                        <span style={{ fontSize: 11, fontWeight: 500, color: '#5F6368' }}>#{cleanNum}</span>
+                      {/* Row 1: order number (BIG & BOLD) + status badge */}
+                      <div className="flex items-center justify-between mb-2">
+                        <span style={{ fontSize: 28, fontWeight: 800, color: '#202124', letterSpacing: '-0.5px' }}>#{cleanNum}</span>
                         <div className="flex items-center gap-1.5">
                           {showStatus && (
                             <span style={{ fontSize: 10, fontWeight: 700, color: '#fff', background: statusCfg.color || '#1A73E8', padding: '2px 8px', borderRadius: 99 }}>{statusCfg.label}</span>
@@ -2614,14 +2623,21 @@ const ScheduleView: React.FC<{
                       </div>
                       {/* Row 2: recipient name */}
                       <p style={{ fontSize: 16, fontWeight: 700, color: '#202124', lineHeight: 1.2, marginBottom: 2 }} className="truncate">{name}</p>
-                      {/* Row 3: CITY — largest, boldest */}
-                      <p style={{ fontSize: 26, fontWeight: 800, color: '#202124', lineHeight: 1.1, letterSpacing: '-0.5px' }}>
+                      {/* Row 3: CITY + ZIP */}
+                      <p style={{ fontSize: 22, fontWeight: 800, color: '#202124', lineHeight: 1.1, letterSpacing: '-0.5px' }}>
                         {order.address?.city || '—'} <span style={{ fontSize: 15, fontWeight: 500, color: '#5F6368' }}>{order.address?.zip}</span>
                       </p>
-                      {/* Row 4: street address */}
-                      <p style={{ fontSize: 12, fontWeight: 400, color: '#5F6368', marginTop: 2 }} className="truncate">
-                        {order.address?.street}{order.address?.unit ? ` #${order.address.unit}` : ''}
-                      </p>
+                      {/* Row 4: street address — tappable Google Maps link */}
+                      <a
+                        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${order.address?.street || ''}${order.address?.unit ? ' #' + order.address.unit : ''}, ${order.address?.city || ''}, FL ${order.address?.zip || ''}`)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={e => e.stopPropagation()}
+                        style={{ fontSize: 14, fontWeight: 600, color: '#1A73E8', textDecoration: 'underline', marginTop: 4, display: 'block' }}
+                        className="truncate"
+                      >
+                        📍 {order.address?.street}{order.address?.unit ? ` #${order.address.unit}` : ''}
+                      </a>
                       {/* Row 5: product */}
                       {order.items?.[0] && (
                         <p style={{ fontSize: 11, fontWeight: 400, color: '#80868b', marginTop: 3 }} className="truncate">{order.items[0].name}</p>
@@ -4406,7 +4422,7 @@ export default function App() {
   const [dataSource, setDataSource] = useState<'LIVE' | 'MOCK' | 'ERROR'>('MOCK');
   const [tab, setTab] = useState<'HOME' | 'ORDERS' | 'SCHEDULE' | 'ADMIN' | 'DRIVERS' | 'PROJECTS'>('SCHEDULE');
   const isAdmin = currentUser?.role === 'SUPER_ADMIN' || currentUser?.role === 'MANAGER';
-  const [viewAsUserId, setViewAsUserId] = useState<string>(''); // empty = own view
+
   const [zipQuery, setZipQuery] = useState('');
   const [zipRate, setZipRate] = useState<number | null | undefined>(undefined);
   const [showZipBar, setShowZipBar] = useState(false);
@@ -4522,30 +4538,11 @@ export default function App() {
         <div className="flex items-center gap-2.5">
           <img src={BRAND_LOGO} alt="Sweet Tooth" className="h-9 w-auto object-contain" />
           <div>
-            {isAdmin && viewAsUserId ? (
-              <p className="text-[9px] font-bold uppercase text-blue-600 leading-none">Viewing as driver</p>
-            ) : (
-              <p className="text-[9px] font-bold uppercase text-[#5F6368] leading-none">{currentUser.role.replace('_', ' ')}</p>
-            )}
-            <p className="text-sm font-bold text-[#202124] leading-tight">
-              {viewAsUserId ? (allUsers.find(u => u.id === viewAsUserId)?.name || currentUser.name) : currentUser.name}
-            </p>
+            <p className="text-[9px] font-bold uppercase text-[#5F6368] leading-none">{currentUser.role.replace('_', ' ')}</p>
+            <p className="text-sm font-bold text-[#202124] leading-tight">{currentUser.name}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {/* View-as-driver toggle — super admin only */}
-          {isAdmin && (
-            <select
-              value={viewAsUserId}
-              onChange={e => setViewAsUserId(e.target.value)}
-              className={`text-[11px] font-bold rounded-lg px-2 py-1.5 outline-none border transition-all max-w-[120px] ${viewAsUserId ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-[#e0e0e0] bg-[#f8f9fa] text-[#5F6368]'}`}
-            >
-              <option value="">👁 My View</option>
-              {allUsers.filter(u => u.id !== currentUser.id && (u.role === 'DRIVER' || u.role === 'MANAGER') && u.isActive).map(u => (
-                <option key={u.id} value={u.id}>👤 {u.name}</option>
-              ))}
-            </select>
-          )}
           {/* Delivery Fee ZIP lookup — admin only */}
           {isAdmin && (
             <button onClick={() => { setShowZipBar(s => !s); setZipQuery(''); setZipRate(undefined); }}
@@ -4756,8 +4753,8 @@ export default function App() {
         {tab === 'HOME' && (
           <ScheduleView
             deliveries={deliveries}
-            role={viewAsUserId ? 'DRIVER' : currentUser.role}
-            currentUserId={viewAsUserId || currentUser.id}
+            role={currentUser.role}
+            currentUserId={currentUser.id}
             allUsers={allUsers}
             onSelectOrder={setSelectedOrder}
             onUpdateOrder={handleUpdateOrder}
@@ -4768,8 +4765,8 @@ export default function App() {
         {tab === 'SCHEDULE' && (
           <ScheduleView
             deliveries={deliveries}
-            role={viewAsUserId ? 'DRIVER' : currentUser.role}
-            currentUserId={viewAsUserId || currentUser.id}
+            role={currentUser.role}
+            currentUserId={currentUser.id}
             allUsers={allUsers}
             onSelectOrder={setSelectedOrder}
             onUpdateOrder={handleUpdateOrder}
