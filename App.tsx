@@ -593,7 +593,7 @@ const FailedDeliveryFlow: React.FC<FailedFlowProps> = ({ order, currentUser, onS
             </div>
 
             {/* Photo — REQUIRED */}
-            <input type="file" accept="image/*" capture="environment" ref={fileRef} onChange={handlePhoto} className="hidden" />
+            <input type="file" accept="image/*" ref={fileRef} onChange={handlePhoto} className="hidden" />
             <div>
               <label className="text-[10px] font-black uppercase text-stone-500 tracking-widest block mb-2">
                 📷 Photo of Property <span className="text-red-500">*Required</span>
@@ -1241,7 +1241,7 @@ const OrderDetail: React.FC<{
               <p className="text-stone-400 text-[10px] font-bold mt-0.5">Required for all deliveries — successful or not</p>
             </div>
 
-            <input type="file" accept="image/*" capture="environment" ref={fileRef} onChange={handlePhoto} className="hidden" />
+            <input type="file" accept="image/*" ref={fileRef} onChange={handlePhoto} className="hidden" />
 
             <div className="p-4 space-y-3">
               {/* PHOTO — primary, full width */}
@@ -4248,7 +4248,7 @@ const BulkProjectsView: React.FC<{
                 <Camera size={28} /><span>Take Photo</span>
               </button>
             )}
-            <input ref={photoInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handlePhotoCapture} />
+            <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoCapture} />
           </div>
           <div className="mb-4">
             <p className="font-black text-sm mb-2 uppercase text-stone-500">✍️ Signature</p>
