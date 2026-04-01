@@ -2376,7 +2376,7 @@ const ScheduleView: React.FC<{
   const tomorrowStr = new Date(Date.now() + 86400000).toISOString().split('T')[0];
 
   const [search, setSearch] = useState('');
-  const [driverFilter, setDriverFilter] = useState(isAdmin ? 'ALL' : currentUserId);
+  const [driverFilter, setDriverFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState<'OPEN'|'DONE'|'ALL'>('OPEN');
   const [sortBy, setSortBy] = useState<'date'|'city'|'zip'|'name'|'driver'>('date');
   const [customOrder, setCustomOrder] = useState<string[]>([]); // manual sort by order ID
@@ -4749,6 +4749,14 @@ export default function App() {
     setDeliveries(prev => [...prev, delivery]);
   }, []);
 
+  // ── DRIVER ISOLATION: drivers only see orders assigned to them ──
+  const visibleDeliveries = useMemo(() => {
+    if (!currentUser) return deliveries;
+    const admin = currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'MANAGER';
+    if (admin) return deliveries;
+    return deliveries.filter(d => d.driverId === currentUser.id);
+  }, [deliveries, currentUser]);
+
   const logout = () => {
     if (!window.confirm(`Log out as ${currentUser?.name}?`)) return;
     localStorage.removeItem('currentUser');
@@ -4774,12 +4782,6 @@ export default function App() {
       </div>
     );
   }
-
-  // ── DRIVER ISOLATION: drivers only see orders assigned to them ──
-  const visibleDeliveries = useMemo(() => {
-    if (isAdmin) return deliveries;
-    return deliveries.filter(d => d.driverId === currentUser.id);
-  }, [deliveries, isAdmin, currentUser.id]);
 
   // Stats for orders tab header
   const todayStr = new Date().toISOString().split('T')[0];
