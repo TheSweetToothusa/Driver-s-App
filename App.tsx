@@ -2285,9 +2285,16 @@ const OrderAdminRow: React.FC<{
 }> = ({ order, allUsers, activeDrivers, onUpdateOrder }) => {
   const [localDate, setLocalDate] = useState(order.deliveryDate || '');
   const [showDateInput, setShowDateInput] = useState(false);
+  const [saveToast, setSaveToast] = useState<string | null>(null);
 
   return (
     <div className="px-3 pb-3 pt-0 space-y-1.5 bg-inherit" onClick={e => e.stopPropagation()}>
+      {/* Save confirmation toast */}
+      {saveToast && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[9999] bg-green-600 text-white px-5 py-3 rounded-xl font-black text-sm shadow-xl flex items-center gap-2 animate-pulse">
+          ✓ {saveToast}
+        </div>
+      )}
       {/* Driver dropdown */}
       <div className="flex items-center gap-2">
         <Users size={13} className="text-stone-400 shrink-0" />
@@ -2298,10 +2305,14 @@ const OrderAdminRow: React.FC<{
             if (!u) return;
             onUpdateOrder(order.id, { driverId: u.id, driverName: u.name });
             const isManual = (order as any).isManual;
-            await fetch(isManual ? `/api/manual-orders/${order.id}` : `/api/orders/${order.id}/assign`, {
+            const resp = await fetch(isManual ? `/api/manual-orders/${order.id}` : `/api/orders/${order.id}/assign`, {
               method: 'PATCH', headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ driverId: u.id, driverName: u.name })
             });
+            if (resp.ok) {
+              setSaveToast(`Assigned to ${u.name}`);
+              setTimeout(() => setSaveToast(null), 2000);
+            }
           }}
           className="flex-1 bg-stone-50 border border-stone-200 rounded-lg px-2 py-2 text-sm font-black outline-none text-stone-700 focus:border-black"
         >
@@ -2333,10 +2344,14 @@ const OrderAdminRow: React.FC<{
               if (!localDate) return;
               onUpdateOrder(order.id, { deliveryDate: localDate });
               const isManual = (order as any).isManual;
-              await fetch(isManual ? `/api/manual-orders/${order.id}` : `/api/orders/${order.id}/edit`, {
+              const resp = await fetch(isManual ? `/api/manual-orders/${order.id}` : `/api/orders/${order.id}/edit`, {
                 method: 'PATCH', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ deliveryDate: localDate })
               });
+              if (resp.ok) {
+                setSaveToast(`Date saved: ${new Date(localDate + 'T12:00:00').toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric' })}`);
+                setTimeout(() => setSaveToast(null), 2000);
+              }
               setShowDateInput(false);
             }}
             className="px-3 py-1.5 bg-green-600 text-white rounded-lg font-black text-xs"
