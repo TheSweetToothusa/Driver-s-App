@@ -2008,7 +2008,8 @@ const OrdersView: React.FC<OrdersViewProps> = ({
   // ── DRIVER VIEW ──
   const myOrders = deliveries.filter(d => {
     const dd = (d.deliveryDate || today).split('T')[0];
-    return dd === driverDate && (d.driverId === currentUser.id || d.driverId === 'manager_1' && currentUser.role === 'MANAGER');
+    // Strict: only show orders assigned to THIS driver
+    return dd === driverDate && d.driverId === currentUser.id;
   });
   const active = myOrders.filter(d => d.status !== DeliveryStatus.DELIVERED && d.status !== DeliveryStatus.CLOSED);
   const done = myOrders.filter(d => d.status === DeliveryStatus.DELIVERED || d.status === DeliveryStatus.CLOSED);
@@ -2376,9 +2377,10 @@ const ScheduleView: React.FC<{
   // Filter deliveries
   const filtered = useMemo(() => {
     return deliveries.filter(d => {
-      // Driver filter
+      // Driver filter - STRICT isolation for non-admins
       if (!isAdmin) {
-        if (d.driverId !== currentUserId && d.driverId !== 'manager_1') return false;
+        // Drivers only see orders assigned to THEM
+        if (d.driverId !== currentUserId) return false;
       } else if (driverFilter !== 'ALL') {
         if (d.driverId !== driverFilter) return false;
       }
@@ -2675,7 +2677,7 @@ const ScheduleView: React.FC<{
               </div>
 
               {/* Cards for this date */}
-              <div className="px-4 py-2 space-y-3">
+              <div className="px-3 py-2 space-y-2">
               {orders.map((order, idx) => {
                 const name = order.giftReceiverName || order.customer?.name || '—';
                 const cleanNum = (order.orderNumber || order.id).replace(/^#+/, '');
@@ -2683,34 +2685,63 @@ const ScheduleView: React.FC<{
                 const isDone = DONE_STATUSES.includes(order.status);
                 const showStatus = !['PENDING','ASSIGNED'].includes(order.status);
 
-                return (
-                  <div key={order.id} className="flex gap-2 items-stretch">
-                    {/* Reorder buttons - only for active orders */}
-                    {!isDone && (
-                      <div className="flex flex-col justify-center gap-1 shrink-0">
-                        <button
-                          onClick={() => moveOrder(order.id, 'up', orders)}
-                          disabled={idx === 0}
-                          className={`w-8 h-8 flex items-center justify-center rounded-lg ${idx === 0 ? 'bg-stone-100 text-stone-300' : 'bg-stone-200 text-stone-600 active:bg-stone-300'}`}
-                        >
-                          <ChevronUp size={18} />
-                        </button>
-                        <span className="text-center text-sm font-black text-stone-400">{idx + 1}</span>
-                        <button
-                          onClick={() => moveOrder(order.id, 'down', orders)}
-                          disabled={idx === orders.length - 1}
-                          className={`w-8 h-8 flex items-center justify-center rounded-lg ${idx === orders.length - 1 ? 'bg-stone-100 text-stone-300' : 'bg-stone-200 text-stone-600 active:bg-stone-300'}`}
-                        >
-                          <ChevronDown size={18} />
-                        </button>
+                // COMPACT VIEW for drivers (non-admin) — fit more on screen
+                if (!isAdmin) {
+                  return (
+                    <div key={order.id} className={`flex items-center gap-2 p-2 rounded-xl border ${isDone ? 'bg-stone-50 border-stone-200' : 'bg-white border-stone-200'}`}>
+                      {/* Reorder arrows for active orders */}
+                      {!isDone && (
+                        <div className="flex flex-col shrink-0">
+                          <button
+                            onClick={() => moveOrder(order.id, 'up', orders)}
+                            disabled={idx === 0}
+                            className={`p-1 ${idx === 0 ? 'text-stone-200' : 'text-stone-500 active:bg-stone-100 rounded'}`}
+                          >
+                            <ChevronUp size={18} />
+                          </button>
+                          <button
+                            onClick={() => moveOrder(order.id, 'down', orders)}
+                            disabled={idx === orders.length - 1}
+                            className={`p-1 ${idx === orders.length - 1 ? 'text-stone-200' : 'text-stone-500 active:bg-stone-100 rounded'}`}
+                          >
+                            <ChevronDown size={18} />
+                          </button>
+                        </div>
+                      )}
+                      {/* Stop number */}
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 font-black text-sm ${isDone ? 'bg-green-100 text-green-600' : 'bg-black text-white'}`}>
+                        {isDone ? '✓' : idx + 1}
                       </div>
-                    )}
-                    {/* Order card */}
-                    <div className="flex-1"
-                      style={{ border: '1px solid #e0e0e0', borderRadius: 12, background: isDone ? '#F8F9FA' : '#ffffff', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
-                      {/* Tappable card body */}
-                      <div className="cursor-pointer active:opacity-80" onClick={() => onSelectOrder(order)}
-                        style={{ borderLeft: `4px solid ${statusCfg.color || '#1A73E8'}`, padding: '14px 16px 12px 14px' }}>
+                      {/* Main info — tappable */}
+                      <div className="flex-1 min-w-0 cursor-pointer" onClick={() => onSelectOrder(order)}>
+                        <div className="flex items-center gap-2">
+                          <span className="font-black text-base text-stone-900">#{cleanNum}</span>
+                          {order.deliveryInstructions && <AlertTriangle size={14} className="text-red-500 shrink-0" />}
+                        </div>
+                        <p className="text-sm font-bold text-stone-700 truncate">{name}</p>
+                        <p className="text-xs text-stone-500 truncate">{order.address?.city} {order.address?.zip}</p>
+                      </div>
+                      {/* Nav button */}
+                      <a
+                        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${order.address?.street || ''}, ${order.address?.city || ''}, FL ${order.address?.zip || ''}`)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={e => e.stopPropagation()}
+                        className="w-10 h-10 bg-blue-500 rounded-xl flex items-center justify-center shrink-0 active:scale-95"
+                      >
+                        <Navigation size={18} className="text-white" />
+                      </a>
+                    </div>
+                  );
+                }
+
+                // DETAILED VIEW for admins — full cards
+                return (
+                  <div key={order.id}
+                    style={{ border: '1px solid #e0e0e0', borderRadius: 12, background: isDone ? '#F8F9FA' : '#ffffff', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
+                    {/* Tappable card body */}
+                    <div className="cursor-pointer active:opacity-80" onClick={() => onSelectOrder(order)}
+                      style={{ borderLeft: `4px solid ${statusCfg.color || '#1A73E8'}`, padding: '14px 16px 12px 14px' }}>
                       {/* Row 1: order number (BIG & BOLD) + status badge */}
                       <div className="flex items-center justify-between mb-2">
                         <span style={{ fontSize: 28, fontWeight: 800, color: '#202124', letterSpacing: '-0.5px' }}>#{cleanNum}</span>
@@ -2753,16 +2784,13 @@ const ScheduleView: React.FC<{
                     </div>
 
                     {/* Admin action row: driver + date */}
-                    {isAdmin && (
-                      <div style={{ borderTop: '1px solid #f0f0f0', background: '#fafafa', padding: '8px 14px' }}>
-                        <OrderAdminRow
-                          order={order}
-                          allUsers={allUsers}
-                          activeDrivers={activeDrivers}
-                          onUpdateOrder={onUpdateOrder}
-                        />
-                      </div>
-                    )}
+                    <div style={{ borderTop: '1px solid #f0f0f0', background: '#fafafa', padding: '8px 14px' }}>
+                      <OrderAdminRow
+                        order={order}
+                        allUsers={allUsers}
+                        activeDrivers={activeDrivers}
+                        onUpdateOrder={onUpdateOrder}
+                      />
                     </div>
                   </div>
                 );
@@ -3543,8 +3571,8 @@ const DriverHomeView: React.FC<DriverHomeProps> = ({ currentUser, deliveries, on
     setSelectedDate(d.toISOString().split('T')[0]);
   };
 
-  const myDeliveries = (isDriver || currentUser.role === 'MANAGER')
-    ? deliveries.filter(d => d.driverId === currentUser.id || d.driverId === 'manager_1' && currentUser.role === 'MANAGER')
+  const myDeliveries = isDriver
+    ? deliveries.filter(d => d.driverId === currentUser.id)
     : deliveries;
 
   // Stats (all time / today)
