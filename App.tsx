@@ -2227,8 +2227,8 @@ const RouteMapPanel: React.FC<{
           <p className="font-black text-sm uppercase">Optimized Route</p>
           <p className="text-[10px] text-stone-500 font-bold">{stops.length} stops • ~{totalDistance} mi total</p>
         </div>
-        <button onClick={onClose} className="w-9 h-9 bg-stone-100 rounded-full flex items-center justify-center">
-          <X size={18} className="text-stone-600" />
+        <button onClick={onClose} className="px-4 py-2 bg-black text-white rounded-xl font-black text-sm active:scale-95">
+          ✕ Close
         </button>
       </div>
 
@@ -2238,13 +2238,13 @@ const RouteMapPanel: React.FC<{
       {/* Stop list */}
       <div className="bg-white max-h-[35vh] overflow-y-auto border-t border-stone-200">
         {stops.map(s => (
-          <div key={s.id} className="flex items-center gap-3 px-4 py-2.5 border-b border-stone-100">
-            <div className="w-7 h-7 bg-black rounded-full flex items-center justify-center shrink-0">
-              <span className="text-white font-black text-xs">{s.stopNumber}</span>
+          <div key={s.id} className={`flex items-center gap-3 px-4 py-2.5 border-b border-stone-100 ${s.lat === 0 ? 'bg-amber-50' : ''}`}>
+            <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${s.lat === 0 ? 'bg-amber-500' : 'bg-black'}`}>
+              <span className="text-white font-black text-xs">{s.lat === 0 ? '?' : s.stopNumber}</span>
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-xs font-black text-stone-900 truncate">{s.name}</p>
-              <p className="text-[10px] text-stone-400 truncate">{s.address}</p>
+              <p className={`text-[10px] truncate ${s.lat === 0 ? 'text-amber-600 font-bold' : 'text-stone-400'}`}>{s.address}</p>
             </div>
             <p className="text-[10px] font-black text-stone-400">#{s.orderNumber?.replace(/^#+/, '')}</p>
           </div>
@@ -2252,14 +2252,20 @@ const RouteMapPanel: React.FC<{
       </div>
 
       {/* Navigation buttons */}
-      <div className="bg-white px-4 py-3 border-t border-stone-200 flex gap-2 safe-bottom">
-        <button onClick={() => onStartNav('waze')}
-          className="flex-1 py-3.5 bg-[#33ccff] text-white rounded-2xl font-black uppercase text-sm flex items-center justify-center gap-2 active:scale-95">
-          <Navigation size={16} /> Waze
-        </button>
-        <button onClick={() => onStartNav('google')}
-          className="flex-1 py-3.5 bg-[#4285F4] text-white rounded-2xl font-black uppercase text-sm flex items-center justify-center gap-2 active:scale-95">
-          <MapIcon size={16} /> Google Maps
+      <div className="bg-white px-4 py-3 border-t border-stone-200 safe-bottom">
+        <div className="flex gap-2 mb-2">
+          <button onClick={() => onStartNav('waze')}
+            className="flex-1 py-3.5 bg-[#33ccff] text-white rounded-2xl font-black uppercase text-sm flex items-center justify-center gap-2 active:scale-95">
+            <Navigation size={16} /> Waze
+          </button>
+          <button onClick={() => onStartNav('google')}
+            className="flex-1 py-3.5 bg-[#4285F4] text-white rounded-2xl font-black uppercase text-sm flex items-center justify-center gap-2 active:scale-95">
+            <MapIcon size={16} /> Google Maps
+          </button>
+        </div>
+        <button onClick={onClose}
+          className="w-full py-3 bg-stone-200 text-stone-700 rounded-2xl font-black uppercase text-sm active:scale-95">
+          ← Back to Deliveries
         </button>
       </div>
     </div>
@@ -2507,6 +2513,13 @@ const ScheduleView: React.FC<{
     // Optimize order
     setRouteStatus('Calculating best route...');
     const withCoords = optimizableStops.filter(d => d.address?.lat && d.address.lat !== 0);
+    const withoutCoords = optimizableStops.filter(d => !d.address?.lat || d.address.lat === 0);
+    
+    // Warn if some orders couldn't be geocoded
+    if (withoutCoords.length > 0) {
+      console.warn('Orders without coordinates:', withoutCoords.map(d => d.orderNumber));
+    }
+    
     try {
       const resp = await fetch('/api/route/optimize', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -2527,18 +2540,42 @@ const ScheduleView: React.FC<{
           orderNumber: d.orderNumber || d.id,
         };
       }).filter(Boolean);
+      
+      // Add orders without coordinates at the end (they won't show on map but will be in the list)
+      withoutCoords.forEach((d, idx) => {
+        ordered.push({
+          id: d.id,
+          stopNumber: ordered.length + 1,
+          lat: 0,
+          lng: 0,
+          name: d.giftReceiverName || d.customer?.name || '—',
+          address: `⚠️ ${d.address?.street}, ${d.address?.city} (address not found on map)`,
+          orderNumber: d.orderNumber || d.id,
+        });
+      });
+      
       setRouteTotalDist(data.totalDistance || 0);
       setRouteStops(ordered);
       setShowRouteMap(true);
     } catch {
-      // Even if optimize fails, show the map with stops in list order
-      setRouteStops(withCoords.map((d: Delivery, idx: number) => ({
-        id: d.id, stopNumber: idx + 1,
-        lat: d.address.lat, lng: d.address.lng,
-        name: d.giftReceiverName || d.customer?.name || '—',
-        address: `${d.address?.street}, ${d.address?.city}`,
-        orderNumber: d.orderNumber || d.id,
-      })));
+      // Even if optimize fails, show the map with all stops
+      const allStops = [
+        ...withCoords.map((d: Delivery, idx: number) => ({
+          id: d.id, stopNumber: idx + 1,
+          lat: d.address.lat, lng: d.address.lng,
+          name: d.giftReceiverName || d.customer?.name || '—',
+          address: `${d.address?.street}, ${d.address?.city}`,
+          orderNumber: d.orderNumber || d.id,
+        })),
+        ...withoutCoords.map((d: Delivery, idx: number) => ({
+          id: d.id, stopNumber: withCoords.length + idx + 1,
+          lat: 0, lng: 0,
+          name: d.giftReceiverName || d.customer?.name || '—',
+          address: `⚠️ ${d.address?.street}, ${d.address?.city} (address not found)`,
+          orderNumber: d.orderNumber || d.id,
+        }))
+      ];
+      setRouteStops(allStops);
       setShowRouteMap(true);
     }
     setRouteLoading(false);
