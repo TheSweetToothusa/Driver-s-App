@@ -4557,7 +4557,7 @@ export default function App() {
             <select
               value={viewAsUserId}
               onChange={e => setViewAsUserId(e.target.value)}
-              className={`text-[11px] font-bold rounded-xl px-2 py-1.5 outline-none border-2 transition-all ${viewAsUserId ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-[#e0e0e0] bg-[#f8f9fa] text-[#5F6368]'}`}
+              className={`text-[11px] font-bold rounded-lg px-2 py-1.5 outline-none border transition-all max-w-[120px] ${viewAsUserId ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-[#e0e0e0] bg-[#f8f9fa] text-[#5F6368]'}`}
             >
               <option value="">👁 My View</option>
               {allUsers.filter(u => u.id !== currentUser.id && (u.role === 'DRIVER' || u.role === 'MANAGER') && u.isActive).map(u => (
@@ -4568,8 +4568,8 @@ export default function App() {
           {/* Delivery Fee ZIP lookup — admin only */}
           {isAdmin && (
             <button onClick={() => { setShowZipBar(s => !s); setZipQuery(''); setZipRate(undefined); }}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl font-bold text-[11px] uppercase transition-all border-2 ${showZipBar ? 'bg-black text-white border-black' : 'bg-amber-400 text-black border-amber-400'}`}>
-              <DollarSign size={13} /> Fee by ZIP
+              className={`flex items-center gap-1 px-2 py-1.5 rounded-lg font-bold text-[10px] uppercase transition-all border whitespace-nowrap ${showZipBar ? 'bg-black text-white border-black' : 'bg-amber-400 text-black border-amber-500'}`}>
+              <DollarSign size={11} /> ZIP Fee
             </button>
           )}
           <span className={`w-2 h-2 rounded-full ${isLoading ? 'bg-amber-400 animate-pulse' : dataSource === 'LIVE' ? 'bg-green-500' : 'bg-red-400'}`} />
