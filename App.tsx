@@ -2509,7 +2509,7 @@ const ScheduleView: React.FC<{
     }));
 
     try {
-      const resp = await fetch('/api/geocode/batch', {
+      const resp = await fetch('/api/geocode', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ addresses })
