@@ -4426,6 +4426,7 @@ export default function App() {
   const [zipQuery, setZipQuery] = useState('');
   const [zipRate, setZipRate] = useState<number | null | undefined>(undefined);
   const [showZipBar, setShowZipBar] = useState(false);
+  const [filterByDriver, setFilterByDriver] = useState<string>(''); // empty = all drivers
   const [defaultDriver, setDefaultDriver] = useState<{ driverId: string | null; driverName: string | null }>({ driverId: null, driverName: null });
   // Global manual delivery state — accessible from any tab
   const [showGlobalAddManual, setShowGlobalAddManual] = useState(false);
@@ -4543,6 +4544,19 @@ export default function App() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {/* Driver filter dropdown — admin only */}
+          {isAdmin && (
+            <select
+              value={filterByDriver}
+              onChange={e => setFilterByDriver(e.target.value)}
+              className={`text-[11px] font-bold rounded-lg px-2 py-1.5 outline-none border transition-all max-w-[120px] ${filterByDriver ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-[#e0e0e0] bg-[#f8f9fa] text-[#5F6368]'}`}
+            >
+              <option value="">All Drivers</option>
+              {allUsers.filter(u => (u.role === 'DRIVER' || u.role === 'MANAGER') && u.isActive).map(u => (
+                <option key={u.id} value={u.id}>👤 {u.name}</option>
+              ))}
+            </select>
+          )}
           {/* Delivery Fee ZIP lookup — admin only */}
           {isAdmin && (
             <button onClick={() => { setShowZipBar(s => !s); setZipQuery(''); setZipRate(undefined); }}
@@ -4752,7 +4766,7 @@ export default function App() {
         {/* ── HOME TAB — dashboard for all users ── */}
         {tab === 'HOME' && (
           <ScheduleView
-            deliveries={deliveries}
+            deliveries={filterByDriver ? deliveries.filter(d => d.driverId === filterByDriver) : deliveries}
             role={currentUser.role}
             currentUserId={currentUser.id}
             allUsers={allUsers}
@@ -4764,7 +4778,7 @@ export default function App() {
         {/* ── DELIVERIES TAB ── */}
         {tab === 'SCHEDULE' && (
           <ScheduleView
-            deliveries={deliveries}
+            deliveries={filterByDriver ? deliveries.filter(d => d.driverId === filterByDriver) : deliveries}
             role={currentUser.role}
             currentUserId={currentUser.id}
             allUsers={allUsers}
