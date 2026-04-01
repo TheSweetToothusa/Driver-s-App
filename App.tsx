@@ -733,6 +733,7 @@ const OrderDetail: React.FC<{
   const [notifyChannel, setNotifyChannel] = useState('');
   const [notifySent, setNotifySent] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [notifyError, setNotifyError] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
   const isAdmin = role === 'SUPER_ADMIN' || role === 'MANAGER';
   const isCompleted = order.status === DeliveryStatus.DELIVERED || order.status === DeliveryStatus.FAILED || order.status === DeliveryStatus.PENDING_RESCHEDULE || order.status === DeliveryStatus.SECOND_ATTEMPT;
@@ -773,9 +774,22 @@ const OrderDetail: React.FC<{
 
   const handleComplete = async () => {
     const now = new Date().toISOString();
+    const isManualOrder = (order as any).isManual;
     const updates: Partial<Delivery> = { status: DeliveryStatus.DELIVERED, confirmationPhoto: photoData || undefined, confirmationSignature: sigData || undefined, driverNotes: driverNote, completedAt: now, submittedAt: now };
     onUpdate(order.id, updates);
-    await fetch('/api/pod', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orderId: order.id, photo: photoData, signature: sigData, notes: driverNote, completedAt: now, status: 'DELIVERED', driverId: currentUser.id, driverName: currentUser.name }) });
+
+    // 1. Save POD data (photo, sig, notes) to DB
+    await fetch('/api/pod', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orderId: order.id, photo: photoData, signature: sigData, notes: driverNote, completedAt: now, status: 'DELIVERED', driverId: currentUser.id, driverName: currentUser.name, isManual: isManualOrder }) });
+
+    // 2. Update order status to DELIVERED — use correct endpoint for manual vs Shopify orders
+    try {
+      if (isManualOrder) {
+        await fetch(`/api/manual-orders/${order.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'DELIVERED', completedAt: now, confirmationPhoto: photoData || null, driverNotes: driverNote }) });
+      } else {
+        await fetch(`/api/orders/${order.id}/status`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'DELIVERED', completedAt: now }) });
+      }
+    } catch { /* non-fatal — POD already saved */ }
+
     // Show full-screen delivery confirmation, then go back
     setShowDeliveredConfirm(true);
     setTimeout(() => { setShowDeliveredConfirm(false); onBack(); }, 2500);
@@ -830,13 +844,24 @@ const OrderDetail: React.FC<{
 
   const handleSend = async () => {
     if (!showNotifyPreview) return;
-    if (!isWithinSendingHours()) { alert('Messages can only be sent between 9 AM and 8 PM.'); return; }
+    if (!isWithinSendingHours()) { setNotifyError('Messages can only be sent between 9 AM and 8 PM.'); return; }
     setIsSending(true);
-    const res = await fetch('/api/notify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: showNotifyPreview, order, failureReason: pendingFailure ? FAILURE_REASON_LABELS[pendingFailure.reason] : '', driverNotes: order.driverNotes || '' }) });
-    const data = await res.json();
-    setIsSending(false);
-    if (data.sent) { setNotifySent(true); onUpdate(order.id, showNotifyPreview === 'SUCCESS' ? { successNotificationSent: true } : { failureNotificationSent: true }); }
-    else alert(data.error || 'Failed to send. Check SendGrid setup (SENDGRID_API_KEY env var).');
+    setNotifyError('');
+    try {
+      const res = await fetch('/api/notify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: showNotifyPreview, order, failureReason: pendingFailure ? FAILURE_REASON_LABELS[pendingFailure.reason] : '', driverNotes: order.driverNotes || '' }) });
+      const data = await res.json();
+      setIsSending(false);
+      if (data.sent) {
+        setNotifySent(true);
+        setNotifyChannel(data.channel || notifyChannel);
+        onUpdate(order.id, showNotifyPreview === 'SUCCESS' ? { successNotificationSent: true } : { failureNotificationSent: true });
+      } else {
+        setNotifyError(data.error || 'Could not send — no email or phone on file for this order.');
+      }
+    } catch {
+      setIsSending(false);
+      setNotifyError('Network error — please try again.');
+    }
   };
 
   const handleAddNote = async () => {
@@ -1510,9 +1535,23 @@ const OrderDetail: React.FC<{
                 <button onClick={() => setShowNotifyPreview(null)}><X size={20} className="text-stone-400" /></button>
               </div>
               <div className="bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-xs text-stone-700 whitespace-pre-line leading-relaxed">{notifyPreviewText}</div>
-              <p className="text-[10px] font-bold text-stone-400 uppercase">Sending via: {notifyChannel}</p>
+              {notifyChannel && !notifySent && (
+                <p className="text-[10px] font-bold text-stone-500 uppercase text-center">Will send via: {notifyChannel}</p>
+              )}
               {notifySent ? (
-                <p className="text-center font-black text-green-600">✓ Sent!</p>
+                <div className="w-full py-4 bg-green-600 text-white rounded-2xl font-black text-sm flex items-center justify-center gap-2">
+                  ✓ Confirmation sent via {notifyChannel || 'email'}
+                </div>
+              ) : notifyError ? (
+                <div className="space-y-2">
+                  <div className="w-full py-3 bg-red-50 border border-red-200 text-red-700 rounded-2xl font-bold text-xs text-center px-4">
+                    ✗ {notifyError}
+                  </div>
+                  <button onClick={handleSend} disabled={isSending}
+                    className="w-full py-4 bg-black text-white rounded-2xl font-black uppercase text-sm flex items-center justify-center gap-2 disabled:opacity-50">
+                    {isSending ? 'Sending…' : <><Bell size={16} /> Try Again</>}
+                  </button>
+                </div>
               ) : (
                 <button onClick={handleSend} disabled={isSending}
                   className="w-full py-4 bg-black text-white rounded-2xl font-black uppercase text-sm flex items-center justify-center gap-2 disabled:opacity-50">

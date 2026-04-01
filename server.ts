@@ -553,7 +553,7 @@ async function startServer() {
   });
 
   app.post("/api/pod", async (req, res) => {
-    const { orderId, photo, signature, notes, completedAt, status, driverId, driverName, failureReason } = req.body;
+    const { orderId, photo, signature, notes, completedAt, status, driverId, driverName, failureReason, isManual } = req.body;
     try {
       const existingPod = await readPodOrder(orderId);
       const updated = {
@@ -573,10 +573,32 @@ async function startServer() {
       };
       await writePodOrder(orderId, updated);
 
-      // Write status + completedAt back to Shopify as order tags so it survives server restarts
-      if (SHOPIFY_STORE_URL && SHOPIFY_ACCESS_TOKEN && status === 'DELIVERED') {
+      // For manual orders (stored in DB only) — update the manual_orders record directly
+      const isManualOrder = isManual || String(orderId).startsWith('manual_');
+      if (isManualOrder && status === 'DELIVERED') {
         try {
-          // Get existing tags first
+          const manualOrders = await dbGet('manual_orders') || [];
+          const idx = manualOrders.findIndex((o: any) => o.id === orderId);
+          if (idx !== -1) {
+            manualOrders[idx] = {
+              ...manualOrders[idx],
+              status: 'DELIVERED',
+              completedAt: completedAt || new Date().toISOString(),
+              confirmationPhoto: photo || null,
+              driverNotes: notes || null,
+              driverId: driverId || manualOrders[idx].driverId,
+              driverName: driverName || manualOrders[idx].driverName,
+            };
+            await dbSet('manual_orders', manualOrders);
+          }
+        } catch (manualErr) {
+          console.error('Failed to update manual order status (non-fatal):', manualErr);
+        }
+      }
+
+      // For Shopify orders — write status + completedAt back as order tags
+      if (!isManualOrder && SHOPIFY_STORE_URL && SHOPIFY_ACCESS_TOKEN && status === 'DELIVERED') {
+        try {
           const existing = await fetch(`https://${SHOPIFY_STORE_URL}/admin/api/2025-01/orders/${orderId}.json?fields=tags`, {
             headers: { 'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN }
           });
