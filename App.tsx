@@ -8,7 +8,8 @@ import {
   UserPlus, Users,
   MessageCircle, MessageSquare, ChevronLeft, Edit3,
   Bell, Clock, XCircle, Gift, User,
-  AlertTriangle, RotateCcw, Inbox, Home, DollarSign, Store, Truck, Map as MapIcon, Route, Trash2, Plus
+  AlertTriangle, RotateCcw, Inbox, Home, DollarSign, Store, Truck, Map as MapIcon, Route, Trash2, Plus,
+  ChevronUp, ChevronDown
 } from 'lucide-react';
 import { Delivery, DeliveryStatus, AppRole, FailureReason, FAILURE_REASON_LABELS, ViewMode, UserAccount, MessageTemplate } from './types';
 import { getDeliveries } from './services/shopifyService';
@@ -1582,6 +1583,7 @@ const OrdersView: React.FC<OrdersViewProps> = ({
   const [rescheduleDate, setRescheduleDate] = useState('');
   const [rescheduleSaved, setRescheduleSaved] = useState(false);
   const [showAddManual, setShowAddManual] = useState(false);
+  const [customOrder, setCustomOrder] = useState<string[]>([]); // manual sort order by order ID
   const [manualForm, setManualForm] = useState({
     recipientName: '', recipientPhone: '', recipientEmail: '',
     street: '', unit: '', city: '', zip: '',
@@ -2010,7 +2012,33 @@ const OrdersView: React.FC<OrdersViewProps> = ({
   });
   const active = myOrders.filter(d => d.status !== DeliveryStatus.DELIVERED && d.status !== DeliveryStatus.CLOSED);
   const done = myOrders.filter(d => d.status === DeliveryStatus.DELIVERED || d.status === DeliveryStatus.CLOSED);
-  const shown = activeTab === 'active' ? active : done;
+  
+  // Apply custom sort order to active deliveries
+  const sortedActive = customOrder.length > 0
+    ? [...active].sort((a, b) => {
+        const aIdx = customOrder.indexOf(a.id);
+        const bIdx = customOrder.indexOf(b.id);
+        if (aIdx === -1 && bIdx === -1) return 0;
+        if (aIdx === -1) return 1;
+        if (bIdx === -1) return -1;
+        return aIdx - bIdx;
+      })
+    : active;
+  
+  const shown = activeTab === 'active' ? sortedActive : done;
+  
+  // Move order up/down in the list
+  const moveOrder = (orderId: string, direction: 'up' | 'down') => {
+    const currentList = customOrder.length > 0 ? customOrder : active.map(o => o.id);
+    const idx = currentList.indexOf(orderId);
+    if (idx === -1) return;
+    if (direction === 'up' && idx === 0) return;
+    if (direction === 'down' && idx === currentList.length - 1) return;
+    const newList = [...currentList];
+    const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+    [newList[idx], newList[swapIdx]] = [newList[swapIdx], newList[idx]];
+    setCustomOrder(newList);
+  };
 
   return (
     <div className="flex flex-col h-full">
@@ -2061,17 +2089,37 @@ const OrdersView: React.FC<OrdersViewProps> = ({
           const labelText = STATUS_CONFIG[order.status]?.label || order.status;
           const isDelivered = order.status === DeliveryStatus.DELIVERED;
           return (
-            <div key={order.id} onClick={() => onSelectOrder(order)}
-              className={`mx-3 mb-2 rounded-xl border border-stone-200 overflow-hidden active:scale-[0.99] transition-all cursor-pointer ${isDelivered ? 'bg-[#F8F9FA]' : 'bg-white'}`}>
+            <div key={order.id}
+              className={`mx-3 mb-2 rounded-xl border border-stone-200 overflow-hidden transition-all ${isDelivered ? 'bg-[#F8F9FA]' : 'bg-white'}`}>
               {/* Status bar with BIG order number */}
               <div className={`${cardBg} px-3 py-2 flex items-center justify-between`}>
                 <span className={`text-[10px] font-black uppercase tracking-widest ${isDelivered ? 'text-stone-500' : 'text-white'}`}>{labelText}</span>
                 <span className={`text-xl font-black ${isDelivered ? 'text-stone-500' : 'text-white'}`}>#{order.orderNumber?.replace(/^#+/, '') || order.id}</span>
               </div>
-              <div className="px-3 py-2.5 flex items-center gap-3">
-                {/* Stop number */}
-                <span className="text-2xl font-black text-stone-200 w-7 shrink-0 text-center">{idx + 1}</span>
-                <div className="flex-1 min-w-0">
+              <div className="px-3 py-2.5 flex items-center gap-2">
+                {/* Stop number + move buttons (active only) */}
+                {activeTab === 'active' ? (
+                  <div className="flex flex-col items-center gap-0.5 shrink-0">
+                    <button
+                      onClick={e => { e.stopPropagation(); moveOrder(order.id, 'up'); }}
+                      disabled={idx === 0}
+                      className={`w-7 h-6 flex items-center justify-center rounded ${idx === 0 ? 'text-stone-200' : 'text-stone-500 bg-stone-100 active:bg-stone-200'}`}
+                    >
+                      <ChevronUp size={16} />
+                    </button>
+                    <span className="text-lg font-black text-stone-400 w-7 text-center">{idx + 1}</span>
+                    <button
+                      onClick={e => { e.stopPropagation(); moveOrder(order.id, 'down'); }}
+                      disabled={idx === shown.length - 1}
+                      className={`w-7 h-6 flex items-center justify-center rounded ${idx === shown.length - 1 ? 'text-stone-200' : 'text-stone-500 bg-stone-100 active:bg-stone-200'}`}
+                    >
+                      <ChevronDown size={16} />
+                    </button>
+                  </div>
+                ) : (
+                  <span className="text-2xl font-black text-stone-200 w-7 shrink-0 text-center">{idx + 1}</span>
+                )}
+                <div className="flex-1 min-w-0 cursor-pointer" onClick={() => onSelectOrder(order)}>
                   {/* RECIPIENT NAME — first and largest */}
                   <p className="text-base font-black text-stone-900 leading-tight">{order.giftReceiverName || order.customer?.name}</p>
                   {renderAttemptBadge(order)}
@@ -2095,7 +2143,7 @@ const OrdersView: React.FC<OrdersViewProps> = ({
                     </div>
                   )}
                 </div>
-                <ChevronRight size={16} className="text-stone-300 shrink-0" />
+                <ChevronRight size={16} className="text-stone-300 shrink-0 cursor-pointer" onClick={() => onSelectOrder(order)} />
               </div>
             </div>
           );
