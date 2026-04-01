@@ -2413,6 +2413,10 @@ const ScheduleView: React.FC<{
   const [routeTotalDist, setRouteTotalDist] = useState(0);
   const [driverLat, setDriverLat] = useState(25.946);
   const [driverLng, setDriverLng] = useState(-80.155);
+  const [routeSaved, setRouteSaved] = useState(false);
+  const [dragOrderId, setDragOrderId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
+  const [routeSavedMsg, setRouteSavedMsg] = useState('');
 
   const activeDrivers = useMemo(() =>
     allUsers.filter(u => (u.role === 'DRIVER' || u.role === 'MANAGER') && u.isActive),
@@ -2506,6 +2510,7 @@ const ScheduleView: React.FC<{
     // Merge with existing customOrder for other dates
     const otherDates = customOrder.filter(id => !dateOrders.some(d => d.id === id));
     setCustomOrder([...otherDates, ...newList]);
+    setRouteSaved(true);
   };
 
   // Get active (not delivered) stops for route optimization
@@ -2651,7 +2656,9 @@ const ScheduleView: React.FC<{
       setRouteStops(ordered);
       // Apply the optimized order to the actual list
       setCustomOrder(ordered.map((s: any) => s.id));
-      setShowRouteMap(true);
+      setRouteSaved(true);
+      setRouteSavedMsg('✓ Route optimized! Drag stops to adjust, then tap Navigate.');
+      setTimeout(() => setRouteSavedMsg(''), 4000);
     } catch {
       // Even if optimize fails, show the map with all stops
       const allStops = [
@@ -2671,20 +2678,55 @@ const ScheduleView: React.FC<{
         }))
       ];
       setRouteStops(allStops);
-      setShowRouteMap(true);
+      setCustomOrder(allStops.map((s: any) => s.id));
+      setRouteSaved(true);
+      setRouteSavedMsg('✓ Route set! Drag stops to adjust, then tap Navigate.');
+      setTimeout(() => setRouteSavedMsg(''), 4000);
     }
     setRouteLoading(false);
     setRouteStatus('');
   };
 
+  // Drag reorder handler — swaps dragged card with drop target, updates customOrder
+  const handleDropOnStop = (dateOrders: Delivery[], dragId: string, dropId: string) => {
+    if (dragId === dropId) return;
+    const currentList = customOrder.length > 0
+      ? customOrder.filter(id => dateOrders.some(d => d.id === id))
+      : dateOrders.map(d => d.id);
+    const allOther = dateOrders.map(d => d.id).filter(id => !currentList.includes(id));
+    const full = [...currentList, ...allOther];
+    const fromIdx = full.indexOf(dragId);
+    const toIdx = full.indexOf(dropId);
+    if (fromIdx === -1 || toIdx === -1) return;
+    const next = [...full];
+    next.splice(fromIdx, 1);
+    next.splice(toIdx, 0, dragId);
+    const otherDates = customOrder.filter(id => !dateOrders.some(d => d.id === id));
+    setCustomOrder([...otherDates, ...next]);
+    // Update routeStops order too if set
+    if (routeStops.length > 0) {
+      const reordered = next
+        .map((id, i) => {
+          const s = routeStops.find((r: any) => r.id === id);
+          return s ? { ...s, stopNumber: i + 1 } : null;
+        })
+        .filter(Boolean);
+      setRouteStops(reordered);
+    }
+    setRouteSavedMsg('✓ Order saved!');
+    setTimeout(() => setRouteSavedMsg(''), 2000);
+  };
+
   const startNavigation = (app: 'waze' | 'google') => {
-    if (routeStops.length === 0) return;
+    // Build ordered stops from routeStops (already in customOrder sequence)
+    const stops = routeStops.filter((s: any) => s.lat !== 0 && s.lng !== 0);
+    if (stops.length === 0) return;
     if (app === 'waze') {
-      const first = routeStops[0];
+      const first = stops[0];
       window.open(`https://waze.com/ul?ll=${first.lat},${first.lng}&navigate=yes`, '_blank');
     } else {
-      const dest = routeStops[routeStops.length - 1];
-      const waypoints = routeStops.slice(0, -1).map((s: any) => `${s.lat},${s.lng}`).join('|');
+      const dest = stops[stops.length - 1];
+      const waypoints = stops.slice(0, -1).map((s: any) => `${s.lat},${s.lng}`).join('|');
       const url = waypoints
         ? `https://www.google.com/maps/dir/?api=1&destination=${dest.lat},${dest.lng}&waypoints=${encodeURIComponent(waypoints)}&travelmode=driving`
         : `https://www.google.com/maps/dir/?api=1&destination=${dest.lat},${dest.lng}&travelmode=driving`;
@@ -2758,9 +2800,17 @@ const ScheduleView: React.FC<{
         </div>
       </div>
 
-      {/* ── MAP + OPTIMIZE ROUTE BUTTON ── */}
+      {/* ── ROUTE CONTROL BAR ── */}
       {optimizableStops.length > 0 && (
         <div className="px-4 py-3 bg-stone-50 border-b border-stone-200 space-y-2">
+          {/* Saved confirmation banner */}
+          {routeSavedMsg ? (
+            <div className="w-full py-2.5 rounded-2xl bg-green-600 text-white font-black text-sm flex items-center justify-center gap-2">
+              {routeSavedMsg}
+            </div>
+          ) : null}
+
+          {/* Optimize button */}
           <button
             onClick={optimizeRoute}
             disabled={routeLoading}
@@ -2770,43 +2820,43 @@ const ScheduleView: React.FC<{
             {routeLoading ? (
               <><RefreshCw size={16} className="animate-spin" /> {routeStatus || 'Loading...'}</>
             ) : (
-              <><MapIcon size={16} /> 🗺 Map + Optimize Route ({optimizableStops.length} stops)</>
+              <><MapIcon size={16} /> Optimize Route ({optimizableStops.length} stops)</>
             )}
           </button>
-          {/* Quick sort buttons */}
-          <div className="flex gap-2">
-            <button
-              onClick={sortByDistance}
-              disabled={routeLoading}
-              className="flex-1 py-2.5 rounded-xl font-black text-xs uppercase flex items-center justify-center gap-1.5 active:scale-95 disabled:opacity-60 transition-all bg-stone-800 text-white"
-            >
-              <Route size={14} /> Sort by Distance
-            </button>
-            <button
-              onClick={() => setCustomOrder([])}
-              disabled={customOrder.length === 0}
-              className="flex-1 py-2.5 rounded-xl font-black text-xs uppercase flex items-center justify-center gap-1.5 active:scale-95 disabled:opacity-40 transition-all bg-stone-200 text-stone-600"
-            >
-              <RotateCcw size={14} /> Reset to Order #
-            </button>
-          </div>
-        </div>
-      )}
 
-      {/* ── ROUTE MAP OVERLAY ── */}
-      {showRouteMap && (
-        <RouteMapPanel
-          stops={routeStops}
-          driverLat={driverLat}
-          driverLng={driverLng}
-          totalDistance={routeTotalDist}
-          onClose={() => setShowRouteMap(false)}
-          onStartNav={startNavigation}
-          onReorder={(newStops) => {
-            setRouteStops(newStops);
-            setCustomOrder(newStops.map((s: any) => s.id));
-          }}
-        />
+          {/* Navigate + Reset row — only show after route is set */}
+          {routeSaved && (
+            <div className="flex gap-2">
+              <button
+                onClick={() => startNavigation('waze')}
+                className="flex-1 py-3 rounded-xl font-black text-xs uppercase flex items-center justify-center gap-1.5 active:scale-95 transition-all text-white"
+                style={{ background: '#33ccff' }}
+              >
+                <Navigation size={14} /> Waze
+              </button>
+              <button
+                onClick={() => startNavigation('google')}
+                className="flex-1 py-3 rounded-xl font-black text-xs uppercase flex items-center justify-center gap-1.5 active:scale-95 transition-all text-white"
+                style={{ background: '#4285F4' }}
+              >
+                <MapIcon size={14} /> Google Maps
+              </button>
+              <button
+                onClick={() => { setCustomOrder([]); setRouteSaved(false); setRouteStops([]); setRouteSavedMsg(''); }}
+                className="px-3 py-3 rounded-xl font-black text-xs uppercase flex items-center justify-center gap-1 active:scale-95 transition-all bg-stone-200 text-stone-600"
+              >
+                <RotateCcw size={14} />
+              </button>
+            </div>
+          )}
+
+          {/* Hint text when route is active */}
+          {routeSaved && (
+            <p className="text-[10px] text-stone-400 font-bold text-center">
+              Drag the ≡ handle on any stop to reorder • Order auto-saves
+            </p>
+          )}
+        </div>
       )}
 
       {/* ── ORDER LIST ── */}
@@ -2841,29 +2891,24 @@ const ScheduleView: React.FC<{
                 // COMPACT VIEW for drivers (non-admin) — fit more on screen
                 if (!isAdmin) {
                   return (
-                    <div key={order.id} className={`flex items-center gap-2 p-2 rounded-xl border ${isDone ? 'bg-stone-50 border-stone-200' : 'bg-white border-stone-200'}`}>
-                      {/* Reorder arrows for active orders */}
-                      {!isDone && (
-                        <div className="flex flex-col shrink-0">
-                          <button
-                            onClick={() => moveOrder(order.id, 'up', orders)}
-                            disabled={idx === 0}
-                            className={`p-1 ${idx === 0 ? 'text-stone-200' : 'text-stone-500 active:bg-stone-100 rounded'}`}
-                          >
-                            <ChevronUp size={18} />
-                          </button>
-                          <button
-                            onClick={() => moveOrder(order.id, 'down', orders)}
-                            disabled={idx === orders.length - 1}
-                            className={`p-1 ${idx === orders.length - 1 ? 'text-stone-200' : 'text-stone-500 active:bg-stone-100 rounded'}`}
-                          >
-                            <ChevronDown size={18} />
-                          </button>
+                    <div
+                      key={order.id}
+                      draggable={!isDone && routeSaved}
+                      onDragStart={() => setDragOrderId(order.id)}
+                      onDragOver={e => { e.preventDefault(); setDragOverId(order.id); }}
+                      onDrop={() => { if (dragOrderId) handleDropOnStop(orders, dragOrderId, order.id); setDragOrderId(null); setDragOverId(null); }}
+                      onDragEnd={() => { setDragOrderId(null); setDragOverId(null); }}
+                      className={`flex items-center gap-2 p-2 rounded-xl border transition-all ${isDone ? 'bg-stone-50 border-stone-200' : dragOverId === order.id ? 'bg-blue-50 border-blue-400 scale-[1.02]' : 'bg-white border-stone-200'}`}
+                    >
+                      {/* Drag handle — only when route is active */}
+                      {!isDone && routeSaved && (
+                        <div className="flex flex-col items-center shrink-0 px-1 py-2 cursor-grab active:cursor-grabbing text-stone-300">
+                          <span style={{ fontSize: 18, lineHeight: 1 }}>≡</span>
                         </div>
                       )}
                       {/* Stop number */}
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 font-black text-sm ${isDone ? 'bg-green-100 text-green-600' : 'bg-black text-white'}`}>
-                        {isDone ? '✓' : idx + 1}
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 font-black text-sm ${isDone ? 'bg-green-100 text-green-600' : routeSaved ? 'bg-black text-white' : 'bg-stone-200 text-stone-600'}`}>
+                        {isDone ? '✓' : routeSaved ? idx + 1 : idx + 1}
                       </div>
                       {/* Main info — tappable */}
                       <div className="flex-1 min-w-0 cursor-pointer" onClick={() => onSelectOrder(order)}>
@@ -2891,7 +2936,22 @@ const ScheduleView: React.FC<{
                 // DETAILED VIEW for admins — full cards
                 return (
                   <div key={order.id}
-                    style={{ border: '1px solid #e0e0e0', borderRadius: 12, background: isDone ? '#F8F9FA' : '#ffffff', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
+                    draggable={!isDone && routeSaved}
+                    onDragStart={() => setDragOrderId(order.id)}
+                    onDragOver={e => { e.preventDefault(); setDragOverId(order.id); }}
+                    onDrop={() => { if (dragOrderId) handleDropOnStop(orders, dragOrderId, order.id); setDragOrderId(null); setDragOverId(null); }}
+                    onDragEnd={() => { setDragOrderId(null); setDragOverId(null); }}
+                    style={{ border: dragOverId === order.id ? '2px solid #1A73E8' : '1px solid #e0e0e0', borderRadius: 12, background: isDone ? '#F8F9FA' : '#ffffff', boxShadow: dragOverId === order.id ? '0 0 0 3px rgba(26,115,232,0.15)' : '0 1px 4px rgba(0,0,0,0.06)', overflow: 'hidden', transition: 'all 0.15s' }}>
+                    {/* Drag handle bar — shown when route is active */}
+                    {!isDone && routeSaved && (
+                      <div className="flex items-center justify-between px-4 py-1.5 bg-stone-100 border-b border-stone-200 cursor-grab active:cursor-grabbing">
+                        <div className="flex items-center gap-2">
+                          <span className="w-6 h-6 rounded-full bg-black text-white flex items-center justify-center font-black text-xs">{idx + 1}</span>
+                          <span className="text-[10px] font-black text-stone-400 uppercase tracking-wide">Stop {idx + 1} — Drag to reorder</span>
+                        </div>
+                        <span style={{ fontSize: 20, color: '#9ca3af', lineHeight: 1 }}>≡</span>
+                      </div>
+                    )}
                     {/* Tappable card body */}
                     <div className="cursor-pointer active:opacity-80" onClick={() => onSelectOrder(order)}
                       style={{ borderLeft: `4px solid ${statusCfg.color || '#1A73E8'}`, padding: '14px 16px 12px 14px' }}>
