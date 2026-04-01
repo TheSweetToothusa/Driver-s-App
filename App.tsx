@@ -4690,15 +4690,21 @@ export default function App() {
     );
   }
 
+  // ── DRIVER ISOLATION: drivers only see orders assigned to them ──
+  const visibleDeliveries = useMemo(() => {
+    if (isAdmin) return deliveries;
+    return deliveries.filter(d => d.driverId === currentUser.id);
+  }, [deliveries, isAdmin, currentUser.id]);
+
   // Stats for orders tab header
   const todayStr = new Date().toISOString().split('T')[0];
-  const activeOrders = deliveries.filter(d =>
+  const activeOrders = visibleDeliveries.filter(d =>
     d.status !== DeliveryStatus.DELIVERED &&
     d.status !== DeliveryStatus.CLOSED
   );
-  const pendingCount = deliveries.filter(d => d.status === DeliveryStatus.PENDING || d.status === DeliveryStatus.ASSIGNED).length;
-  const inTransitCount = deliveries.filter(d => d.status === DeliveryStatus.IN_TRANSIT).length;
-  const deliveredTodayCount = deliveries.filter(d => d.status === DeliveryStatus.DELIVERED && (d.completedAt || '').startsWith(todayStr)).length;
+  const pendingCount = visibleDeliveries.filter(d => d.status === DeliveryStatus.PENDING || d.status === DeliveryStatus.ASSIGNED).length;
+  const inTransitCount = visibleDeliveries.filter(d => d.status === DeliveryStatus.IN_TRANSIT).length;
+  const deliveredTodayCount = visibleDeliveries.filter(d => d.status === DeliveryStatus.DELIVERED && (d.completedAt || '').startsWith(todayStr)).length;
   const isSameDayWindow = new Date().getHours() < 14;
 
   return (
@@ -4922,7 +4928,7 @@ export default function App() {
         {/* ── HOME TAB — dashboard for all users ── */}
         {tab === 'HOME' && (
           <ScheduleView
-            deliveries={deliveries}
+            deliveries={visibleDeliveries}
             role={currentUser.role}
             currentUserId={currentUser.id}
             allUsers={allUsers}
@@ -4934,7 +4940,7 @@ export default function App() {
         {/* ── DELIVERIES TAB ── */}
         {tab === 'SCHEDULE' && (
           <ScheduleView
-            deliveries={deliveries}
+            deliveries={visibleDeliveries}
             role={currentUser.role}
             currentUserId={currentUser.id}
             allUsers={allUsers}
@@ -4946,7 +4952,7 @@ export default function App() {
         {/* ── HISTORY TAB ── */}
         {tab === 'ORDERS' && (
           <OrdersView
-            deliveries={deliveries}
+            deliveries={visibleDeliveries}
             isAdmin={isAdmin}
             currentUser={currentUser}
             allUsers={allUsers}
