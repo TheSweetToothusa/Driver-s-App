@@ -2534,25 +2534,6 @@ const ScheduleView: React.FC<{
             </button>
           ))}
         </div>
-        {/* Sort control */}
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] font-black uppercase text-[#5F6368] tracking-widest shrink-0">Sort by</span>
-          <div className="flex gap-1.5 flex-1">
-            {([
-              { key: 'date', label: 'Order #' },
-              { key: 'city', label: 'City' },
-              { key: 'zip', label: 'ZIP' },
-              { key: 'name', label: 'Name' },
-              { key: 'driver', label: 'Driver' },
-            ] as const).map(s => (
-              <button key={s.key} onClick={() => setSortBy(s.key)}
-                className="flex-1 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all"
-                style={{ background: sortBy === s.key ? '#1A73E8' : '#f1f3f4', color: sortBy === s.key ? '#fff' : '#5F6368' }}>
-                {s.label}
-              </button>
-            ))}
-          </div>
-        </div>
       </div>
 
       {/* ── MAP + OPTIMIZE ROUTE BUTTON ── */}
@@ -4775,7 +4756,7 @@ export default function App() {
         {tab === 'HOME' && (
           <ScheduleView
             deliveries={deliveries}
-            role={currentUser.role}
+            role={viewAsUserId ? 'DRIVER' : currentUser.role}
             currentUserId={viewAsUserId || currentUser.id}
             allUsers={allUsers}
             onSelectOrder={setSelectedOrder}
@@ -4787,7 +4768,7 @@ export default function App() {
         {tab === 'SCHEDULE' && (
           <ScheduleView
             deliveries={deliveries}
-            role={currentUser.role}
+            role={viewAsUserId ? 'DRIVER' : currentUser.role}
             currentUserId={viewAsUserId || currentUser.id}
             allUsers={allUsers}
             onSelectOrder={setSelectedOrder}
