@@ -2361,7 +2361,7 @@ const ScheduleView: React.FC<{
   const tomorrowStr = new Date(Date.now() + 86400000).toISOString().split('T')[0];
 
   const [search, setSearch] = useState('');
-  const [driverFilter, setDriverFilter] = useState('ALL');
+  const [driverFilter, setDriverFilter] = useState(isAdmin ? 'ALL' : currentUserId);
   const [statusFilter, setStatusFilter] = useState<'OPEN'|'DONE'|'ALL'>('OPEN');
   const [sortBy, setSortBy] = useState<'date'|'city'|'zip'|'name'|'driver'>('date');
   const [customOrder, setCustomOrder] = useState<string[]>([]); // manual sort by order ID
