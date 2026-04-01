@@ -2475,6 +2475,47 @@ const ScheduleView: React.FC<{
     [filtered]
   );
 
+  // Quick sort by distance from store (no map needed)
+  const sortByDistance = async () => {
+    if (optimizableStops.length === 0) return;
+    setRouteLoading(true);
+    setRouteStatus('Sorting by distance...');
+
+    // Store location
+    const storeLat = 25.946;
+    const storeLng = -80.155;
+
+    // Geocode all stops
+    const withDist: { id: string; dist: number }[] = [];
+    for (const d of optimizableStops) {
+      const addrStr = `${d.address?.street || ''}, ${d.address?.city || ''}, FL ${d.address?.zip || ''}`;
+      try {
+        const resp = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addrStr)}&limit=1`);
+        const data = await resp.json();
+        if (data && data[0]) {
+          const lat = parseFloat(data[0].lat);
+          const lng = parseFloat(data[0].lon);
+          // Haversine distance
+          const R = 3959;
+          const dLat = (lat - storeLat) * Math.PI / 180;
+          const dLng = (lng - storeLng) * Math.PI / 180;
+          const a = Math.sin(dLat/2)**2 + Math.cos(storeLat * Math.PI / 180) * Math.cos(lat * Math.PI / 180) * Math.sin(dLng/2)**2;
+          const dist = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+          withDist.push({ id: d.id, dist });
+        } else {
+          withDist.push({ id: d.id, dist: 9999 }); // No coords = end of list
+        }
+      } catch {
+        withDist.push({ id: d.id, dist: 9999 });
+      }
+    }
+    // Sort by distance ascending
+    withDist.sort((a, b) => a.dist - b.dist);
+    setCustomOrder(withDist.map(x => x.id));
+    setRouteLoading(false);
+    setRouteStatus('');
+  };
+
   const optimizeRoute = async () => {
     if (optimizableStops.length === 0) return;
     setRouteLoading(true);
@@ -2559,6 +2600,8 @@ const ScheduleView: React.FC<{
       
       setRouteTotalDist(data.totalDistance || 0);
       setRouteStops(ordered);
+      // Apply the optimized order to the actual list
+      setCustomOrder(ordered.map((s: any) => s.id));
       setShowRouteMap(true);
     } catch {
       // Even if optimize fails, show the map with all stops
@@ -2668,7 +2711,7 @@ const ScheduleView: React.FC<{
 
       {/* ── MAP + OPTIMIZE ROUTE BUTTON ── */}
       {optimizableStops.length > 0 && (
-        <div className="px-4 py-3 bg-stone-50 border-b border-stone-200">
+        <div className="px-4 py-3 bg-stone-50 border-b border-stone-200 space-y-2">
           <button
             onClick={optimizeRoute}
             disabled={routeLoading}
@@ -2681,6 +2724,23 @@ const ScheduleView: React.FC<{
               <><MapIcon size={16} /> 🗺 Map + Optimize Route ({optimizableStops.length} stops)</>
             )}
           </button>
+          {/* Quick sort buttons */}
+          <div className="flex gap-2">
+            <button
+              onClick={sortByDistance}
+              disabled={routeLoading}
+              className="flex-1 py-2.5 rounded-xl font-black text-xs uppercase flex items-center justify-center gap-1.5 active:scale-95 disabled:opacity-60 transition-all bg-stone-800 text-white"
+            >
+              <Route size={14} /> Sort by Distance
+            </button>
+            <button
+              onClick={() => setCustomOrder([])}
+              disabled={customOrder.length === 0}
+              className="flex-1 py-2.5 rounded-xl font-black text-xs uppercase flex items-center justify-center gap-1.5 active:scale-95 disabled:opacity-40 transition-all bg-stone-200 text-stone-600"
+            >
+              <RotateCcw size={14} /> Reset to Order #
+            </button>
+          </div>
         </div>
       )}
 
