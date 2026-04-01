@@ -1126,13 +1126,13 @@ const OrderDetail: React.FC<{
                     )}
                   </div>
                 ))}
-                {/* Delivery fee — shown just below items, above gift section */}
+                {/* Delivery fee — inline with other item properties */}
                 {(() => {
                   const fee = order.deliveryFee || DELIVERY_FEES[order.address?.zip || ''] || 0;
                   return fee > 0 ? (
-                    <div className="flex items-center justify-between pt-2 mt-1 border-t border-stone-100">
-                      <span className="text-[10px] font-black uppercase text-stone-400 tracking-widest">Delivery Fee</span>
-                      <span className="text-sm font-black text-green-700">${fee.toFixed(2)}</span>
+                    <div className="flex items-baseline gap-1.5 pt-2 mt-1 border-t border-stone-100">
+                      <span className="text-[10px] font-black uppercase text-stone-400 tracking-wide shrink-0">Delivery Fee:</span>
+                      <span className="text-xs font-bold text-stone-700">${fee.toFixed(2)}</span>
                     </div>
                   ) : null;
                 })()}
