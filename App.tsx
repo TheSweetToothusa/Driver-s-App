@@ -2833,7 +2833,6 @@ const ScheduleView: React.FC<{
   };
 
   // Stats for the header
-  const todayStr = new Date().toISOString().split('T')[0];
   const openCount = filtered.filter(d => OPEN_STATUSES.includes(d.status)).length;
   const outForDeliveryCount = filtered.filter(d => d.status === 'IN_TRANSIT').length;
   const doneTodayCount = filtered.filter(d => d.status === 'DELIVERED' && (d.completedAt || '').startsWith(todayStr)).length;
