@@ -1285,9 +1285,9 @@ const OrderDetail: React.FC<{
         {/* ── ZONE 3: PROOF OF DELIVERY (main action zone) ── */}
         {!isCompleted && (
           <div className="mx-3 mt-4 bg-white rounded-xl border border-stone-200 overflow-hidden">
-            <div className="px-4 py-3 bg-stone-900">
-              <p className="text-white font-black uppercase text-xs tracking-widest">📋 Proof of Delivery</p>
-              <p className="text-stone-400 text-[10px] font-bold mt-0.5">Required for all deliveries — successful or not</p>
+            <div style={{ background: '#F5F5F0', padding: '12px 16px' }}>
+              <p style={{ color: '#374151', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>📋 Proof of Delivery</p>
+              <p style={{ color: '#9CA3AF', fontSize: 10, marginTop: 2 }}>Required for all deliveries — successful or not</p>
             </div>
 
             <input type="file" accept="image/*" ref={fileRef} onChange={handlePhoto} className="hidden" />
@@ -3387,18 +3387,18 @@ const DriversView: React.FC<{
   };
 
   return (
-    <div className="flex flex-col h-full bg-stone-50 overflow-y-auto pb-28">
+    <div className="flex flex-col h-full bg-white overflow-y-auto pb-28">
 
       {/* Header */}
-      <div className="bg-black text-white px-4 py-4">
-        <p className="text-lg font-black">👥 Driver Management</p>
-        <p className="text-xs text-white/50 mt-0.5">{drivers.length} driver{drivers.length !== 1 ? 's' : ''} · Name + phone required</p>
+      <div style={{ background: '#F5F5F0', padding: '12px 16px' }}>
+        <p style={{ color: '#374151', fontSize: 14, fontWeight: 600 }}>👥 Driver Management</p>
+        <p style={{ color: '#9CA3AF', fontSize: 11, marginTop: 2 }}>{drivers.length} driver{drivers.length !== 1 ? 's' : ''} · Name + phone required</p>
       </div>
 
       {/* Add new driver */}
       <div className="mx-4 mt-4 bg-white rounded-2xl border border-stone-200 overflow-hidden">
-        <div className="px-4 py-3 bg-stone-900">
-          <p className="text-xs font-black uppercase text-white tracking-widest">➕ Add New Driver</p>
+        <div style={{ background: '#F5F5F0', padding: '12px 16px' }}>
+          <p style={{ color: '#374151', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>➕ Add New Driver</p>
         </div>
         <div className="p-4 space-y-3">
           <input value={newDriver.name} onChange={e => setNewDriver(p => ({ ...p, name: e.target.value }))}
@@ -3426,9 +3426,9 @@ const DriversView: React.FC<{
 
       {/* SMS Templates preview */}
       <div className="mx-4 mt-4 bg-white rounded-2xl border border-stone-200 overflow-hidden">
-        <div className="px-4 py-3 bg-stone-900">
-          <p className="text-xs font-black uppercase text-white tracking-widest">💬 Driver SMS Templates</p>
-          <p className="text-[10px] text-white/50 mt-0.5">Auto-filled with driver name & number when sent</p>
+        <div style={{ background: '#F5F5F0', padding: '12px 16px' }}>
+          <p style={{ color: '#374151', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>💬 Driver SMS Templates</p>
+          <p style={{ color: '#9CA3AF', fontSize: 10, marginTop: 2 }}>Auto-filled with driver name & number when sent</p>
         </div>
         <div className="divide-y divide-stone-100">
           {SMS_TEMPLATES.map(t => (
@@ -3455,8 +3455,8 @@ const DriversView: React.FC<{
 
       {/* Driver list */}
       <div className="mx-4 mt-4 bg-white rounded-2xl border border-stone-200 overflow-hidden mb-4">
-        <div className="px-4 py-3 bg-stone-900">
-          <p className="text-xs font-black uppercase text-white tracking-widest">🚗 Active Drivers</p>
+        <div style={{ background: '#F5F5F0', padding: '12px 16px' }}>
+          <p style={{ color: '#374151', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>🚗 Active Drivers</p>
         </div>
         {drivers.length === 0 ? (
           <div className="text-center py-10">
