@@ -2981,9 +2981,18 @@ const ScheduleView: React.FC<{
           const hdr = fmtDateHeader(dateKey);
           return (
             <div key={dateKey}>
-              {/* Date group header */}
-              <div className="px-4 py-4 flex items-center justify-center" style={{ background: 'transparent' }}>
-                <p className="font-bold text-sm tracking-wide" style={{ color: '#374151' }}>
+              {/* Date group header - cream/tan bar */}
+              <div style={{ 
+                background: '#EAE6DE', 
+                padding: '12px 16px',
+                marginBottom: 0
+              }}>
+                <p style={{ 
+                  color: '#374151', 
+                  fontSize: 14, 
+                  fontWeight: 600,
+                  letterSpacing: '0.5px'
+                }}>
                   {hdr.isToday ? `TODAY — ${new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).toUpperCase()}` : hdr.label}
                 </p>
               </div>
