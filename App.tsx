@@ -1742,17 +1742,17 @@ const OrdersView: React.FC<OrdersViewProps> = ({
     });
 
     return (<>
-      <div className="flex flex-col h-full">
+      <div className="flex flex-col h-full" style={{ background: '#F5F5DC' }}>
         {/* Stats + Add button */}
-        <div className="border-b border-stone-200">
+        <div style={{ background: '#FFFFFF', borderBottom: '1px solid #E5E7EB' }}>
           <div className="grid grid-cols-3 border-b border-stone-100">
             {[
-              { label: 'Open', val: deliveries.filter(d => OPEN_STATUSES.includes(d.status)).length, color: 'text-blue-600' },
-              { label: 'Out for Delivery', val: inTransitCount, color: 'text-black' },
-              { label: 'Done Today', val: deliveredTodayCount, color: 'text-green-600' },
+              { label: 'Open', val: deliveries.filter(d => OPEN_STATUSES.includes(d.status)).length, color: '#374151' },
+              { label: 'Out for Delivery', val: inTransitCount, color: '#D97706' },
+              { label: 'Done Today', val: deliveredTodayCount, color: '#059669' },
             ].map(s => (
               <div key={s.label} className="py-3 text-center border-r border-stone-100 last:border-0">
-                <p className={`text-xl font-black ${s.color}`}>{s.val}</p>
+                <p className="text-xl font-black" style={{ color: s.color }}>{s.val}</p>
                 <p className="text-[8px] font-black uppercase text-stone-400 leading-tight px-1">{s.label}</p>
               </div>
             ))}
@@ -1866,9 +1866,17 @@ const OrdersView: React.FC<OrdersViewProps> = ({
                 const dayLabel = d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
                 const isToday = dateKey === adminToday;
                 rows.push(
-                  <div key={`sep-${dateKey}`} className={`flex items-center gap-3 px-3 py-2 sticky top-0 z-10 ${isToday ? 'bg-black' : 'bg-stone-700'}`}>
-                    <span className={`text-xs font-black uppercase tracking-widest ${isToday ? 'text-white' : 'text-stone-200'}`}>
-                      {isToday ? '📅 Today — ' : ''}{dayLabel}
+                  <div key={`sep-${dateKey}`} style={{ 
+                    background: '#EAE6DE', 
+                    padding: '12px 16px'
+                  }}>
+                    <span style={{ 
+                      color: '#374151', 
+                      fontSize: 14, 
+                      fontWeight: 600,
+                      letterSpacing: '0.5px'
+                    }}>
+                      {isToday ? 'TODAY — ' : ''}{dayLabel.toUpperCase()}
                     </span>
                   </div>
                 );
@@ -5255,15 +5263,15 @@ export default function App() {
 
         {/* ── MANAGE TAB — admin only ── */}
         {tab === 'ADMIN' && isAdmin && (
-          <div className="pb-24">
-            <div className="grid grid-cols-3 border-b border-stone-100">
+          <div className="pb-24" style={{ background: '#F5F5DC' }}>
+            <div className="grid grid-cols-3" style={{ background: '#FFFFFF', borderBottom: '1px solid #E5E7EB' }}>
               {[
-                { label: 'Open', val: activeOrders.length, color: 'text-black' },
-                { label: 'Out for Delivery', val: inTransitCount, color: 'text-blue-600' },
-                { label: 'Done Today', val: deliveredTodayCount, color: 'text-green-600' },
+                { label: 'Open', val: activeOrders.length, color: '#374151' },
+                { label: 'Out for Delivery', val: inTransitCount, color: '#D97706' },
+                { label: 'Done Today', val: deliveredTodayCount, color: '#059669' },
               ].map(s => (
                 <div key={s.label} className="py-3 text-center border-r border-stone-100 last:border-0">
-                  <p className={`text-2xl font-black ${s.color}`}>{s.val}</p>
+                  <p className="text-2xl font-black" style={{ color: s.color }}>{s.val}</p>
                   <p className="text-[8px] font-black uppercase text-stone-400 leading-tight px-1">{s.label}</p>
                 </div>
               ))}
