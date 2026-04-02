@@ -3039,10 +3039,8 @@ const ScheduleView: React.FC<{
                   );
                 }
 
-                // CITY-FIRST COMPACT VIEW for admins
+                // CITY-FIRST COMPACT VIEW for admins — Minimalist Luxury Theme
                 const isManualOrder = (order as any).isManual;
-                const driverColor = order.driverId === 'manager_1' ? '#fce7f3' : order.driverId === 'driver_1' ? '#dbeafe' : '#d1fae5';
-                const driverTextColor = order.driverId === 'manager_1' ? '#9d174d' : order.driverId === 'driver_1' ? '#1e40af' : '#065f46';
                 
                 return (
                   <div key={order.id}
@@ -3051,66 +3049,109 @@ const ScheduleView: React.FC<{
                     onDragOver={e => { e.preventDefault(); setDragOverId(order.id); }}
                     onDrop={() => { if (dragOrderId) handleDropOnStop(orders, dragOrderId, order.id); setDragOrderId(null); setDragOverId(null); }}
                     onDragEnd={() => { setDragOrderId(null); setDragOverId(null); }}
-                    className={`rounded-xl overflow-hidden transition-all ${dragOverId === order.id ? 'ring-2 ring-blue-500' : ''}`}
+                    className={`rounded-xl overflow-hidden transition-all ${dragOverId === order.id ? 'ring-2 ring-stone-300' : ''}`}
                     style={{ 
-                      background: isDone ? '#f8f9fa' : '#ffffff', 
-                      border: isManualOrder ? '1px solid #e0e0e0' : '1px solid #e0e0e0',
-                      borderLeft: isManualOrder ? '3px solid #9333ea' : `3px solid ${statusCfg.color || '#e0e0e0'}`,
+                      background: '#ffffff',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02)',
+                      borderLeft: isManualOrder ? '3px solid #D4AF37' : '3px solid transparent',
+                      border: '1px solid #f0f0f0',
                     }}>
                     
                     {/* CITY-FIRST HEADER: Order # | CITY | Driver Pill | ⋮ menu */}
-                    <div className="flex items-center justify-between px-3 py-2 border-b border-stone-100" onClick={e => e.stopPropagation()}>
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="text-xs text-stone-400 font-bold shrink-0">#{cleanNum}</span>
-                        <span className="text-stone-300">|</span>
-                        <span className="text-sm font-black text-stone-900 tracking-wide uppercase truncate">{(order.address?.city || '—').toUpperCase()}</span>
-                        {isManualOrder && <span className="text-purple-600 shrink-0" title="Manual entry">✍️</span>}
+                    <div className="flex items-center justify-between px-3 py-2.5" onClick={e => e.stopPropagation()}>
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span style={{ color: '#6B7280', fontSize: 12, fontWeight: 600 }}>#{cleanNum}</span>
+                        <span style={{ color: '#D1D5DB' }}>|</span>
+                        <span style={{ color: '#374151', fontSize: 14, fontWeight: 700, letterSpacing: '0.025em' }}>{(order.address?.city || '—').toUpperCase()}</span>
                         {showStatus && !isDone && (
-                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0" style={{ background: statusCfg.color || '#e0e0e0', color: '#fff' }}>
-                            {order.status === 'IN_TRANSIT' ? 'OUT' : statusCfg.label.split(' ')[0]}
+                          <span style={{ 
+                            fontSize: 9, 
+                            fontWeight: 600, 
+                            padding: '2px 6px', 
+                            borderRadius: 4,
+                            background: order.status === 'IN_TRANSIT' ? '#FEF3C7' : '#F3F4F6',
+                            color: order.status === 'IN_TRANSIT' ? '#92400E' : '#6B7280'
+                          }}>
+                            {order.status === 'IN_TRANSIT' ? 'OUT' : statusCfg.label.split(' ')[0].toUpperCase()}
+                          </span>
+                        )}
+                        {isDone && (
+                          <span style={{ fontSize: 9, fontWeight: 600, padding: '2px 6px', borderRadius: 4, background: '#ECFDF5', color: '#065F46' }}>
+                            DONE
                           </span>
                         )}
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
-                        {/* Driver pill */}
-                        <span className="text-xs font-bold px-2 py-1 rounded-full" style={{ background: driverColor, color: driverTextColor }}>
-                          {order.driverName || 'Unassigned'} {order.driverId ? '✓' : ''}
+                        {/* Driver pill — subtle grey */}
+                        <span style={{ 
+                          fontSize: 11, 
+                          fontWeight: 600, 
+                          padding: '4px 10px', 
+                          borderRadius: 20,
+                          background: '#F3F4F6',
+                          color: '#374151'
+                        }}>
+                          {order.driverName || 'Unassigned'}
                         </span>
                         {/* ⋮ More menu button */}
                         <button 
                           onClick={(e) => { e.stopPropagation(); onSelectOrder(order); }}
-                          className="w-7 h-7 flex items-center justify-center text-stone-400 hover:bg-stone-100 rounded-lg"
+                          className="w-7 h-7 flex items-center justify-center rounded-lg"
+                          style={{ color: '#9CA3AF' }}
                         >
-                          <span className="text-lg leading-none">⋮</span>
+                          <span style={{ fontSize: 18, lineHeight: 1 }}>⋮</span>
                         </button>
                       </div>
                     </div>
 
                     {/* BODY: Recipient name + Product */}
-                    <div className="px-3 py-2 cursor-pointer" onClick={() => onSelectOrder(order)}>
-                      <p className="text-base font-bold text-stone-900 truncate">{name}</p>
+                    <div className="px-3 pb-2 cursor-pointer" onClick={() => onSelectOrder(order)}>
+                      <p style={{ color: '#374151', fontSize: 15, fontWeight: 600 }} className="truncate">{name}</p>
                       {order.items?.[0] && (
-                        <p className="text-xs text-stone-500 truncate mt-0.5">{order.items[0].name}</p>
+                        <p style={{ color: '#9CA3AF', fontSize: 12, marginTop: 2 }} className="truncate">{order.items[0].name}</p>
                       )}
-                      {/* Delivery instructions alert */}
+                      {/* Delivery instructions alert — subtle */}
                       {order.deliveryInstructions && (
-                        <div className="flex items-start gap-1.5 mt-2 bg-red-50 border border-red-200 rounded-lg px-2 py-1.5">
-                          <AlertTriangle size={12} className="text-red-500 shrink-0 mt-0.5" />
-                          <p className="text-[11px] font-bold text-red-700 line-clamp-2">{order.deliveryInstructions}</p>
+                        <div style={{ 
+                          marginTop: 8, 
+                          padding: '6px 10px', 
+                          background: '#FFFBEB', 
+                          border: '1px solid #FEF3C7',
+                          borderRadius: 6,
+                          display: 'flex',
+                          alignItems: 'flex-start',
+                          gap: 6
+                        }}>
+                          <AlertTriangle size={12} style={{ color: '#D97706', flexShrink: 0, marginTop: 1 }} />
+                          <p style={{ fontSize: 11, fontWeight: 500, color: '#92400E', lineHeight: 1.4 }} className="line-clamp-2">{order.deliveryInstructions}</p>
                         </div>
                       )}
                     </div>
 
-                    {/* NAVIGATE BUTTON — Primary Action */}
+                    {/* NAVIGATE BUTTON — Soft, Light Grey */}
                     <div className="px-3 pb-3">
                       <a
                         href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${order.address?.street || ''}${order.address?.unit ? ' #' + order.address.unit : ''}, ${order.address?.city || ''}, FL ${order.address?.zip || ''}`)}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         onClick={e => e.stopPropagation()}
-                        className="flex items-center justify-center gap-2 w-full py-2.5 bg-stone-900 text-white rounded-lg font-bold text-sm active:scale-[0.98] transition-all"
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 8,
+                          width: '100%',
+                          padding: '10px 16px',
+                          background: '#F3F4F6',
+                          color: '#374151',
+                          borderRadius: 8,
+                          fontWeight: 600,
+                          fontSize: 13,
+                          transition: 'all 0.15s'
+                        }}
+                        className="active:scale-[0.98]"
                       >
-                        <Navigation size={16} />
+                        <Navigation size={15} style={{ color: '#6B7280' }} />
                         Navigate to {order.address?.street?.split(' ').slice(0, 3).join(' ')}{order.address?.unit ? ` #${order.address.unit}` : ''}
                       </a>
                     </div>
