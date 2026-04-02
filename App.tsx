@@ -2838,20 +2838,20 @@ const ScheduleView: React.FC<{
   const doneTodayCount = filtered.filter(d => d.status === 'DELIVERED' && (d.completedAt || '').startsWith(todayStr)).length;
 
   return (
-    <div className="flex flex-col h-full" style={{ background: '#F9FAFB' }}>
+    <div className="flex flex-col h-full" style={{ background: '#F5F5DC' }}>
 
       {/* ── STATS BAR ── */}
-      <div className="grid grid-cols-3 border-b border-stone-100 bg-white">
-        <div className="py-3 text-center border-r border-stone-100">
-          <p className="text-2xl font-black text-black">{openCount}</p>
+      <div className="grid grid-cols-3 border-b border-stone-200" style={{ background: '#FFFFFF' }}>
+        <div className="py-3 text-center border-r border-stone-200">
+          <p className="text-2xl font-black" style={{ color: '#374151' }}>{openCount}</p>
           <p className="text-[8px] font-black uppercase text-stone-400 leading-tight">Open</p>
         </div>
-        <div className="py-3 text-center border-r border-stone-100">
-          <p className="text-2xl font-black text-amber-500">{outForDeliveryCount}</p>
+        <div className="py-3 text-center border-r border-stone-200">
+          <p className="text-2xl font-black" style={{ color: '#D97706' }}>{outForDeliveryCount}</p>
           <p className="text-[8px] font-black uppercase text-stone-400 leading-tight">Out for Delivery</p>
         </div>
         <div className="py-3 text-center">
-          <p className="text-2xl font-black text-green-600">{doneTodayCount}</p>
+          <p className="text-2xl font-black" style={{ color: '#059669' }}>{doneTodayCount}</p>
           <p className="text-[8px] font-black uppercase text-stone-400 leading-tight">Done Today</p>
         </div>
       </div>
@@ -2876,11 +2876,12 @@ const ScheduleView: React.FC<{
         <div className="flex gap-2 items-center">
           {isAdmin && (
             <select value={driverFilter} onChange={e => setDriverFilter(e.target.value)}
-              className="flex-1 bg-stone-50 border-2 border-stone-200 rounded-xl px-3 py-2 text-sm font-black outline-none focus:border-black">
-              <option value="ALL">All Drivers ({deliveries.filter(d => OPEN_STATUSES.includes(d.status)).length} open)</option>
+              className="bg-stone-100 border-2 border-stone-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-black"
+              style={{ color: '#374151' }}>
+              <option value="ALL">Viewing: All drivers</option>
               {activeDrivers.map(u => (
                 <option key={u.id} value={u.id}>
-                  {u.name} ({deliveries.filter(d => d.driverId === u.id && OPEN_STATUSES.includes(d.status)).length} open)
+                  Viewing: {u.name}
                 </option>
               ))}
             </select>
@@ -2920,8 +2921,12 @@ const ScheduleView: React.FC<{
           <button
             onClick={optimizeRoute}
             disabled={routeLoading}
-            className="w-full py-4 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 active:scale-95 disabled:opacity-60 transition-all text-white"
-            style={{ background: routeLoading ? '#5F6368' : '#1A73E8' }}
+            className="w-full py-4 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 active:scale-95 disabled:opacity-60 transition-all"
+            style={{ 
+              background: routeLoading ? '#F3F4F6' : '#FFFFFF', 
+              color: '#374151',
+              border: '1px solid #374151'
+            }}
           >
             {routeLoading ? (
               <><RefreshCw size={16} className="animate-spin" /> {routeStatus || 'Loading...'}</>
@@ -2977,12 +2982,10 @@ const ScheduleView: React.FC<{
           return (
             <div key={dateKey}>
               {/* Date group header */}
-              <div className={`px-4 py-2.5 flex items-center justify-between sticky top-0 z-[5] ${hdr.isToday ? 'bg-black' : hdr.isTomorrow ? 'bg-stone-800' : 'bg-stone-700'}`}>
-                <div>
-                  <p className="text-white font-black text-sm tracking-wide">{hdr.label}</p>
-                  {hdr.sub && <p className="text-stone-400 text-[10px] font-bold">{hdr.sub}</p>}
-                </div>
-                <span className="text-white font-black text-xs bg-white/20 px-2 py-0.5 rounded-full">{orders.length} orders</span>
+              <div className="px-4 py-4 flex items-center justify-center" style={{ background: 'transparent' }}>
+                <p className="font-bold text-sm tracking-wide" style={{ color: '#374151' }}>
+                  {hdr.isToday ? `TODAY — ${new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).toUpperCase()}` : hdr.label}
+                </p>
               </div>
 
               {/* Cards for this date */}
@@ -3041,6 +3044,7 @@ const ScheduleView: React.FC<{
 
                 // MINIMALIST CARD — Clean, white, quiet
                 const isManualOrder = (order as any).isManual;
+                const isOutForDelivery = order.status === 'IN_TRANSIT';
                 
                 return (
                   <div key={order.id}
@@ -3054,40 +3058,51 @@ const ScheduleView: React.FC<{
                       borderRadius: 12,
                       padding: 20,
                       marginBottom: 12,
-                      borderLeft: isManualOrder ? '3px solid #D4AF37' : '3px solid transparent',
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
+                      borderLeft: isManualOrder ? '3px solid #D4AF37' : isOutForDelivery ? '3px solid #F59E0B' : '3px solid transparent',
                     }}>
                     
-                    {/* HEADER: #35213 | MIAMI | Katie */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+                    {/* HEADER: #35213 | MIAMI | [Driver Pill] */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                       <span style={{ color: '#374151', fontSize: 13, fontWeight: 500 }}>#{cleanNum}</span>
                       <span style={{ color: '#D1D5DB' }}>|</span>
-                      <span style={{ color: '#374151', fontSize: 13, fontWeight: 500 }}>{(order.address?.city || '—').toUpperCase()}</span>
-                      <span style={{ color: '#D1D5DB' }}>|</span>
-                      <span style={{ color: '#374151', fontSize: 13, fontWeight: 500 }}>{order.driverName || 'Unassigned'}</span>
-                      {isDone && <span style={{ color: '#22C55E', fontSize: 12 }}>✓</span>}
+                      <span style={{ color: '#374151', fontSize: 13, fontWeight: 700, textTransform: 'uppercase' }}>{order.address?.city || '—'}</span>
+                      {isOutForDelivery && <span style={{ background: '#FEF3C7', color: '#D97706', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 9999 }}>OUT</span>}
+                      <div style={{ marginLeft: 'auto' }}>
+                        <span style={{ 
+                          background: isDone ? '#D1FAE5' : '#F3F4F6', 
+                          color: isDone ? '#059669' : '#374151', 
+                          fontSize: 12, 
+                          fontWeight: 500, 
+                          padding: '4px 10px', 
+                          borderRadius: 9999 
+                        }}>
+                          {order.driverName || 'Unassigned'}{isDone ? ' ✓' : ''}
+                        </span>
+                      </div>
                     </div>
 
                     {/* BODY */}
                     <div style={{ cursor: 'pointer' }} onClick={() => onSelectOrder(order)}>
                       <p style={{ color: '#374151', fontSize: 16, fontWeight: 600, marginBottom: 4 }}>{name}</p>
                       {order.items?.[0] && (
-                        <p style={{ color: '#6B7280', fontSize: 13, marginBottom: 12 }}>{order.items[0].name}</p>
+                        <p style={{ color: '#9CA3AF', fontSize: 13, marginBottom: 8 }}>{order.items[0].name}</p>
                       )}
                       
-                      {/* ADDRESS — Plain text hyperlink */}
+                      {/* ADDRESS — Subtle blue link */}
                       <a
                         href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${order.address?.street || ''}${order.address?.unit ? ' #' + order.address.unit : ''}, ${order.address?.city || ''}, FL ${order.address?.zip || ''}`)}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         onClick={e => e.stopPropagation()}
-                        style={{ color: '#6B7280', fontSize: 14, textDecoration: 'underline' }}
+                        style={{ color: '#1D4ED8', fontSize: 13, textDecoration: 'none' }}
                       >
                         {order.address?.street}{order.address?.unit ? ` #${order.address.unit}` : ''}, {order.address?.city} {order.address?.zip}
                       </a>
                       
                       {/* Delivery instructions — subtle */}
                       {order.deliveryInstructions && (
-                        <p style={{ color: '#6B7280', fontSize: 12, marginTop: 12, fontStyle: 'italic' }}>
+                        <p style={{ color: '#9CA3AF', fontSize: 12, marginTop: 8, fontStyle: 'italic' }}>
                           Note: {order.deliveryInstructions}
                         </p>
                       )}
@@ -5158,19 +5173,21 @@ export default function App() {
         {/* DELIVERIES */}
         <button onClick={() => setTab('SCHEDULE')}
           className={`flex-1 py-3 flex flex-col items-center gap-0.5 transition-all relative ${tab === 'SCHEDULE' ? 'text-black' : 'text-stone-300'}`}>
-          <Truck size={22} />
+          <span className="relative">
+            <span style={{ fontSize: 22 }}>🚚</span>
+            {activeOrders.length > 0 && (
+              <span className="absolute -top-1.5 -right-2 min-w-[18px] h-[18px] bg-red-500 text-white text-[9px] font-black rounded-full flex items-center justify-center px-1">
+                {activeOrders.length > 99 ? '99+' : activeOrders.length}
+              </span>
+            )}
+          </span>
           <span className="text-[9px] font-black uppercase">Deliveries</span>
-          {activeOrders.length > 0 && (
-            <span className="absolute top-1.5 right-2 min-w-[18px] h-[18px] bg-black text-white text-[9px] font-black rounded-full flex items-center justify-center px-1">
-              {activeOrders.length > 99 ? '99+' : activeOrders.length}
-            </span>
-          )}
         </button>
 
         {/* HISTORY */}
         <button onClick={() => setTab('ORDERS')}
           className={`flex-1 py-3 flex flex-col items-center gap-0.5 transition-all ${tab === 'ORDERS' ? 'text-black' : 'text-stone-300'}`}>
-          <CheckCircle2 size={22} />
+          <Clock size={22} />
           <span className="text-[9px] font-black uppercase">History</span>
         </button>
 
