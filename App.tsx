@@ -2832,8 +2832,30 @@ const ScheduleView: React.FC<{
     };
   };
 
+  // Stats for the header
+  const todayStr = new Date().toISOString().split('T')[0];
+  const openCount = filtered.filter(d => OPEN_STATUSES.includes(d.status)).length;
+  const outForDeliveryCount = filtered.filter(d => d.status === 'IN_TRANSIT').length;
+  const doneTodayCount = filtered.filter(d => d.status === 'DELIVERED' && (d.completedAt || '').startsWith(todayStr)).length;
+
   return (
     <div className="flex flex-col h-full bg-stone-50">
+
+      {/* ── STATS BAR ── */}
+      <div className="grid grid-cols-3 border-b border-stone-100 bg-white">
+        <div className="py-3 text-center border-r border-stone-100">
+          <p className="text-2xl font-black text-black">{openCount}</p>
+          <p className="text-[8px] font-black uppercase text-stone-400 leading-tight">Open</p>
+        </div>
+        <div className="py-3 text-center border-r border-stone-100">
+          <p className="text-2xl font-black text-amber-500">{outForDeliveryCount}</p>
+          <p className="text-[8px] font-black uppercase text-stone-400 leading-tight">Out for Delivery</p>
+        </div>
+        <div className="py-3 text-center">
+          <p className="text-2xl font-black text-green-600">{doneTodayCount}</p>
+          <p className="text-[8px] font-black uppercase text-stone-400 leading-tight">Done Today</p>
+        </div>
+      </div>
 
       {/* ── STICKY HEADER ── */}
       <div className="sticky top-0 z-10 bg-white border-b border-stone-200 px-4 pt-3 pb-3 space-y-2.5 shadow-sm">
