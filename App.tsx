@@ -1742,7 +1742,7 @@ const OrdersView: React.FC<OrdersViewProps> = ({
     });
 
     return (<>
-      <div className="flex flex-col h-full" style={{ background: '#F5F5DC' }}>
+      <div className="flex flex-col h-full" style={{ background: '#FFFFFF' }}>
         {/* Stats + Add button */}
         <div style={{ background: '#FFFFFF', borderBottom: '1px solid #E5E7EB' }}>
           <div className="grid grid-cols-3 border-b border-stone-100">
@@ -1867,14 +1867,14 @@ const OrdersView: React.FC<OrdersViewProps> = ({
                 const isToday = dateKey === adminToday;
                 rows.push(
                   <div key={`sep-${dateKey}`} style={{ 
-                    background: '#EAE6DE', 
-                    padding: '12px 16px'
+                    background: '#F5F5F0', 
+                    padding: '10px 16px'
                   }}>
                     <span style={{ 
                       color: '#374151', 
-                      fontSize: 14, 
-                      fontWeight: 600,
-                      letterSpacing: '0.5px'
+                      fontSize: 13, 
+                      fontWeight: 500,
+                      letterSpacing: '0.3px'
                     }}>
                       {isToday ? 'TODAY — ' : ''}{dayLabel.toUpperCase()}
                     </span>
@@ -2846,7 +2846,7 @@ const ScheduleView: React.FC<{
   const doneTodayCount = filtered.filter(d => d.status === 'DELIVERED' && (d.completedAt || '').startsWith(todayStr)).length;
 
   return (
-    <div className="flex flex-col h-full" style={{ background: '#F5F5DC' }}>
+    <div className="flex flex-col h-full" style={{ background: '#FFFFFF' }}>
 
       {/* ── STATS BAR ── */}
       <div className="grid grid-cols-3 border-b border-stone-200" style={{ background: '#FFFFFF' }}>
@@ -2865,27 +2865,13 @@ const ScheduleView: React.FC<{
       </div>
 
       {/* ── STICKY HEADER ── */}
-      <div className="sticky top-0 z-10 bg-white border-b border-stone-200 px-4 pt-3 pb-3 space-y-2.5 shadow-sm">
+      <div className="sticky top-0 z-10 bg-white border-b border-stone-200 px-4 pt-3 pb-3 space-y-2.5">
 
-        {/* Search */}
-        <div className="relative">
-          <input
-            value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Search name, order #, city, ZIP, driver..."
-            className="w-full bg-stone-50 border-2 border-stone-200 rounded-xl px-4 py-2.5 text-sm font-bold outline-none focus:border-black pr-9"
-          />
-          {search
-            ? <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400"><X size={16} /></button>
-            : <span className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-300 text-base">🔍</span>
-          }
-        </div>
-
-        {/* Driver filter (admin only) + status toggle */}
+        {/* Driver filter (admin only) - light beige background */}
         <div className="flex gap-2 items-center">
           {isAdmin && (
             <select value={driverFilter} onChange={e => setDriverFilter(e.target.value)}
-              className="bg-stone-100 border-2 border-stone-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-black"
-              style={{ color: '#374151' }}>
+              style={{ background: '#F5F5F0', color: '#374151', border: 'none', borderRadius: 12, padding: '10px 14px', fontSize: 14, fontWeight: 600 }}>
               <option value="ALL">Viewing: All drivers</option>
               {activeDrivers.map(u => (
                 <option key={u.id} value={u.id}>
@@ -2894,24 +2880,6 @@ const ScheduleView: React.FC<{
               ))}
             </select>
           )}
-        </div>
-
-        {/* Status tabs */}
-        <div className="flex gap-1.5">
-          {([
-            { key: 'OPEN', label: `Active`, count: deliveries.filter(d => OPEN_STATUSES.includes(d.status) && (driverFilter === 'ALL' || d.driverId === driverFilter)).length },
-            { key: 'DONE', label: `Delivered`, count: deliveries.filter(d => DONE_STATUSES.includes(d.status) && (driverFilter === 'ALL' || d.driverId === driverFilter)).length },
-            { key: 'ALL',  label: `All`, count: deliveries.filter(d => driverFilter === 'ALL' || d.driverId === driverFilter).length },
-          ] as const).map(f => (
-            <button key={f.key} onClick={() => setStatusFilter(f.key)}
-              className={`flex-1 py-2 rounded-xl font-black text-xs uppercase transition-all ${
-                statusFilter === f.key
-                  ? f.key === 'OPEN' ? 'bg-black text-white' : f.key === 'DONE' ? 'bg-green-600 text-white' : 'bg-stone-600 text-white'
-                  : 'bg-stone-100 text-stone-500'
-              }`}>
-              {f.label} ({f.count})
-            </button>
-          ))}
         </div>
       </div>
 
@@ -2989,17 +2957,17 @@ const ScheduleView: React.FC<{
           const hdr = fmtDateHeader(dateKey);
           return (
             <div key={dateKey}>
-              {/* Date group header - cream/tan bar */}
+              {/* Date group header - very light beige bar */}
               <div style={{ 
-                background: '#EAE6DE', 
-                padding: '12px 16px',
+                background: '#F5F5F0', 
+                padding: '10px 16px',
                 marginBottom: 0
               }}>
                 <p style={{ 
                   color: '#374151', 
-                  fontSize: 14, 
-                  fontWeight: 600,
-                  letterSpacing: '0.5px'
+                  fontSize: 13, 
+                  fontWeight: 500,
+                  letterSpacing: '0.3px'
                 }}>
                   {hdr.isToday ? `TODAY — ${new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).toUpperCase()}` : hdr.label}
                 </p>
@@ -5263,7 +5231,7 @@ export default function App() {
 
         {/* ── MANAGE TAB — admin only ── */}
         {tab === 'ADMIN' && isAdmin && (
-          <div className="pb-24" style={{ background: '#F5F5DC' }}>
+          <div className="pb-24" style={{ background: '#FFFFFF' }}>
             <div className="grid grid-cols-3" style={{ background: '#FFFFFF', borderBottom: '1px solid #E5E7EB' }}>
               {[
                 { label: 'Open', val: activeOrders.length, color: '#374151' },
