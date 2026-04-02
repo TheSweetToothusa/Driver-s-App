@@ -1743,197 +1743,127 @@ const OrdersView: React.FC<OrdersViewProps> = ({
 
     return (<>
       <div className="flex flex-col h-full" style={{ background: '#FFFFFF' }}>
-        {/* Stats + Add button */}
-        <div style={{ background: '#FFFFFF', borderBottom: '1px solid #E5E7EB' }}>
-          <div className="grid grid-cols-3 border-b border-stone-100">
-            {[
-              { label: 'Open', val: deliveries.filter(d => OPEN_STATUSES.includes(d.status)).length, color: '#374151' },
-              { label: 'Out for Delivery', val: inTransitCount, color: '#D97706' },
-              { label: 'Done Today', val: deliveredTodayCount, color: '#059669' },
-            ].map(s => (
-              <div key={s.label} className="py-3 text-center border-r border-stone-100 last:border-0">
-                <p className="text-xl font-black" style={{ color: s.color }}>{s.val}</p>
-                <p className="text-[8px] font-black uppercase text-stone-400 leading-tight px-1">{s.label}</p>
-              </div>
-            ))}
+        {/* Stats bar - matching Deliveries */}
+        <div className="grid grid-cols-3 border-b border-stone-200" style={{ background: '#FFFFFF' }}>
+          <div className="py-3 text-center border-r border-stone-200">
+            <p className="text-2xl font-black" style={{ color: '#374151' }}>{deliveries.filter(d => OPEN_STATUSES.includes(d.status)).length}</p>
+            <p className="text-[8px] font-black uppercase text-stone-400 leading-tight">Open</p>
+          </div>
+          <div className="py-3 text-center border-r border-stone-200">
+            <p className="text-2xl font-black" style={{ color: '#D97706' }}>{inTransitCount}</p>
+            <p className="text-[8px] font-black uppercase text-stone-400 leading-tight">Out for Delivery</p>
+          </div>
+          <div className="py-3 text-center">
+            <p className="text-2xl font-black" style={{ color: '#22C55E' }}>{deliveredTodayCount}</p>
+            <p className="text-[8px] font-black uppercase text-stone-400 leading-tight">Done Today</p>
           </div>
         </div>
 
-        {/* Filters + Search */}
-        <div className="px-3 pt-2 pb-2 border-b border-stone-200 space-y-2">
-          {/* Driver filter dropdown */}
+        {/* Driver filter - matching Deliveries */}
+        <div className="px-4 pt-3 pb-3 bg-white">
           <select value={ordersDriverFilter} onChange={e => setOrdersDriverFilter(e.target.value)}
-            className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-2.5 text-sm font-bold outline-none focus:border-black">
-            {uniqueOrderDrivers.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+            style={{ background: '#F5F5F0', color: '#374151', border: 'none', borderRadius: 12, padding: '10px 14px', fontSize: 14, fontWeight: 600 }}>
+            <option value="ALL">Viewing: All drivers</option>
+            {uniqueOrderDrivers.filter(d => d.id !== 'ALL').map(d => (
+              <option key={d.id} value={d.id}>Viewing: {d.name}</option>
+            ))}
           </select>
-          {/* Active / Delivered toggle — Active on left */}
-          <div className="flex gap-2">
-            <button onClick={() => setStatusFilter('OPEN')}
-              className={`flex-1 py-2.5 rounded-xl font-black text-xs uppercase transition-all ${statusFilter === 'OPEN' ? 'bg-blue-600 text-white' : 'bg-stone-100 text-stone-500'}`}>
-              Active ({deliveries.filter(d => OPEN_STATUSES.includes(d.status)).length})
-            </button>
-            <button onClick={() => setStatusFilter('CLOSED')}
-              className={`flex-1 py-2.5 rounded-xl font-black text-xs uppercase transition-all ${statusFilter === 'CLOSED' ? 'bg-green-600 text-white' : 'bg-stone-100 text-stone-500'}`}>
-              ✓ Delivered ({deliveries.filter(d => CLOSED_STATUSES.includes(d.status)).length})
-            </button>
-          </div>
-          {/* Text search */}
-          <input
-            value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Search name, order #, address, status..."
-            className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-black"
-          />
         </div>
 
-        {/* Table header */}
-        <div className="grid grid-cols-[70px_1fr_100px] bg-stone-50 border-b border-stone-200 px-3 py-2">
-          <p className="text-[9px] font-black uppercase text-stone-600">Order #</p>
-          <p className="text-[9px] font-black uppercase text-stone-600">Recipient · City · Product</p>
-          <p className="text-[9px] font-black uppercase text-stone-600 text-right">Driver · Status</p>
-        </div>
-
-        {/* Rows with day separators */}
-        <div className="flex-1 overflow-y-auto">
+        {/* Cards - matching Deliveries page exactly */}
+        <div className="flex-1 overflow-y-auto" style={{ background: '#FFFFFF' }}>
           {filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20">
               <Package size={32} className="text-stone-200 mb-2" />
-              <p className="text-xs font-black uppercase text-stone-300">No orders found</p>
+              <p className="text-xs font-bold text-stone-300">No orders found</p>
             </div>
-          ) : search ? (
-            // SEARCH MODE: Simple list, no date grouping
-            filtered.map((order, idx) => {
-              const statusCfg = STATUSES_FOR_DROPDOWN.find(s => s.value === order.status) || STATUSES_FOR_DROPDOWN[0];
-              return (
-                <div key={order.id}
-                  className={`grid grid-cols-[70px_1fr_100px] px-3 py-3 border-b border-stone-100 active:bg-stone-50 cursor-pointer ${idx % 2 === 0 ? 'bg-white' : 'bg-stone-50/30'}`}
-                  onClick={() => onSelectOrder(order)}>
-                  {/* Col 1: order# + date */}
-                  <div>
-                    <p className="text-sm font-black text-black leading-tight">#{order.orderNumber?.replace(/^#+/, '') || order.id}</p>
-                    <p className="text-[10px] font-bold text-stone-500 mt-0.5">{order.deliveryDate ? fmtDate(order.deliveryDate) : '—'}</p>
-                  </div>
-                  {/* Col 2: recipient name + city + product */}
-                  <div className="min-w-0 px-2">
-                    <div className="flex items-center gap-1 flex-wrap">
-                      <p className="text-sm font-black text-stone-900 leading-tight truncate">{order.giftReceiverName || order.customer?.name}</p>
-                      {renderAttemptBadge(order)}
-                      {(order as any).isManual && <span className="px-1 py-0.5 bg-violet-100 text-violet-700 text-[8px] font-black rounded">Manual</span>}
-                    </div>
-                    <p className="text-xl font-black text-black mt-0.5 leading-tight">{order.address?.city}{order.address?.zip ? ` ${order.address.zip}` : ''}</p>
-                    <p className="text-[10px] text-stone-400 truncate">{order.address?.street}</p>
-                    {order.items?.[0] && <p className="text-[10px] text-stone-500 truncate">{order.items[0].name}</p>}
-                    {order.deliveryInstructions && (
-                      <div className="flex items-center gap-1 mt-0.5 bg-red-50 border border-red-200 rounded px-1.5 py-0.5">
-                        <AlertTriangle size={8} className="text-red-600 shrink-0" />
-                        <p className="text-[9px] font-black text-red-700 truncate">{order.deliveryInstructions}</p>
-                      </div>
-                    )}
-                  </div>
-                  {/* Col 3: driver + status dot (no big badge) */}
-                  <div className="text-right" onClick={e => e.stopPropagation()}>
-                    <p className="text-[10px] font-bold text-stone-500 truncate">{order.driverName || '—'}</p>
-                    <select
-                      value={order.status}
-                      onChange={e => {
-                        const newStatus = e.target.value as DeliveryStatus;
-                        onUpdateOrder(order.id, { status: newStatus });
-                        const isManualOrder = (order as any).isManual;
-                        fetch(isManualOrder ? `/api/manual-orders/${order.id}` : `/api/orders/${order.id}/status`, {
-                          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ status: newStatus })
-                        }).catch(() => {});
-                      }}
-                      style={{ backgroundColor: statusCfg.color, color: 'white' }}
-                      className="mt-1 w-full text-[9px] font-black rounded-lg px-1 py-1 outline-none border-0 appearance-none cursor-pointer"
-                    >
-                      {STATUSES_FOR_DROPDOWN.map(s => (
-                        <option key={s.value} value={s.value} style={{ backgroundColor: s.color, color: 'white' }}>{s.label}</option>
-                      ))}
-                    </select>
-                  </div>
-              </div>
-              );
-            })
           ) : (() => {
-            // NORMAL MODE: Group by delivery date with day separators
-            const rows: React.ReactNode[] = [];
-            let lastDate = '';
-            filtered.forEach((order, idx) => {
-              const dateKey = (order.deliveryDate || '').split('T')[0];
-              if (dateKey && dateKey !== lastDate) {
-                lastDate = dateKey;
-                const d = new Date(dateKey + 'T12:00:00');
-                const dayLabel = d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
-                const isToday = dateKey === adminToday;
-                rows.push(
-                  <div key={`sep-${dateKey}`} style={{ 
-                    background: '#F5F5F0', 
-                    padding: '10px 16px'
-                  }}>
-                    <span style={{ 
-                      color: '#374151', 
-                      fontSize: 13, 
-                      fontWeight: 500,
-                      letterSpacing: '0.3px'
-                    }}>
-                      {isToday ? 'TODAY — ' : ''}{dayLabel.toUpperCase()}
-                    </span>
+            // Group by date
+            const grouped: Record<string, typeof filtered> = {};
+            filtered.forEach(order => {
+              const dateKey = (order.deliveryDate || 'unscheduled').split('T')[0];
+              if (!grouped[dateKey]) grouped[dateKey] = [];
+              grouped[dateKey].push(order);
+            });
+            
+            return Object.entries(grouped).map(([dateKey, orders]) => {
+              const d = dateKey !== 'unscheduled' ? new Date(dateKey + 'T12:00:00') : null;
+              const isToday = dateKey === adminToday;
+              const dayLabel = d ? d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }).toUpperCase() : 'UNSCHEDULED';
+              
+              return (
+                <div key={dateKey}>
+                  {/* Date header bar - light beige */}
+                  <div style={{ background: '#F5F5F0', padding: '10px 16px' }}>
+                    <p style={{ color: '#374151', fontSize: 13, fontWeight: 500, letterSpacing: '0.3px' }}>
+                      {isToday ? `TODAY — ${dayLabel}` : dayLabel}
+                    </p>
                   </div>
-                );
-              }
-              const statusCfg = STATUSES_FOR_DROPDOWN.find(s => s.value === order.status) || STATUSES_FOR_DROPDOWN[0];
-              rows.push(
-                <div key={order.id}
-                  className={`grid grid-cols-[70px_1fr_100px] px-3 py-3 border-b border-stone-100 active:bg-stone-50 cursor-pointer ${idx % 2 === 0 ? 'bg-white' : 'bg-stone-50/30'}`}
-                  onClick={() => onSelectOrder(order)}>
-                  {/* Col 1: order# + date */}
-                  <div>
-                    <p className="text-sm font-black text-black leading-tight">#{order.orderNumber?.replace(/^#+/, '') || order.id}</p>
-                    <p className="text-[10px] font-bold text-stone-500 mt-0.5">{order.deliveryDate ? fmtDate(order.deliveryDate) : '—'}</p>
+                  
+                  {/* Cards */}
+                  <div style={{ padding: '12px 16px' }}>
+                    {orders.map(order => {
+                      const name = order.giftReceiverName || order.customer?.name || '—';
+                      const cleanNum = (order.orderNumber || order.id).replace(/^#+/, '');
+                      const isDone = CLOSED_STATUSES.includes(order.status);
+                      const isOutForDelivery = order.status === 'IN_TRANSIT';
+                      const isManualOrder = (order as any).isManual;
+                      
+                      // Driver pill colors
+                      const driverName = order.driverName || 'Unassigned';
+                      let pillBg = '#F3F4F6';
+                      let pillColor = '#6B7280';
+                      if (driverName.toLowerCase().includes('mike')) {
+                        pillBg = '#DBEAFE'; pillColor = '#1E40AF';
+                      } else if (driverName.toLowerCase().includes('katie')) {
+                        pillBg = '#FCE7F3'; pillColor = '#BE185D';
+                      } else if (driverName.toLowerCase().includes('smith')) {
+                        pillBg = '#D1FAE5'; pillColor = '#065F46';
+                      } else if (driverName !== 'Unassigned') {
+                        pillBg = '#E0E7FF'; pillColor = '#3730A3';
+                      }
+                      
+                      return (
+                        <div key={order.id}
+                          onClick={() => onSelectOrder(order)}
+                          style={{ 
+                            background: '#ffffff',
+                            borderRadius: 12,
+                            padding: 16,
+                            marginBottom: 12,
+                            boxShadow: '0 1px 3px rgba(0, 0, 0, 0.08)',
+                            borderLeft: isManualOrder ? '3px solid #D4AF37' : isOutForDelivery ? '3px solid #F59E0B' : '3px solid #E5E7EB',
+                            cursor: 'pointer'
+                          }}>
+                          
+                          {/* Header */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                            <span style={{ color: '#6B7280', fontSize: 12, fontWeight: 500 }}>#{cleanNum}</span>
+                            <span style={{ color: '#D1D5DB' }}>|</span>
+                            <span style={{ color: '#374151', fontSize: 13, fontWeight: 600, textTransform: 'uppercase' }}>{order.address?.city || '—'}</span>
+                            {isOutForDelivery && <span style={{ background: '#FEF3C7', color: '#92400E', fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 9999 }}>OUT</span>}
+                            <div style={{ marginLeft: 'auto' }}>
+                              <span style={{ background: pillBg, color: pillColor, fontSize: 12, fontWeight: 500, padding: '4px 10px', borderRadius: 9999 }}>
+                                {driverName}{isDone ? ' ✓' : ''}
+                              </span>
+                            </div>
+                          </div>
+                          
+                          {/* Body */}
+                          <p style={{ color: '#111827', fontSize: 15, fontWeight: 600, marginBottom: 2 }}>{name}</p>
+                          {order.items?.[0] && (
+                            <p style={{ color: '#9CA3AF', fontSize: 12, marginBottom: 6 }}>{order.items[0].name}</p>
+                          )}
+                          <p style={{ color: '#2563EB', fontSize: 12 }}>
+                            {order.address?.street}{order.address?.unit ? ` #${order.address.unit}` : ''}, {order.address?.city} {order.address?.zip}
+                          </p>
+                        </div>
+                      );
+                    })}
                   </div>
-                  {/* Col 2: recipient name + city + product */}
-                  <div className="min-w-0 px-2">
-                    <div className="flex items-center gap-1 flex-wrap">
-                      <p className="text-sm font-black text-stone-900 leading-tight truncate">{order.giftReceiverName || order.customer?.name}</p>
-                      {renderAttemptBadge(order)}
-                      {(order as any).isManual && <span className="px-1 py-0.5 bg-violet-100 text-violet-700 text-[8px] font-black rounded">Manual</span>}
-                    </div>
-                    <p className="text-xl font-black text-black mt-0.5 leading-tight">{order.address?.city}{order.address?.zip ? ` ${order.address.zip}` : ''}</p>
-                    <p className="text-[10px] text-stone-400 truncate">{order.address?.street}</p>
-                    {order.items?.[0] && <p className="text-[10px] text-stone-500 truncate">{order.items[0].name}</p>}
-                    {order.deliveryInstructions && (
-                      <div className="flex items-center gap-1 mt-0.5 bg-red-50 border border-red-200 rounded px-1.5 py-0.5">
-                        <AlertTriangle size={8} className="text-red-600 shrink-0" />
-                        <p className="text-[9px] font-black text-red-700 truncate">{order.deliveryInstructions}</p>
-                      </div>
-                    )}
-                  </div>
-                  {/* Col 3: driver + status dot (no big badge) */}
-                  <div className="text-right" onClick={e => e.stopPropagation()}>
-                    <p className="text-[10px] font-bold text-stone-500 truncate">{order.driverName || '—'}</p>
-                    <select
-                      value={order.status}
-                      onChange={e => {
-                        const newStatus = e.target.value as DeliveryStatus;
-                        onUpdateOrder(order.id, { status: newStatus });
-                        const isManualOrder = (order as any).isManual;
-                        fetch(isManualOrder ? `/api/manual-orders/${order.id}` : `/api/orders/${order.id}/status`, {
-                          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ status: newStatus })
-                        }).catch(() => {});
-                      }}
-                      style={{ backgroundColor: statusCfg.color, color: 'white' }}
-                      className="mt-1 w-full text-[9px] font-black rounded-lg px-1 py-1 outline-none border-0 appearance-none cursor-pointer"
-                    >
-                      {STATUSES_FOR_DROPDOWN.map(s => (
-                        <option key={s.value} value={s.value} style={{ backgroundColor: s.color, color: 'white' }}>{s.label}</option>
-                      ))}
-                    </select>
-                  </div>
-              </div>
+                </div>
               );
             });
-            return rows;
           })()}
         </div>
       </div>
@@ -2859,13 +2789,13 @@ const ScheduleView: React.FC<{
           <p className="text-[8px] font-black uppercase text-stone-400 leading-tight">Out for Delivery</p>
         </div>
         <div className="py-3 text-center">
-          <p className="text-2xl font-black" style={{ color: '#059669' }}>{doneTodayCount}</p>
+          <p className="text-2xl font-black" style={{ color: '#22C55E' }}>{doneTodayCount}</p>
           <p className="text-[8px] font-black uppercase text-stone-400 leading-tight">Done Today</p>
         </div>
       </div>
 
       {/* ── STICKY HEADER ── */}
-      <div className="sticky top-0 z-10 bg-white border-b border-stone-200 px-4 pt-3 pb-3 space-y-2.5">
+      <div className="sticky top-0 z-10 bg-white px-4 pt-3 pb-3">
 
         {/* Driver filter (admin only) - light beige background */}
         <div className="flex gap-2 items-center">
@@ -3041,37 +2971,54 @@ const ScheduleView: React.FC<{
                     style={{ 
                       background: '#ffffff',
                       borderRadius: 12,
-                      padding: 20,
+                      padding: 16,
                       marginBottom: 12,
-                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
-                      borderLeft: isManualOrder ? '3px solid #D4AF37' : isOutForDelivery ? '3px solid #F59E0B' : '3px solid transparent',
+                      boxShadow: '0 1px 3px rgba(0, 0, 0, 0.08)',
+                      borderLeft: isManualOrder ? '3px solid #D4AF37' : isOutForDelivery ? '3px solid #F59E0B' : '3px solid #E5E7EB',
                     }}>
                     
                     {/* HEADER: #35213 | MIAMI | [Driver Pill] */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                      <span style={{ color: '#374151', fontSize: 13, fontWeight: 500 }}>#{cleanNum}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                      <span style={{ color: '#6B7280', fontSize: 12, fontWeight: 500 }}>#{cleanNum}</span>
                       <span style={{ color: '#D1D5DB' }}>|</span>
-                      <span style={{ color: '#374151', fontSize: 13, fontWeight: 700, textTransform: 'uppercase' }}>{order.address?.city || '—'}</span>
-                      {isOutForDelivery && <span style={{ background: '#FEF3C7', color: '#D97706', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 9999 }}>OUT</span>}
+                      <span style={{ color: '#374151', fontSize: 13, fontWeight: 600, textTransform: 'uppercase' }}>{order.address?.city || '—'}</span>
+                      {isOutForDelivery && <span style={{ background: '#FEF3C7', color: '#92400E', fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 9999 }}>OUT</span>}
                       <div style={{ marginLeft: 'auto' }}>
-                        <span style={{ 
-                          background: isDone ? '#D1FAE5' : '#F3F4F6', 
-                          color: isDone ? '#059669' : '#374151', 
-                          fontSize: 12, 
-                          fontWeight: 500, 
-                          padding: '4px 10px', 
-                          borderRadius: 9999 
-                        }}>
-                          {order.driverName || 'Unassigned'}{isDone ? ' ✓' : ''}
-                        </span>
+                        {(() => {
+                          const driverName = order.driverName || 'Unassigned';
+                          // Soft pastel colors matching Gemini's design
+                          let pillBg = '#F3F4F6'; // gray for unassigned
+                          let pillColor = '#6B7280';
+                          if (driverName.toLowerCase().includes('mike')) {
+                            pillBg = '#DBEAFE'; pillColor = '#1E40AF'; // soft blue
+                          } else if (driverName.toLowerCase().includes('katie')) {
+                            pillBg = '#FCE7F3'; pillColor = '#BE185D'; // soft pink
+                          } else if (driverName.toLowerCase().includes('smith')) {
+                            pillBg = '#D1FAE5'; pillColor = '#065F46'; // soft green
+                          } else if (driverName !== 'Unassigned') {
+                            pillBg = '#E0E7FF'; pillColor = '#3730A3'; // soft purple for others
+                          }
+                          return (
+                            <span style={{ 
+                              background: pillBg, 
+                              color: pillColor, 
+                              fontSize: 12, 
+                              fontWeight: 500, 
+                              padding: '4px 10px', 
+                              borderRadius: 9999 
+                            }}>
+                              {driverName}{isDone ? ' ✓' : ''}
+                            </span>
+                          );
+                        })()}
                       </div>
                     </div>
 
                     {/* BODY */}
                     <div style={{ cursor: 'pointer' }} onClick={() => onSelectOrder(order)}>
-                      <p style={{ color: '#374151', fontSize: 16, fontWeight: 600, marginBottom: 4 }}>{name}</p>
+                      <p style={{ color: '#111827', fontSize: 15, fontWeight: 600, marginBottom: 2 }}>{name}</p>
                       {order.items?.[0] && (
-                        <p style={{ color: '#9CA3AF', fontSize: 13, marginBottom: 8 }}>{order.items[0].name}</p>
+                        <p style={{ color: '#9CA3AF', fontSize: 12, marginBottom: 6 }}>{order.items[0].name}</p>
                       )}
                       
                       {/* ADDRESS — Subtle blue link */}
@@ -3080,14 +3027,14 @@ const ScheduleView: React.FC<{
                         target="_blank"
                         rel="noopener noreferrer"
                         onClick={e => e.stopPropagation()}
-                        style={{ color: '#1D4ED8', fontSize: 13, textDecoration: 'none' }}
+                        style={{ color: '#2563EB', fontSize: 12, textDecoration: 'none' }}
                       >
                         {order.address?.street}{order.address?.unit ? ` #${order.address.unit}` : ''}, {order.address?.city} {order.address?.zip}
                       </a>
                       
                       {/* Delivery instructions — subtle */}
                       {order.deliveryInstructions && (
-                        <p style={{ color: '#9CA3AF', fontSize: 12, marginTop: 8, fontStyle: 'italic' }}>
+                        <p style={{ color: '#9CA3AF', fontSize: 11, marginTop: 6, fontStyle: 'italic' }}>
                           Note: {order.deliveryInstructions}
                         </p>
                       )}
@@ -5236,7 +5183,7 @@ export default function App() {
               {[
                 { label: 'Open', val: activeOrders.length, color: '#374151' },
                 { label: 'Out for Delivery', val: inTransitCount, color: '#D97706' },
-                { label: 'Done Today', val: deliveredTodayCount, color: '#059669' },
+                { label: 'Done Today', val: deliveredTodayCount, color: '#22C55E' },
               ].map(s => (
                 <div key={s.label} className="py-3 text-center border-r border-stone-100 last:border-0">
                   <p className="text-2xl font-black" style={{ color: s.color }}>{s.val}</p>
