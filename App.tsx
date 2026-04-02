@@ -766,6 +766,7 @@ const OrderDetail: React.FC<{
   const [showDeliveredConfirm, setShowDeliveredConfirm] = useState(false);
   const [showRevertConfirm, setShowRevertConfirm] = useState(false);
   const [showSendConfirm, setShowSendConfirm] = useState(false);
+  const [showAdminOverrideConfirm, setShowAdminOverrideConfirm] = useState(false);
   const [showNavChoice, setShowNavChoice] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [pendingDate, setPendingDate] = useState(order.deliveryDate || '');
@@ -791,6 +792,29 @@ const OrderDetail: React.FC<{
     } catch { /* non-fatal — POD already saved */ }
 
     // Show full-screen delivery confirmation, then go back
+    setShowDeliveredConfirm(true);
+    setTimeout(() => { setShowDeliveredConfirm(false); onBack(); }, 2500);
+  };
+
+  const handleAdminOverride = async () => {
+    const now = new Date().toISOString();
+    const isManualOrder = (order as any).isManual;
+    const updates: Partial<Delivery> = { status: DeliveryStatus.DELIVERED, driverNotes: driverNote || 'Admin override — marked delivered manually', completedAt: now, submittedAt: now };
+    onUpdate(order.id, updates);
+
+    // Save POD with admin override flag
+    await fetch('/api/pod', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orderId: order.id, notes: driverNote || 'Admin override — marked delivered manually', completedAt: now, status: 'DELIVERED', driverId: currentUser.id, driverName: currentUser.name, isManual: isManualOrder, adminOverride: true }) });
+
+    // Update order status
+    try {
+      if (isManualOrder) {
+        await fetch(`/api/manual-orders/${order.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'DELIVERED', completedAt: now, driverNotes: driverNote || 'Admin override' }) });
+      } else {
+        await fetch(`/api/orders/${order.id}/status`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'DELIVERED', completedAt: now }) });
+      }
+    } catch { /* non-fatal */ }
+
+    setShowAdminOverrideConfirm(false);
     setShowDeliveredConfirm(true);
     setTimeout(() => { setShowDeliveredConfirm(false); onBack(); }, 2500);
   };
@@ -1332,6 +1356,28 @@ const OrderDetail: React.FC<{
               </button>
               {!photoData && (
                 <p className="text-center text-[11px] font-bold text-stone-400 uppercase tracking-wide">📷 Take a photo first to confirm delivery</p>
+              )}
+
+              {/* ADMIN OVERRIDE — mark as delivered without photo */}
+              {isAdmin && !photoData && !showAdminOverrideConfirm && (
+                <button
+                  onClick={() => setShowAdminOverrideConfirm(true)}
+                  className="w-full py-3 bg-stone-800 text-stone-300 rounded-xl font-bold uppercase text-xs flex items-center justify-center gap-2 active:scale-95 border border-stone-600"
+                >
+                  🔐 Admin Override — Mark Delivered Without Photo
+                </button>
+              )}
+              {isAdmin && showAdminOverrideConfirm && (
+                <div className="bg-amber-50 border-2 border-amber-400 rounded-2xl p-4 space-y-3">
+                  <p className="text-amber-800 font-black text-sm text-center uppercase">⚠ Mark as Delivered Without Proof?</p>
+                  <p className="text-amber-700 text-xs text-center">This will mark the order as delivered without a photo or signature. Use only when delivery was completed but couldn't be logged normally.</p>
+                  <div className="flex gap-2">
+                    <button onClick={() => setShowAdminOverrideConfirm(false)}
+                      className="flex-1 py-3 bg-stone-100 text-stone-600 rounded-xl font-black uppercase text-xs">Cancel</button>
+                    <button onClick={handleAdminOverride}
+                      className="flex-1 py-3 bg-amber-500 text-white rounded-xl font-black uppercase text-xs">Yes, Mark Delivered</button>
+                  </div>
+                </div>
               )}
 
               {/* COULDN'T DELIVER */}
