@@ -1124,88 +1124,62 @@ const OrderDetail: React.FC<{
       </div>
 
       {/* ── SCROLLABLE CONTENT ── */}
-      <div className="flex-1 overflow-y-auto pb-6">
+      <div className="flex-1 overflow-y-auto pb-6" style={{ background: '#FFFFFF' }}>
 
-        {/* ── DELIVERY INSTRUCTIONS — Full-width high-alert banner ── */}
+        {/* ── DELIVERY INSTRUCTIONS — Subtle but visible ── */}
         {order.deliveryInstructions && (
-          <div className="mx-3 mt-3">
-            <style>{`
-              @keyframes alertPulse {
-                0%, 100% { transform: scale(1); }
-                50% { transform: scale(1.1); }
-              }
-              .alert-pulse { animation: alertPulse 2s ease-in-out infinite; }
-            `}</style>
-            <div className="bg-[#FFBF00] rounded-2xl px-4 py-4 flex gap-4 items-start shadow-lg">
-              <div className="alert-pulse shrink-0 mt-1">
-                <div className="w-10 h-10 rounded-full bg-black/10 flex items-center justify-center">
-                  <AlertTriangle size={24} className="text-black" />
-                </div>
-              </div>
-              <div className="flex-1">
-                <p className="text-[10px] font-black uppercase text-black/60 tracking-widest mb-1">⚠️ STOP & READ</p>
-                <p className="font-black text-black text-lg leading-snug">{order.deliveryInstructions}</p>
-              </div>
-            </div>
+          <div style={{ background: '#FEF3C7', padding: '12px 16px', borderLeft: '3px solid #F59E0B' }}>
+            <p style={{ fontSize: 10, fontWeight: 700, color: '#92400E', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>Delivery Instructions</p>
+            <p style={{ fontSize: 14, fontWeight: 600, color: '#78350F' }}>{order.deliveryInstructions}</p>
           </div>
         )}
 
-        {/* ── ZONE 1: ORDER INFO CARD — High contrast, driver-proof ── */}
-        <div className="mx-3 mt-3 space-y-3">
+        {/* ── ORDER INFO CARD — Matching orders list style ── */}
+        <div style={{ padding: '12px 16px' }}>
           
-          {/* RECIPIENT NAME — Hero section */}
-          <div className="bg-white rounded-2xl border border-stone-200 px-4 pt-4 pb-4">
-            <p className="text-[10px] font-black uppercase text-stone-400 tracking-widest mb-1">Delivering To</p>
-            <p className="text-3xl font-black text-stone-900 leading-tight">{recipientName}</p>
-          </div>
-
-          {/* ADDRESS + GET DIRECTIONS — Large action button */}
-          <div className="bg-white rounded-2xl border border-stone-200 overflow-hidden">
-            <div className="px-4 pt-4 pb-3">
-              <p className="text-[10px] font-black uppercase text-stone-400 tracking-widest mb-2">Address</p>
-              <p className="text-2xl font-black text-stone-900 leading-snug">{order.address.street}{order.address.unit ? ` #${order.address.unit}` : ''}</p>
-              {order.address.company && <p className="text-base font-bold text-blue-700 mt-1">📍 {order.address.company}</p>}
-              <p className="text-2xl font-black text-black mt-1">{order.address.city}, {order.address.zip}</p>
-            </div>
+          {/* RECIPIENT + ADDRESS CARD */}
+          <div style={{ background: '#ffffff', borderRadius: 12, padding: 16, marginBottom: 12, boxShadow: '0 1px 3px rgba(0, 0, 0, 0.08)', borderLeft: '3px solid #E5E7EB' }}>
+            <p style={{ fontSize: 10, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>Delivering To</p>
+            <p style={{ fontSize: 22, fontWeight: 700, color: '#111827', marginBottom: 16 }}>{recipientName}</p>
+            
+            <p style={{ fontSize: 10, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>Address</p>
             <button 
               onClick={() => openNavChoice([order.address?.street, order.address?.unit, order.address?.city, 'FL', order.address?.zip].filter(Boolean).join(' '))}
-              className="w-full flex items-center justify-center gap-3 py-4 bg-blue-600 text-white font-black text-base uppercase tracking-wide active:bg-blue-700 transition-colors"
+              style={{ display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
             >
-              <Navigation size={20} /> Get Directions
+              <p style={{ fontSize: 15, fontWeight: 600, color: '#111827', marginBottom: 2 }}>{order.address.street}{order.address.unit ? ` #${order.address.unit}` : ''}</p>
+              {order.address.company && <p style={{ fontSize: 13, fontWeight: 500, color: '#6B7280', marginBottom: 2 }}>📍 {order.address.company}</p>}
+              <p style={{ fontSize: 13, color: '#2563EB' }}>{order.address.city}, {order.address.zip}</p>
+              <p style={{ fontSize: 11, color: '#9CA3AF', marginTop: 6 }}>Tap to open in Maps →</p>
             </button>
           </div>
 
-          {/* ITEMS — Parcels count grouped with item name */}
+          {/* ITEMS CARD */}
           {order.items?.length > 0 && (
-            <div className="bg-white rounded-2xl border border-stone-200 px-4 py-4">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-[10px] font-black uppercase text-stone-400 tracking-widest">Items</span>
-              </div>
+            <div style={{ background: '#ffffff', borderRadius: 12, padding: 16, marginBottom: 12, boxShadow: '0 1px 3px rgba(0, 0, 0, 0.08)', borderLeft: '3px solid #E5E7EB' }}>
+              <p style={{ fontSize: 10, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 12 }}>Items</p>
+              
               {order.items.map((item, i) => (
-                <div key={i} className="py-2 border-b border-stone-100 last:border-0">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="bg-stone-900 text-white text-[11px] font-black px-2 py-0.5 rounded-full">×{item.quantity}</span>
-                        <p className="text-base font-black text-stone-900 leading-snug">{item.name}</p>
-                      </div>
-                    </div>
+                <div key={i} style={{ paddingBottom: 12, marginBottom: 12, borderBottom: i < order.items.length - 1 ? '1px solid #F3F4F6' : 'none' }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                    <span style={{ background: '#F3F4F6', color: '#374151', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 9999 }}>×{item.quantity}</span>
+                    <p style={{ fontSize: 15, fontWeight: 600, color: '#111827', flex: 1 }}>{item.name}</p>
                   </div>
                   {item.variantTitle && (
-                    <p className="text-xs font-bold text-stone-600 mt-1 ml-8">{item.variantTitle}</p>
+                    <p style={{ fontSize: 12, color: '#6B7280', marginTop: 4, marginLeft: 40 }}>{item.variantTitle}</p>
                   )}
                   {item.properties && item.properties.length > 0 && (
-                    <div className="mt-2 ml-8 space-y-0.5">
+                    <div style={{ marginTop: 8, marginLeft: 40 }}>
                       {item.properties.filter((prop: any) => {
                         const n = prop.name?.toLowerCase() || '';
                         return !n.includes('delivery fee') && !n.includes('_') && prop.value && prop.value !== 'null';
                       }).map((prop: any, pi: number) => {
                         const isSpecialInstruction = prop.name?.toLowerCase().includes('special instruction') || prop.name?.toLowerCase().includes('special_instruction');
                         return isSpecialInstruction ? null : (
-                          <div key={pi} className="flex items-baseline gap-1.5">
-                            <span className="text-[10px] font-black uppercase text-stone-400 tracking-wide shrink-0">{prop.name}:</span>
-                            <span className="text-xs font-bold text-stone-700">{prop.value}</span>
-                          </div>
+                          <p key={pi} style={{ fontSize: 12, color: '#6B7280', marginBottom: 2 }}>
+                            <span style={{ fontWeight: 600, textTransform: 'uppercase', fontSize: 10, color: '#9CA3AF' }}>{prop.name}: </span>
+                            {prop.value}
+                          </p>
                         );
                       })}
                     </div>
@@ -1213,81 +1187,74 @@ const OrderDetail: React.FC<{
                 </div>
               ))}
               
-              {/* Special Instructions — Full-width amber alert inside items card */}
+              {/* Special Instructions — inline, not a loud banner */}
               {order.items.some((item: any) => item.properties?.some((prop: any) => {
                 const n = prop.name?.toLowerCase() || '';
                 return (n.includes('special instruction') || n.includes('special_instruction')) && prop.value && prop.value !== 'null';
               })) && (
-                <div className="mt-3 -mx-4 px-4 py-4 bg-[#FFBF00]">
-                  <div className="flex gap-3 items-start">
-                    <div className="alert-pulse shrink-0">
-                      <AlertTriangle size={22} className="text-black" />
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-black uppercase text-black/70 tracking-widest mb-1">⚠️ SPECIAL INSTRUCTIONS</p>
-                      {order.items.map((item: any, i: number) => 
-                        item.properties?.filter((prop: any) => {
-                          const n = prop.name?.toLowerCase() || '';
-                          return (n.includes('special instruction') || n.includes('special_instruction')) && prop.value && prop.value !== 'null';
-                        }).map((prop: any, pi: number) => (
-                          <p key={`${i}-${pi}`} className="font-black text-black text-base leading-snug">{prop.value}</p>
-                        ))
-                      )}
-                    </div>
-                  </div>
+                <div style={{ background: '#FEF3C7', borderRadius: 8, padding: 12, marginTop: 8, borderLeft: '3px solid #F59E0B' }}>
+                  <p style={{ fontSize: 10, fontWeight: 700, color: '#92400E', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>⚠ Special Instructions</p>
+                  {order.items.map((item: any, i: number) => 
+                    item.properties?.filter((prop: any) => {
+                      const n = prop.name?.toLowerCase() || '';
+                      return (n.includes('special instruction') || n.includes('special_instruction')) && prop.value && prop.value !== 'null';
+                    }).map((prop: any, pi: number) => (
+                      <p key={`${i}-${pi}`} style={{ fontSize: 14, fontWeight: 600, color: '#78350F' }}>{prop.value}</p>
+                    ))
+                  )}
                 </div>
               )}
 
               {/* Totals row */}
-              <div className="flex items-center justify-between pt-3 mt-3 border-t border-stone-100">
-                <div>
-                  <span className="text-[10px] font-black uppercase text-stone-400 tracking-wide">Total:</span>
-                  <span className="text-sm font-black text-stone-800 ml-1.5">${order.items.reduce((sum: number, it: any) => sum + ((it.price || 0) * (it.quantity || 1)), 0).toFixed(2) || order.orderTotal?.toFixed(2) || '—'}</span>
-                </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 12, marginTop: 12, borderTop: '1px solid #F3F4F6' }}>
+                <p style={{ fontSize: 12, color: '#6B7280' }}>
+                  <span style={{ fontWeight: 600, textTransform: 'uppercase', fontSize: 10, color: '#9CA3AF' }}>Total: </span>
+                  <span style={{ fontWeight: 700, color: '#374151' }}>${order.items.reduce((sum: number, it: any) => sum + ((it.price || 0) * (it.quantity || 1)), 0).toFixed(2) || order.orderTotal?.toFixed(2) || '—'}</span>
+                </p>
                 {(() => {
                   const fee = order.deliveryFee || DELIVERY_FEES[order.address?.zip || ''] || 0;
                   return fee > 0 ? (
-                    <div>
-                      <span className="text-[10px] font-black uppercase text-stone-400 tracking-wide">Delivery Fee:</span>
-                      <span className="text-sm font-black text-stone-800 ml-1.5">${fee.toFixed(2)}</span>
-                    </div>
+                    <p style={{ fontSize: 12, color: '#6B7280' }}>
+                      <span style={{ fontWeight: 600, textTransform: 'uppercase', fontSize: 10, color: '#9CA3AF' }}>Delivery Fee: </span>
+                      <span style={{ fontWeight: 700, color: '#374151' }}>${fee.toFixed(2)}</span>
+                    </p>
                   ) : null;
                 })()}
               </div>
             </div>
           )}
 
-          {/* GIFT FROM — Sender info */}
+          {/* GIFT FROM CARD */}
           {(order.giftSenderName || order.giftSenderPhone) && (
-            <div className="bg-white rounded-2xl border border-stone-200 px-4 py-4">
-              <p className="text-[10px] font-black uppercase text-stone-400 tracking-widest mb-1">Gift From</p>
-              <p className="text-lg font-black text-stone-900">{order.giftSenderName || '—'}</p>
+            <div style={{ background: '#ffffff', borderRadius: 12, padding: 16, marginBottom: 12, boxShadow: '0 1px 3px rgba(0, 0, 0, 0.08)', borderLeft: '3px solid #E5E7EB' }}>
+              <p style={{ fontSize: 10, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>Gift From</p>
+              <p style={{ fontSize: 15, fontWeight: 600, color: '#111827' }}>{order.giftSenderName || '—'}</p>
               {order.giftSenderPhone && (
-                <p className="text-sm font-bold text-stone-500 mt-0.5">{order.giftSenderPhone}</p>
+                <p style={{ fontSize: 13, color: '#6B7280', marginTop: 2 }}>{order.giftSenderPhone}</p>
               )}
             </div>
           )}
 
-          {/* GIFT MESSAGE — Refined pastel pink with clear header */}
+          {/* GIFT MESSAGE CARD */}
           {order.giftMessage && (
-            <div className="bg-pink-50 rounded-2xl border border-pink-200 px-4 py-4">
-              <p className="text-[11px] font-black uppercase text-pink-600 tracking-widest mb-2">🎁 GIFT MESSAGE</p>
-              <p className="text-base font-bold text-stone-800 leading-relaxed italic">"{order.giftMessage}"</p>
+            <div style={{ background: '#FDF2F8', borderRadius: 12, padding: 16, marginBottom: 12, boxShadow: '0 1px 3px rgba(0, 0, 0, 0.08)', borderLeft: '3px solid #EC4899' }}>
+              <p style={{ fontSize: 10, fontWeight: 700, color: '#BE185D', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>🎁 Gift Message</p>
+              <p style={{ fontSize: 14, fontWeight: 500, color: '#831843', fontStyle: 'italic', lineHeight: 1.5 }}>"{order.giftMessage}"</p>
             </div>
           )}
 
-          {/* ORDER TOTAL + DATE */}
-          <div className="bg-white rounded-2xl border border-stone-200 px-4 py-3 flex items-center justify-between">
+          {/* ORDER TOTAL CARD */}
+          <div style={{ background: '#ffffff', borderRadius: 12, padding: 16, marginBottom: 12, boxShadow: '0 1px 3px rgba(0, 0, 0, 0.08)', borderLeft: '3px solid #E5E7EB', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             {order.orderTotal != null && (
               <div>
-                <p className="text-[10px] font-black uppercase text-stone-400 tracking-widest mb-0.5">Order Total</p>
-                <p className="text-xl font-black text-stone-900">${order.orderTotal.toFixed(2)}</p>
+                <p style={{ fontSize: 10, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 2 }}>Order Total</p>
+                <p style={{ fontSize: 18, fontWeight: 700, color: '#111827' }}>${order.orderTotal.toFixed(2)}</p>
               </div>
             )}
             {order.createdAt && (
-              <div className="text-right">
-                <p className="text-[10px] font-black uppercase text-stone-400 tracking-widest mb-0.5">Order Date</p>
-                <p className="text-sm font-black text-stone-700">
+              <div style={{ textAlign: 'right' }}>
+                <p style={{ fontSize: 10, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 2 }}>Order Date</p>
+                <p style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>
                   {new Date(order.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                 </p>
               </div>
@@ -1296,53 +1263,48 @@ const OrderDetail: React.FC<{
 
         </div>
 
-        {/* ── ZONE 2: CONTACT — Clean rounded action tile ── */}
+        {/* ── ZONE 2: CONTACT — Matching card style ── */}
         {!isCompleted && (
-          <div className="mx-3 mt-4">
-            <button
+          <div style={{ padding: '0 16px' }}>
+            <div 
               onClick={() => setShowContactSection(s => !s)}
-              className="w-full flex items-center justify-between px-4 py-4 bg-[#F9FAFB] rounded-2xl border border-stone-200 active:bg-stone-100 transition-colors"
+              style={{ background: '#ffffff', borderRadius: 12, padding: 16, marginBottom: 12, boxShadow: '0 1px 3px rgba(0, 0, 0, 0.08)', borderLeft: '3px solid #E5E7EB', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
             >
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-stone-200 flex items-center justify-center">
-                  <Phone size={20} className="text-stone-600" />
-                </div>
-                <span className="text-base font-black text-stone-700">Need to call someone?</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <Phone size={18} className="text-stone-400" />
+                <span style={{ fontSize: 14, fontWeight: 600, color: '#374151' }}>Need to call someone?</span>
               </div>
-              <ChevronRight size={20} className={`text-stone-400 transition-transform ${showContactSection ? 'rotate-90' : ''}`} />
-            </button>
+              <ChevronRight size={18} className={`text-stone-400 transition-transform ${showContactSection ? 'rotate-90' : ''}`} />
+            </div>
 
             {showContactSection && (
-              <div className="bg-white rounded-2xl border border-t-0 border-stone-200 overflow-hidden mt-[-8px] pt-2">
-                {/* Try Recipient First */}
-                <div className="px-4 py-3 border-b border-stone-100">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="w-6 h-6 rounded-full bg-green-500 text-white text-[11px] font-black flex items-center justify-center shrink-0">1</span>
-                    <span className="text-[10px] font-black uppercase text-stone-500 tracking-widest">Try Recipient First</span>
+              <div style={{ background: '#ffffff', borderRadius: 12, padding: 16, marginTop: -8, marginBottom: 12, boxShadow: '0 1px 3px rgba(0, 0, 0, 0.08)', borderLeft: '3px solid #E5E7EB' }}>
+                {/* Recipient */}
+                <div style={{ marginBottom: 16, paddingBottom: 16, borderBottom: '1px solid #F3F4F6' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    <span style={{ background: '#22C55E', color: 'white', fontSize: 11, fontWeight: 700, width: 20, height: 20, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>1</span>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Try Recipient First</span>
                   </div>
-                  <p className="text-lg font-black text-stone-900 mb-2">{recipientName}</p>
+                  <p style={{ fontSize: 15, fontWeight: 600, color: '#111827', marginBottom: 8 }}>{recipientName}</p>
                   {recipientPhone ? (
                     <ContactCallReveal phone={recipientPhone} label="Receiver" showTemplates={true} driverName={currentUser.name} driverPhone={currentUser.phone || ''} address={[order.address?.street, order.address?.unit].filter(Boolean).join(', ')} />
                   ) : (
-                    <div className="flex items-center gap-2 bg-amber-50 border border-amber-300 rounded-xl px-3 py-2.5">
-                      <span className="text-lg">⚠️</span>
-                      <p className="text-xs font-black text-amber-800">No number — try Gift Sender below</p>
-                    </div>
+                    <p style={{ fontSize: 12, color: '#92400E', background: '#FEF3C7', padding: '8px 12px', borderRadius: 8 }}>No number — try Gift Sender below</p>
                   )}
                 </div>
 
                 {/* Sender Backup */}
                 {(senderName || senderPhone) && (
-                  <div className="px-4 py-3 bg-stone-50">
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="w-6 h-6 rounded-full bg-stone-300 text-stone-600 text-[11px] font-black flex items-center justify-center shrink-0">2</span>
-                      <span className="text-[10px] font-black uppercase text-stone-500 tracking-widest">Backup — Gift Sender</span>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                      <span style={{ background: '#D1D5DB', color: '#374151', fontSize: 11, fontWeight: 700, width: 20, height: 20, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>2</span>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Backup — Gift Sender</span>
                     </div>
-                    <p className="text-lg font-black text-stone-900 mb-2">{senderName}</p>
+                    <p style={{ fontSize: 15, fontWeight: 600, color: '#111827', marginBottom: 8 }}>{senderName}</p>
                     {senderPhone ? (
                       <ContactCallReveal phone={senderPhone} label="Gift Sender" driverName={currentUser.name} driverPhone={currentUser.phone || ''} />
                     ) : (
-                      <p className="text-xs text-stone-400 italic">No phone number on file</p>
+                      <p style={{ fontSize: 12, color: '#9CA3AF', fontStyle: 'italic' }}>No phone number on file</p>
                     )}
                   </div>
                 )}
@@ -1351,107 +1313,107 @@ const OrderDetail: React.FC<{
           </div>
         )}
 
-        {/* ── ZONE 3: PROOF OF DELIVERY — Tap-First Tile Interface ── */}
+        {/* ── ZONE 3: PROOF OF DELIVERY — Matching card style ── */}
         {!isCompleted && (
-          <div className="mx-3 mt-8 space-y-4">
+          <div style={{ padding: '0 16px', marginTop: 16 }}>
             <input type="file" accept="image/*" capture="environment" ref={fileRef} onChange={handlePhoto} className="hidden" />
 
-            {/* POD ACTION TILES — Side by side */}
-            <div className="flex gap-3">
-              {/* PHOTO TILE */}
-              <button
-                onClick={() => fileRef.current?.click()}
-                className="flex-1 bg-[#F9FAFB] rounded-2xl border border-stone-200 overflow-hidden active:scale-[0.98] transition-all"
-                style={{ minHeight: '140px' }}
-              >
-                {photoData ? (
-                  <div className="relative w-full h-full">
-                    <img src={photoData} className="w-full h-full object-cover" alt="Delivery Photo" style={{ minHeight: '140px' }} />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-                    <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between">
-                      <span className="text-white text-[10px] font-black uppercase bg-green-500 px-2 py-0.5 rounded-full">✓ Photo</span>
-                      <span className="text-white/80 text-[9px] font-bold">Tap to retake</span>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center h-full p-4 gap-3">
-                    <div className="w-14 h-14 rounded-full bg-stone-900 flex items-center justify-center">
-                      <Camera size={28} className="text-white" />
-                    </div>
-                    <p className="text-stone-700 font-black text-sm text-center">Snap Photo</p>
-                  </div>
-                )}
-              </button>
+            {/* POD Card */}
+            <div style={{ background: '#ffffff', borderRadius: 12, padding: 16, marginBottom: 12, boxShadow: '0 1px 3px rgba(0, 0, 0, 0.08)', borderLeft: '3px solid #E5E7EB' }}>
+              <p style={{ fontSize: 10, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 16 }}>Proof of Delivery</p>
+              
+              {/* Photo + Signature tiles */}
+              <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
+                {/* Photo tile */}
+                <button
+                  onClick={() => fileRef.current?.click()}
+                  style={{ flex: 1, background: '#F9FAFB', borderRadius: 12, border: '1px solid #E5E7EB', minHeight: 120, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', overflow: 'hidden', position: 'relative' }}
+                >
+                  {photoData ? (
+                    <>
+                      <img src={photoData} style={{ width: '100%', height: '100%', objectFit: 'cover', position: 'absolute', inset: 0 }} alt="Photo" />
+                      <div style={{ position: 'absolute', bottom: 8, left: 8, background: '#22C55E', color: 'white', fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 9999 }}>✓ Photo</div>
+                    </>
+                  ) : (
+                    <>
+                      <Camera size={24} style={{ color: '#6B7280', marginBottom: 8 }} />
+                      <span style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>Take Photo</span>
+                    </>
+                  )}
+                </button>
 
-              {/* SIGNATURE TILE */}
-              <button
-                onClick={() => setIsSigning(true)}
-                className="flex-1 bg-[#F9FAFB] rounded-2xl border border-stone-200 overflow-hidden active:scale-[0.98] transition-all"
-                style={{ minHeight: '140px' }}
-              >
-                {sigData ? (
-                  <div className="relative w-full h-full p-3 flex flex-col">
-                    <div className="flex-1 flex items-center justify-center">
-                      <img src={sigData} className="max-w-full max-h-[90px] object-contain" alt="Signature" />
-                    </div>
-                    <div className="flex items-center justify-between mt-2">
-                      <span className="text-[10px] font-black uppercase text-green-600 bg-green-100 px-2 py-0.5 rounded-full">✓ Signed</span>
-                      <span className="text-stone-400 text-[9px] font-bold">Tap to redo</span>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center h-full p-4 gap-3">
-                    <div className="w-14 h-14 rounded-full bg-stone-200 flex items-center justify-center">
-                      <PenTool size={26} className="text-stone-600" />
-                    </div>
-                    <p className="text-stone-600 font-black text-sm text-center">Collect Signature</p>
-                  </div>
-                )}
-              </button>
+                {/* Signature tile */}
+                <button
+                  onClick={() => setIsSigning(true)}
+                  style={{ flex: 1, background: '#F9FAFB', borderRadius: 12, border: '1px solid #E5E7EB', minHeight: 120, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: 12 }}
+                >
+                  {sigData ? (
+                    <>
+                      <img src={sigData} style={{ maxWidth: '100%', maxHeight: 70, objectFit: 'contain', marginBottom: 8 }} alt="Signature" />
+                      <span style={{ background: '#DCFCE7', color: '#166534', fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 9999 }}>✓ Signed</span>
+                    </>
+                  ) : (
+                    <>
+                      <PenTool size={24} style={{ color: '#9CA3AF', marginBottom: 8 }} />
+                      <span style={{ fontSize: 13, fontWeight: 600, color: '#6B7280' }}>Signature</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {/* Driver Note */}
+              <textarea
+                value={driverNote}
+                onChange={e => setDriverNote(e.target.value)}
+                placeholder="Add a note (e.g. left at door, with concierge)"
+                style={{ width: '100%', background: '#F9FAFB', border: '1px solid #E5E7EB', borderRadius: 8, padding: '12px', fontSize: 14, resize: 'none', minHeight: 60, outline: 'none' }}
+              />
             </div>
 
-            {/* Driver Note */}
-            <textarea
-              value={driverNote}
-              onChange={e => setDriverNote(e.target.value)}
-              placeholder="Add a note (e.g. left at door, with concierge)"
-              className="w-full bg-white border border-stone-200 rounded-2xl px-4 py-3 text-sm outline-none resize-none focus:border-stone-400"
-              style={{ minHeight: '64px' }}
-            />
-
-            {/* PRIMARY ACTION — Mark Delivered */}
+            {/* Action buttons */}
             <button
               onClick={photoData ? handleComplete : undefined}
               disabled={!photoData}
-              className={'w-full py-5 rounded-2xl font-black uppercase text-lg tracking-wide flex items-center justify-center gap-3 shadow-lg transition-all ' + (photoData ? 'bg-green-500 text-white active:scale-[0.98]' : 'bg-stone-200 text-stone-400 cursor-not-allowed')}
+              style={{ 
+                width: '100%', 
+                padding: '16px', 
+                borderRadius: 12, 
+                border: 'none',
+                fontSize: 15, 
+                fontWeight: 700, 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center', 
+                gap: 8,
+                cursor: photoData ? 'pointer' : 'not-allowed',
+                marginBottom: 8,
+                background: photoData ? '#22C55E' : '#E5E7EB',
+                color: photoData ? 'white' : '#9CA3AF'
+              }}
             >
-              <CheckCircle2 size={26} /> Mark Delivered
+              <CheckCircle2 size={20} /> Mark Delivered
             </button>
 
-            {/* Secondary: Couldn't Deliver */}
             <button
               onClick={() => setShowFailFlow(true)}
-              className="w-full py-3.5 border-2 border-stone-200 text-stone-500 rounded-2xl font-bold uppercase text-sm flex items-center justify-center gap-2 active:scale-[0.98]"
+              style={{ width: '100%', padding: '12px', borderRadius: 12, background: 'transparent', border: '1px solid #E5E7EB', fontSize: 13, fontWeight: 600, color: '#6B7280', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, cursor: 'pointer' }}
             >
               <XCircle size={16} /> Couldn't Deliver
             </button>
 
-            {/* Admin-only override — moved to small footer */}
+            {/* Admin override */}
             {isAdmin && !photoData && (
-              <div className="pt-2 border-t border-stone-100">
+              <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #F3F4F6' }}>
                 {!showAdminOverrideConfirm ? (
-                  <button
-                    onClick={() => setShowAdminOverrideConfirm(true)}
-                    className="w-full py-2 text-stone-400 text-xs font-bold flex items-center justify-center gap-1 active:text-stone-600"
-                  >
+                  <button onClick={() => setShowAdminOverrideConfirm(true)} style={{ width: '100%', padding: 8, background: 'transparent', border: 'none', fontSize: 11, color: '#9CA3AF', cursor: 'pointer' }}>
                     🔐 Admin: Mark without proof
                   </button>
                 ) : (
-                  <div className="bg-amber-50 border border-amber-300 rounded-xl p-3 space-y-2">
-                    <p className="text-amber-800 font-black text-xs text-center uppercase">Mark Delivered Without Proof?</p>
-                    <div className="flex gap-2">
-                      <button onClick={() => setShowAdminOverrideConfirm(false)} className="flex-1 py-2 bg-stone-100 text-stone-600 rounded-lg font-bold text-xs">Cancel</button>
-                      <button onClick={handleAdminOverride} className="flex-1 py-2 bg-amber-500 text-white rounded-lg font-bold text-xs">Yes</button>
+                  <div style={{ background: '#FEF3C7', borderRadius: 8, padding: 12 }}>
+                    <p style={{ fontSize: 12, fontWeight: 700, color: '#92400E', textAlign: 'center', marginBottom: 8 }}>Mark Delivered Without Proof?</p>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button onClick={() => setShowAdminOverrideConfirm(false)} style={{ flex: 1, padding: 8, borderRadius: 8, background: '#F3F4F6', border: 'none', fontSize: 12, fontWeight: 600, color: '#374151', cursor: 'pointer' }}>Cancel</button>
+                      <button onClick={handleAdminOverride} style={{ flex: 1, padding: 8, borderRadius: 8, background: '#F59E0B', border: 'none', fontSize: 12, fontWeight: 600, color: 'white', cursor: 'pointer' }}>Yes</button>
                     </div>
                   </div>
                 )}
@@ -1460,132 +1422,104 @@ const OrderDetail: React.FC<{
           </div>
         )}
 
-        {/* ── COMPLETED: POD summary — Tile Layout ── */}
+        {/* ── COMPLETED: POD summary — Matching card style ── */}
         {isCompleted && (() => {
-          // Support both old field name (photo) and new (confirmationPhoto)
           const podPhoto = order.confirmationPhoto || (order as any).photo || null;
           const podSig = order.confirmationSignature || (order as any).signature || null;
           const podNotes = order.driverNotes || (order as any).notes || null;
           return (
-          <div className="mx-3 mt-6 mb-4 space-y-4">
-            {/* Status + timestamp card */}
-            <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-2xl border border-green-200 px-4 py-4">
-              <div className="flex items-center justify-between mb-2">
+          <div style={{ padding: '16px' }}>
+            {/* Status card */}
+            <div style={{ background: '#ffffff', borderRadius: 12, padding: 16, marginBottom: 12, boxShadow: '0 1px 3px rgba(0, 0, 0, 0.08)', borderLeft: '3px solid #22C55E' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                 <StatusBadge status={order.status} />
                 {order.completedAt && (
-                  <span className="text-[10px] font-bold text-stone-500">
+                  <span style={{ fontSize: 11, color: '#6B7280' }}>
                     {new Date(order.completedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} at {new Date(order.completedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
                   </span>
                 )}
               </div>
-              {podNotes && <p className="text-sm italic text-stone-600 mt-2 bg-white/50 rounded-lg px-3 py-2">"{podNotes}"</p>}
+              {podNotes && <p style={{ fontSize: 13, fontStyle: 'italic', color: '#374151', background: '#F9FAFB', padding: '8px 12px', borderRadius: 8, marginTop: 8 }}>"{podNotes}"</p>}
+              {order.driverId && <p style={{ fontSize: 11, color: '#9CA3AF', marginTop: 8 }}>Delivered by {order.driverName || order.driverId}</p>}
             </div>
 
-            {/* POD Tiles — Side by side */}
-            <div className="flex gap-3">
-              {/* Photo Tile */}
-              <div className="flex-1 bg-[#F9FAFB] rounded-2xl border border-stone-200 overflow-hidden" style={{ minHeight: '120px' }}>
+            {/* Photo + Signature tiles */}
+            <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
+              <div style={{ flex: 1, background: '#F9FAFB', borderRadius: 12, border: '1px solid #E5E7EB', minHeight: 100, overflow: 'hidden', position: 'relative' }}>
                 {podPhoto ? (
-                  <div className="relative w-full h-full">
-                    <img src={podPhoto} className="w-full h-full object-cover" alt="Delivery Photo" style={{ minHeight: '120px' }} />
-                    <div className="absolute bottom-2 left-2">
-                      <span className="text-white text-[9px] font-black uppercase bg-green-500/90 px-2 py-0.5 rounded-full">✓ Photo</span>
-                    </div>
-                  </div>
+                  <>
+                    <img src={podPhoto} style={{ width: '100%', height: '100%', objectFit: 'cover', minHeight: 100 }} alt="Photo" />
+                    <div style={{ position: 'absolute', bottom: 6, left: 6, background: '#22C55E', color: 'white', fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 9999 }}>✓ Photo</div>
+                  </>
                 ) : (
-                  <div className="flex flex-col items-center justify-center h-full p-4 gap-2">
-                    <Camera size={24} className="text-stone-300" />
-                    <p className="text-stone-400 text-xs font-bold text-center">No photo</p>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 100 }}>
+                    <Camera size={20} style={{ color: '#D1D5DB', marginBottom: 4 }} />
+                    <span style={{ fontSize: 11, color: '#9CA3AF' }}>No photo</span>
                   </div>
                 )}
               </div>
-
-              {/* Signature Tile */}
-              <div className="flex-1 bg-[#F9FAFB] rounded-2xl border border-stone-200 overflow-hidden p-3 flex flex-col" style={{ minHeight: '120px' }}>
+              <div style={{ flex: 1, background: '#F9FAFB', borderRadius: 12, border: '1px solid #E5E7EB', minHeight: 100, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 12 }}>
                 {podSig ? (
                   <>
-                    <div className="flex-1 flex items-center justify-center">
-                      <img src={podSig} className="max-w-full max-h-[70px] object-contain" alt="Signature" />
-                    </div>
-                    <span className="text-[9px] font-black uppercase text-green-600 bg-green-100 px-2 py-0.5 rounded-full self-start">✓ Signed</span>
+                    <img src={podSig} style={{ maxWidth: '100%', maxHeight: 60, objectFit: 'contain', marginBottom: 8 }} alt="Signature" />
+                    <span style={{ background: '#DCFCE7', color: '#166534', fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 9999 }}>✓ Signed</span>
                   </>
                 ) : (
-                  <div className="flex flex-col items-center justify-center h-full gap-2">
-                    <PenTool size={24} className="text-stone-300" />
-                    <p className="text-stone-400 text-xs font-bold text-center">No signature</p>
-                  </div>
+                  <>
+                    <PenTool size={20} style={{ color: '#D1D5DB', marginBottom: 4 }} />
+                    <span style={{ fontSize: 11, color: '#9CA3AF' }}>No signature</span>
+                  </>
                 )}
               </div>
             </div>
 
             {/* Notification status */}
             {order.successNotificationSent && (
-              <div className="flex items-center justify-center gap-2 py-2 bg-green-50 rounded-xl border border-green-100">
-                <span className="text-green-500">✓</span>
-                <p className="text-xs font-bold text-green-700">Delivery confirmation sent to customer</p>
-              </div>
+              <p style={{ fontSize: 12, color: '#166534', textAlign: 'center', marginBottom: 12 }}>✓ Delivery confirmation sent</p>
             )}
             {order.failureNotificationSent && (
-              <div className="flex items-center justify-center gap-2 py-2 bg-amber-50 rounded-xl border border-amber-100">
-                <span className="text-amber-500">✓</span>
-                <p className="text-xs font-bold text-amber-700">Customer notified of delay</p>
-              </div>
+              <p style={{ fontSize: 12, color: '#92400E', textAlign: 'center', marginBottom: 12 }}>✓ Customer notified of delay</p>
             )}
 
-            {/* Admin actions — Small footer section */}
+            {/* Admin actions */}
             {isAdmin && (
-              <div className="pt-3 border-t border-stone-100 space-y-2">
-                <p className="text-[9px] font-bold uppercase text-stone-400 tracking-wider text-center">Admin Actions</p>
-                
-                {/* Undo button */}
+              <div style={{ paddingTop: 12, borderTop: '1px solid #F3F4F6' }}>
                 {order.status === DeliveryStatus.DELIVERED && !order.successNotificationSent && (
                   !showRevertConfirm ? (
-                    <button onClick={() => setShowRevertConfirm(true)}
-                      className="w-full py-2 text-stone-400 text-xs font-bold flex items-center justify-center gap-1 active:text-stone-600">
+                    <button onClick={() => setShowRevertConfirm(true)} style={{ width: '100%', padding: 8, background: 'transparent', border: 'none', fontSize: 11, color: '#9CA3AF', cursor: 'pointer', marginBottom: 4 }}>
                       ↩ Undo — Marked by mistake
                     </button>
                   ) : (
-                    <div className="bg-red-50 border border-red-200 rounded-xl p-3 space-y-2">
-                      <p className="text-red-700 font-bold text-xs text-center">Revert to assigned?</p>
-                      <div className="flex gap-2">
-                        <button onClick={() => setShowRevertConfirm(false)} className="flex-1 py-2 bg-stone-100 text-stone-600 rounded-lg font-bold text-xs">No</button>
-                        <button onClick={handleRevert} className="flex-1 py-2 bg-red-500 text-white rounded-lg font-bold text-xs">Yes</button>
+                    <div style={{ background: '#FEF2F2', borderRadius: 8, padding: 12, marginBottom: 8 }}>
+                      <p style={{ fontSize: 12, fontWeight: 600, color: '#B91C1C', textAlign: 'center', marginBottom: 8 }}>Revert to assigned?</p>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button onClick={() => setShowRevertConfirm(false)} style={{ flex: 1, padding: 8, borderRadius: 8, background: '#F3F4F6', border: 'none', fontSize: 12, fontWeight: 600, color: '#374151', cursor: 'pointer' }}>No</button>
+                        <button onClick={handleRevert} style={{ flex: 1, padding: 8, borderRadius: 8, background: '#EF4444', border: 'none', fontSize: 12, fontWeight: 600, color: 'white', cursor: 'pointer' }}>Yes</button>
                       </div>
                     </div>
                   )
                 )}
 
-                {/* Send notification */}
                 {order.status === DeliveryStatus.DELIVERED && !order.successNotificationSent && !showRevertConfirm && (
                   !showSendConfirm ? (
-                    <button onClick={() => setShowSendConfirm(true)}
-                      className="w-full py-2 text-stone-400 text-xs font-bold flex items-center justify-center gap-1 active:text-stone-600">
+                    <button onClick={() => setShowSendConfirm(true)} style={{ width: '100%', padding: 8, background: 'transparent', border: 'none', fontSize: 11, color: '#9CA3AF', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
                       <Bell size={12} /> Send delivery confirmation
                     </button>
                   ) : (
-                    <div className="bg-stone-900 rounded-xl p-3 space-y-2">
-                      <p className="text-white font-bold text-xs text-center">Send confirmation email?</p>
-                      <div className="flex gap-2">
-                        <button onClick={() => setShowSendConfirm(false)} className="flex-1 py-2 bg-stone-700 text-white rounded-lg font-bold text-xs">No</button>
-                        <button onClick={() => { setShowSendConfirm(false); loadPreview('SUCCESS'); }} className="flex-1 py-2 bg-green-500 text-white rounded-lg font-bold text-xs">Yes</button>
+                    <div style={{ background: '#111827', borderRadius: 8, padding: 12, marginBottom: 8 }}>
+                      <p style={{ fontSize: 12, fontWeight: 600, color: 'white', textAlign: 'center', marginBottom: 8 }}>Send confirmation email?</p>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button onClick={() => setShowSendConfirm(false)} style={{ flex: 1, padding: 8, borderRadius: 8, background: '#374151', border: 'none', fontSize: 12, fontWeight: 600, color: 'white', cursor: 'pointer' }}>No</button>
+                        <button onClick={() => { setShowSendConfirm(false); loadPreview('SUCCESS'); }} style={{ flex: 1, padding: 8, borderRadius: 8, background: '#22C55E', border: 'none', fontSize: 12, fontWeight: 600, color: 'white', cursor: 'pointer' }}>Yes</button>
                       </div>
                     </div>
                   )
                 )}
 
-                {/* Notify delay for failed orders */}
                 {(order.status === DeliveryStatus.FAILED || order.status === DeliveryStatus.PENDING_RESCHEDULE) && !order.failureNotificationSent && (
-                  <button onClick={() => loadPreview('FAILURE')}
-                    className="w-full py-2.5 bg-stone-800 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1 active:scale-[0.98]">
-                    <Bell size={12} /> Notify Customer of Delay
+                  <button onClick={() => loadPreview('FAILURE')} style={{ width: '100%', padding: 10, borderRadius: 8, background: '#374151', border: 'none', fontSize: 12, fontWeight: 600, color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                    <Bell size={14} /> Notify Customer of Delay
                   </button>
-                )}
-
-                {/* Driver info - small footer text */}
-                {order.driverId && (
-                  <p className="text-[10px] text-stone-400 text-center pt-1">
-                    Delivered by {order.driverName || order.driverId}
-                  </p>
                 )}
               </div>
             )}
@@ -1595,17 +1529,19 @@ const OrderDetail: React.FC<{
 
         {/* ── PREVIOUS ATTEMPTS ── */}
         {order.attempts && order.attempts.length > 0 && (
-          <div className="mx-3 mt-3 bg-white rounded-xl border border-stone-200 overflow-hidden">
-            <div className="px-4 py-2 bg-stone-50 border-b border-stone-100">
-              <p className="text-[10px] font-black uppercase text-stone-500 tracking-widest">Previous Attempts ({order.attempts.length})</p>
-            </div>
-            {order.attempts.map((a, i) => (
-              <div key={i} className="px-4 py-3 border-b border-stone-100 last:border-0">
-                <p className="font-black text-stone-800 text-sm">{FAILURE_REASON_LABELS[a.reason as FailureReason] || a.reason}</p>
-                {a.notes && <p className="text-xs text-stone-500 italic mt-0.5">"{a.notes}"</p>}
-                <p className="text-[10px] text-stone-400 mt-0.5">{a.driverName || 'Driver'} · {formatDate(a.timestamp)}</p>
+          <div style={{ padding: '0 16px', marginBottom: 12 }}>
+            <div style={{ background: '#ffffff', borderRadius: 12, boxShadow: '0 1px 3px rgba(0, 0, 0, 0.08)', borderLeft: '3px solid #F59E0B', overflow: 'hidden' }}>
+              <div style={{ background: '#F9FAFB', padding: '10px 16px', borderBottom: '1px solid #F3F4F6' }}>
+                <p style={{ fontSize: 10, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Previous Attempts ({order.attempts.length})</p>
               </div>
-            ))}
+              {order.attempts.map((a, i) => (
+                <div key={i} style={{ padding: '12px 16px', borderBottom: i < order.attempts.length - 1 ? '1px solid #F3F4F6' : 'none' }}>
+                  <p style={{ fontSize: 14, fontWeight: 600, color: '#374151' }}>{FAILURE_REASON_LABELS[a.reason as FailureReason] || a.reason}</p>
+                  {a.notes && <p style={{ fontSize: 12, color: '#6B7280', fontStyle: 'italic', marginTop: 4 }}>"{a.notes}"</p>}
+                  <p style={{ fontSize: 11, color: '#9CA3AF', marginTop: 4 }}>{a.driverName || 'Driver'} · {formatDate(a.timestamp)}</p>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
