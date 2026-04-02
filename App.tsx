@@ -1126,159 +1126,201 @@ const OrderDetail: React.FC<{
       {/* ── SCROLLABLE CONTENT ── */}
       <div className="flex-1 overflow-y-auto pb-6">
 
-        {/* ── DELIVERY INSTRUCTIONS — amber banner when present ── */}
+        {/* ── DELIVERY INSTRUCTIONS — Full-width high-alert banner ── */}
         {order.deliveryInstructions && (
-          <div className="mx-3 mt-3 bg-amber-400 rounded-xl px-4 py-4 flex gap-3 items-start">
-            <AlertTriangle size={22} className="text-amber-900 shrink-0 mt-0.5" />
-            <div>
-              <p className="text-[9px] font-black uppercase text-amber-800 tracking-widest mb-1">Delivery Instructions</p>
-              <p className="font-black text-amber-950 text-base leading-snug">{order.deliveryInstructions}</p>
+          <div className="mx-3 mt-3">
+            <style>{`
+              @keyframes alertPulse {
+                0%, 100% { transform: scale(1); }
+                50% { transform: scale(1.1); }
+              }
+              .alert-pulse { animation: alertPulse 2s ease-in-out infinite; }
+            `}</style>
+            <div className="bg-[#FFBF00] rounded-2xl px-4 py-4 flex gap-4 items-start shadow-lg">
+              <div className="alert-pulse shrink-0 mt-1">
+                <div className="w-10 h-10 rounded-full bg-black/10 flex items-center justify-center">
+                  <AlertTriangle size={24} className="text-black" />
+                </div>
+              </div>
+              <div className="flex-1">
+                <p className="text-[10px] font-black uppercase text-black/60 tracking-widest mb-1">⚠️ STOP & READ</p>
+                <p className="font-black text-black text-lg leading-snug">{order.deliveryInstructions}</p>
+              </div>
             </div>
           </div>
         )}
 
-        {/* ── ZONE 1: ORDER INFO CARD ── */}
-        <div className="mx-3 mt-3 bg-white rounded-xl border border-stone-200 overflow-hidden">
-          {/* Recipient name */}
-          <div className="px-4 pt-4 pb-3">
+        {/* ── ZONE 1: ORDER INFO CARD — High contrast, driver-proof ── */}
+        <div className="mx-3 mt-3 space-y-3">
+          
+          {/* RECIPIENT NAME — Hero section */}
+          <div className="bg-white rounded-2xl border border-stone-200 px-4 pt-4 pb-4">
             <p className="text-[10px] font-black uppercase text-stone-400 tracking-widest mb-1">Delivering To</p>
             <p className="text-3xl font-black text-stone-900 leading-tight">{recipientName}</p>
           </div>
 
-          <div className="border-t border-stone-100 divide-y divide-stone-100">
-            {/* Address — tappable to choose nav app */}
-            <button onClick={() => openNavChoice([order.address?.street, order.address?.unit, order.address?.city, 'FL', order.address?.zip].filter(Boolean).join(' '))} className="block w-full text-left px-4 py-3 active:bg-stone-50">
-              <div className="flex items-start justify-between gap-2">
-                <span className="text-[10px] font-black uppercase text-stone-400 tracking-widest">Address</span>
-                <span className="flex items-center gap-1 text-[10px] font-black text-blue-500 uppercase tracking-wide shrink-0 mt-0.5">
-                  <Navigation size={11} /> Get Directions
-                </span>
-              </div>
-              <p className="text-xl font-black text-stone-900 mt-1 leading-snug">{order.address.street}{order.address.unit ? ` #${order.address.unit}` : ''}</p>
-              {order.address.company && <p className="text-sm font-bold text-blue-700 mt-1">📍 {order.address.company}</p>}
+          {/* ADDRESS + GET DIRECTIONS — Large action button */}
+          <div className="bg-white rounded-2xl border border-stone-200 overflow-hidden">
+            <div className="px-4 pt-4 pb-3">
+              <p className="text-[10px] font-black uppercase text-stone-400 tracking-widest mb-2">Address</p>
+              <p className="text-2xl font-black text-stone-900 leading-snug">{order.address.street}{order.address.unit ? ` #${order.address.unit}` : ''}</p>
+              {order.address.company && <p className="text-base font-bold text-blue-700 mt-1">📍 {order.address.company}</p>}
               <p className="text-2xl font-black text-black mt-1">{order.address.city}, {order.address.zip}</p>
+            </div>
+            <button 
+              onClick={() => openNavChoice([order.address?.street, order.address?.unit, order.address?.city, 'FL', order.address?.zip].filter(Boolean).join(' '))}
+              className="w-full flex items-center justify-center gap-3 py-4 bg-blue-600 text-white font-black text-base uppercase tracking-wide active:bg-blue-700 transition-colors"
+            >
+              <Navigation size={20} /> Get Directions
             </button>
+          </div>
 
-            {/* Items with SKU — parcels count */}
-            {order.items?.length > 0 && (
-              <div className="px-4 py-3">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[10px] font-black uppercase text-stone-400 tracking-widest">Items</span>
-                  <span className="text-[10px] font-black uppercase text-stone-400 tracking-widest">
-                    {order.items.reduce((sum, it) => sum + (it.quantity || 1), 0)} Parcel{order.items.reduce((sum, it) => sum + (it.quantity || 1), 0) !== 1 ? 's' : ''}
-                  </span>
-                </div>
-                {order.items.map((item, i) => (
-                  <div key={i} className="py-2 border-b border-stone-50 last:border-0">
-                    <div className="flex items-start justify-between gap-2">
-                      <p className="text-sm font-black text-stone-900 flex-1 leading-snug">{item.name}</p>
-                      <span className="text-sm font-black text-stone-500 shrink-0">×{item.quantity}</span>
-                    </div>
-                    {item.variantTitle && (
-                      <p className="text-xs font-bold text-stone-600 mt-0.5">{item.variantTitle}</p>
-                    )}
-                    {item.properties && item.properties.length > 0 && (
-                      <div className="mt-1.5 space-y-0.5">
-                        {item.properties.filter((prop: any) => {
-                          const n = prop.name?.toLowerCase() || '';
-                          return !n.includes('delivery fee') && !n.includes('_') && prop.value && prop.value !== 'null';
-                        }).map((prop: any, pi: number) => {
-                          const isSpecialInstruction = prop.name?.toLowerCase().includes('special instruction') || prop.name?.toLowerCase().includes('special_instruction');
-                          return isSpecialInstruction ? (
-                            <div key={pi} className="flex items-start gap-2 mt-2 rounded-xl px-3 py-2.5" style={{ background: '#fff7ed', border: '2px solid #f97316' }}>
-                              <AlertTriangle size={14} style={{ color: '#ea580c', flexShrink: 0, marginTop: 1 }} />
-                              <div>
-                                <p style={{ fontSize: 10, fontWeight: 800, color: '#c2410c', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>Special Instructions</p>
-                                <p style={{ fontSize: 14, fontWeight: 700, color: '#9a3412' }}>{prop.value}</p>
-                              </div>
-                            </div>
-                          ) : (
-                            <div key={pi} className="flex items-baseline gap-1.5">
-                              <span className="text-[10px] font-black uppercase text-stone-400 tracking-wide shrink-0">{prop.name}:</span>
-                              <span className="text-xs font-bold text-stone-700">{prop.value}</span>
-                            </div>
-                          );
-                        })}
+          {/* ITEMS — Parcels count grouped with item name */}
+          {order.items?.length > 0 && (
+            <div className="bg-white rounded-2xl border border-stone-200 px-4 py-4">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-[10px] font-black uppercase text-stone-400 tracking-widest">Items</span>
+              </div>
+              {order.items.map((item, i) => (
+                <div key={i} className="py-2 border-b border-stone-100 last:border-0">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="bg-stone-900 text-white text-[11px] font-black px-2 py-0.5 rounded-full">×{item.quantity}</span>
+                        <p className="text-base font-black text-stone-900 leading-snug">{item.name}</p>
                       </div>
-                    )}
+                    </div>
                   </div>
-                ))}
-                {/* Delivery fee — inline with other item properties */}
+                  {item.variantTitle && (
+                    <p className="text-xs font-bold text-stone-600 mt-1 ml-8">{item.variantTitle}</p>
+                  )}
+                  {item.properties && item.properties.length > 0 && (
+                    <div className="mt-2 ml-8 space-y-0.5">
+                      {item.properties.filter((prop: any) => {
+                        const n = prop.name?.toLowerCase() || '';
+                        return !n.includes('delivery fee') && !n.includes('_') && prop.value && prop.value !== 'null';
+                      }).map((prop: any, pi: number) => {
+                        const isSpecialInstruction = prop.name?.toLowerCase().includes('special instruction') || prop.name?.toLowerCase().includes('special_instruction');
+                        return isSpecialInstruction ? null : (
+                          <div key={pi} className="flex items-baseline gap-1.5">
+                            <span className="text-[10px] font-black uppercase text-stone-400 tracking-wide shrink-0">{prop.name}:</span>
+                            <span className="text-xs font-bold text-stone-700">{prop.value}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              ))}
+              
+              {/* Special Instructions — Full-width amber alert inside items card */}
+              {order.items.some((item: any) => item.properties?.some((prop: any) => {
+                const n = prop.name?.toLowerCase() || '';
+                return (n.includes('special instruction') || n.includes('special_instruction')) && prop.value && prop.value !== 'null';
+              })) && (
+                <div className="mt-3 -mx-4 px-4 py-4 bg-[#FFBF00]">
+                  <div className="flex gap-3 items-start">
+                    <div className="alert-pulse shrink-0">
+                      <AlertTriangle size={22} className="text-black" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black uppercase text-black/70 tracking-widest mb-1">⚠️ SPECIAL INSTRUCTIONS</p>
+                      {order.items.map((item: any, i: number) => 
+                        item.properties?.filter((prop: any) => {
+                          const n = prop.name?.toLowerCase() || '';
+                          return (n.includes('special instruction') || n.includes('special_instruction')) && prop.value && prop.value !== 'null';
+                        }).map((prop: any, pi: number) => (
+                          <p key={`${i}-${pi}`} className="font-black text-black text-base leading-snug">{prop.value}</p>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Totals row */}
+              <div className="flex items-center justify-between pt-3 mt-3 border-t border-stone-100">
+                <div>
+                  <span className="text-[10px] font-black uppercase text-stone-400 tracking-wide">Total:</span>
+                  <span className="text-sm font-black text-stone-800 ml-1.5">${order.items.reduce((sum: number, it: any) => sum + ((it.price || 0) * (it.quantity || 1)), 0).toFixed(2) || order.orderTotal?.toFixed(2) || '—'}</span>
+                </div>
                 {(() => {
                   const fee = order.deliveryFee || DELIVERY_FEES[order.address?.zip || ''] || 0;
                   return fee > 0 ? (
-                    <div className="flex items-baseline gap-1.5 pt-2 mt-1 border-t border-stone-100">
-                      <span className="text-[10px] font-black uppercase text-stone-400 tracking-wide shrink-0">Delivery Fee:</span>
-                      <span className="text-xs font-bold text-stone-700">${fee.toFixed(2)}</span>
+                    <div>
+                      <span className="text-[10px] font-black uppercase text-stone-400 tracking-wide">Delivery Fee:</span>
+                      <span className="text-sm font-black text-stone-800 ml-1.5">${fee.toFixed(2)}</span>
                     </div>
                   ) : null;
                 })()}
               </div>
-            )}
+            </div>
+          )}
 
-            {/* Gift Sender */}
-            {(order.giftSenderName || order.giftSenderPhone) && (
-              <div className="px-4 py-3">
-                <p className="text-[10px] font-black uppercase text-stone-400 tracking-widest mb-1">Gift From</p>
-                <p className="text-base font-black text-stone-900">{order.giftSenderName || '—'}</p>
-                {order.giftSenderPhone && (
-                  <p className="text-sm font-bold text-stone-500 mt-0.5">{order.giftSenderPhone}</p>
-                )}
-              </div>
-            )}
-
-            {/* Gift Message */}
-            {order.giftMessage && (
-              <div className="px-4 py-3 bg-pink-50">
-                <p className="text-[10px] font-black uppercase text-pink-400 tracking-widest mb-1">🎁 Gift Message</p>
-                <p className="text-sm font-bold text-stone-800 leading-snug italic">"{order.giftMessage}"</p>
-              </div>
-            )}
-
-            {/* Order Total + Created At */}
-            <div className="px-4 py-3 flex items-center justify-between">
-              {order.orderTotal != null && (
-                <div>
-                  <p className="text-[10px] font-black uppercase text-stone-400 tracking-widest mb-0.5">Order Total</p>
-                  <p className="text-base font-black text-stone-900">${order.orderTotal.toFixed(2)}</p>
-                </div>
-              )}
-              {order.createdAt && (
-                <div className="text-right">
-                  <p className="text-[10px] font-black uppercase text-stone-400 tracking-widest mb-0.5">Order Date</p>
-                  <p className="text-sm font-black text-stone-700">
-                    {new Date(order.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                  </p>
-                </div>
+          {/* GIFT FROM — Sender info */}
+          {(order.giftSenderName || order.giftSenderPhone) && (
+            <div className="bg-white rounded-2xl border border-stone-200 px-4 py-4">
+              <p className="text-[10px] font-black uppercase text-stone-400 tracking-widest mb-1">Gift From</p>
+              <p className="text-lg font-black text-stone-900">{order.giftSenderName || '—'}</p>
+              {order.giftSenderPhone && (
+                <p className="text-sm font-bold text-stone-500 mt-0.5">{order.giftSenderPhone}</p>
               )}
             </div>
+          )}
 
+          {/* GIFT MESSAGE — Refined pastel pink with clear header */}
+          {order.giftMessage && (
+            <div className="bg-pink-50 rounded-2xl border border-pink-200 px-4 py-4">
+              <p className="text-[11px] font-black uppercase text-pink-600 tracking-widest mb-2">🎁 GIFT MESSAGE</p>
+              <p className="text-base font-bold text-stone-800 leading-relaxed italic">"{order.giftMessage}"</p>
+            </div>
+          )}
+
+          {/* ORDER TOTAL + DATE */}
+          <div className="bg-white rounded-2xl border border-stone-200 px-4 py-3 flex items-center justify-between">
+            {order.orderTotal != null && (
+              <div>
+                <p className="text-[10px] font-black uppercase text-stone-400 tracking-widest mb-0.5">Order Total</p>
+                <p className="text-xl font-black text-stone-900">${order.orderTotal.toFixed(2)}</p>
+              </div>
+            )}
+            {order.createdAt && (
+              <div className="text-right">
+                <p className="text-[10px] font-black uppercase text-stone-400 tracking-widest mb-0.5">Order Date</p>
+                <p className="text-sm font-black text-stone-700">
+                  {new Date(order.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                </p>
+              </div>
+            )}
           </div>
+
         </div>
 
-        {/* ── ZONE 2: CONTACT — collapsed by default ── */}
+        {/* ── ZONE 2: CONTACT — Clean rounded action tile ── */}
         {!isCompleted && (
-          <div className="mx-3 mt-3">
+          <div className="mx-3 mt-4">
             <button
               onClick={() => setShowContactSection(s => !s)}
-              className="w-full flex items-center justify-between px-4 py-3 bg-white rounded-xl border border-stone-200 active:bg-stone-50"
+              className="w-full flex items-center justify-between px-4 py-4 bg-[#F9FAFB] rounded-2xl border border-stone-200 active:bg-stone-100 transition-colors"
             >
-              <div className="flex items-center gap-2">
-                <span className="text-base">📞</span>
-                <span className="text-sm font-black text-stone-700">Need to call someone?</span>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-stone-200 flex items-center justify-center">
+                  <Phone size={20} className="text-stone-600" />
+                </div>
+                <span className="text-base font-black text-stone-700">Need to call someone?</span>
               </div>
-              <ChevronRight size={16} className={`text-stone-400 transition-transform ${showContactSection ? 'rotate-90' : ''}`} />
+              <ChevronRight size={20} className={`text-stone-400 transition-transform ${showContactSection ? 'rotate-90' : ''}`} />
             </button>
 
             {showContactSection && (
-              <div className="bg-white rounded-b-xl border border-t-0 border-stone-200 overflow-hidden">
+              <div className="bg-white rounded-2xl border border-t-0 border-stone-200 overflow-hidden mt-[-8px] pt-2">
                 {/* Try Recipient First */}
                 <div className="px-4 py-3 border-b border-stone-100">
                   <div className="flex items-center gap-2 mb-2">
-                    <span className="w-5 h-5 rounded-full bg-green-500 text-white text-[10px] font-black flex items-center justify-center shrink-0">1</span>
+                    <span className="w-6 h-6 rounded-full bg-green-500 text-white text-[11px] font-black flex items-center justify-center shrink-0">1</span>
                     <span className="text-[10px] font-black uppercase text-stone-500 tracking-widest">Try Recipient First</span>
                   </div>
-                  <p className="text-base font-black text-stone-900 mb-2">{recipientName}</p>
+                  <p className="text-lg font-black text-stone-900 mb-2">{recipientName}</p>
                   {recipientPhone ? (
                     <ContactCallReveal phone={recipientPhone} label="Receiver" showTemplates={true} driverName={currentUser.name} driverPhone={currentUser.phone || ''} address={[order.address?.street, order.address?.unit].filter(Boolean).join(', ')} />
                   ) : (
@@ -1293,10 +1335,10 @@ const OrderDetail: React.FC<{
                 {(senderName || senderPhone) && (
                   <div className="px-4 py-3 bg-stone-50">
                     <div className="flex items-center gap-2 mb-2">
-                      <span className="w-5 h-5 rounded-full bg-stone-300 text-stone-600 text-[10px] font-black flex items-center justify-center shrink-0">2</span>
+                      <span className="w-6 h-6 rounded-full bg-stone-300 text-stone-600 text-[11px] font-black flex items-center justify-center shrink-0">2</span>
                       <span className="text-[10px] font-black uppercase text-stone-500 tracking-widest">Backup — Gift Sender</span>
                     </div>
-                    <p className="text-base font-black text-stone-900 mb-2">{senderName}</p>
+                    <p className="text-lg font-black text-stone-900 mb-2">{senderName}</p>
                     {senderPhone ? (
                       <ContactCallReveal phone={senderPhone} label="Gift Sender" driverName={currentUser.name} driverPhone={currentUser.phone || ''} />
                     ) : (
