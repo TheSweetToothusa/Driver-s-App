@@ -3039,7 +3039,11 @@ const ScheduleView: React.FC<{
                   );
                 }
 
-                // DETAILED VIEW for admins — full cards
+                // CITY-FIRST COMPACT VIEW for admins
+                const isManualOrder = (order as any).isManual;
+                const driverColor = order.driverId === 'manager_1' ? '#fce7f3' : order.driverId === 'driver_1' ? '#dbeafe' : '#d1fae5';
+                const driverTextColor = order.driverId === 'manager_1' ? '#9d174d' : order.driverId === 'driver_1' ? '#1e40af' : '#065f46';
+                
                 return (
                   <div key={order.id}
                     draggable={!isDone && routeSaved}
@@ -3047,69 +3051,68 @@ const ScheduleView: React.FC<{
                     onDragOver={e => { e.preventDefault(); setDragOverId(order.id); }}
                     onDrop={() => { if (dragOrderId) handleDropOnStop(orders, dragOrderId, order.id); setDragOrderId(null); setDragOverId(null); }}
                     onDragEnd={() => { setDragOrderId(null); setDragOverId(null); }}
-                    style={{ border: dragOverId === order.id ? '2px solid #1A73E8' : '1px solid #e0e0e0', borderRadius: 12, background: isDone ? '#F8F9FA' : '#ffffff', boxShadow: dragOverId === order.id ? '0 0 0 3px rgba(26,115,232,0.15)' : '0 1px 4px rgba(0,0,0,0.06)', overflow: 'hidden', transition: 'all 0.15s' }}>
-                    {/* Drag handle bar — shown when route is active */}
-                    {!isDone && routeSaved && (
-                      <div className="flex items-center justify-between px-4 py-1.5 bg-stone-100 border-b border-stone-200 cursor-grab active:cursor-grabbing">
-                        <div className="flex items-center gap-2">
-                          <span className="w-6 h-6 rounded-full bg-black text-white flex items-center justify-center font-black text-xs">{idx + 1}</span>
-                          <span className="text-[10px] font-black text-stone-400 uppercase tracking-wide">Stop {idx + 1} — Drag to reorder</span>
-                        </div>
-                        <span style={{ fontSize: 20, color: '#9ca3af', lineHeight: 1 }}>≡</span>
+                    className={`rounded-xl overflow-hidden transition-all ${dragOverId === order.id ? 'ring-2 ring-blue-500' : ''}`}
+                    style={{ 
+                      background: isDone ? '#f8f9fa' : '#ffffff', 
+                      border: isManualOrder ? '1px solid #e0e0e0' : '1px solid #e0e0e0',
+                      borderLeft: isManualOrder ? '3px solid #9333ea' : `3px solid ${statusCfg.color || '#e0e0e0'}`,
+                    }}>
+                    
+                    {/* CITY-FIRST HEADER: Order # | CITY | Driver Pill | ⋮ menu */}
+                    <div className="flex items-center justify-between px-3 py-2 border-b border-stone-100" onClick={e => e.stopPropagation()}>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-xs text-stone-400 font-bold shrink-0">#{cleanNum}</span>
+                        <span className="text-stone-300">|</span>
+                        <span className="text-sm font-black text-stone-900 tracking-wide uppercase truncate">{(order.address?.city || '—').toUpperCase()}</span>
+                        {isManualOrder && <span className="text-purple-600 shrink-0" title="Manual entry">✍️</span>}
+                        {showStatus && !isDone && (
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0" style={{ background: statusCfg.color || '#e0e0e0', color: '#fff' }}>
+                            {order.status === 'IN_TRANSIT' ? 'OUT' : statusCfg.label.split(' ')[0]}
+                          </span>
+                        )}
                       </div>
-                    )}
-                    {/* Tappable card body */}
-                    <div className="cursor-pointer active:opacity-80" onClick={() => onSelectOrder(order)}
-                      style={{ borderLeft: `4px solid ${statusCfg.color || '#1A73E8'}`, padding: '14px 16px 12px 14px' }}>
-                      {/* Row 1: order number (BIG & BOLD) + status badge */}
-                      <div className="flex items-center justify-between mb-2">
-                        <span style={{ fontSize: 28, fontWeight: 800, color: '#202124', letterSpacing: '-0.5px' }}>#{cleanNum}</span>
-                        <div className="flex items-center gap-1.5">
-                          {showStatus && (
-                            <span style={{ fontSize: 10, fontWeight: 700, color: '#fff', background: statusCfg.color || '#1A73E8', padding: '2px 8px', borderRadius: 99 }}>{statusCfg.label}</span>
-                          )}
-                          {isDone && <span style={{ fontSize: 10, fontWeight: 700, color: '#16a34a' }}>✓ DONE</span>}
-                          {(order as any).isManual && <span style={{ fontSize: 10, fontWeight: 700, color: '#7c3aed', background: '#ede9fe', padding: '2px 6px', borderRadius: 99 }}>Manual</span>}
-                        </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {/* Driver pill */}
+                        <span className="text-xs font-bold px-2 py-1 rounded-full" style={{ background: driverColor, color: driverTextColor }}>
+                          {order.driverName || 'Unassigned'} {order.driverId ? '✓' : ''}
+                        </span>
+                        {/* ⋮ More menu button */}
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); onSelectOrder(order); }}
+                          className="w-7 h-7 flex items-center justify-center text-stone-400 hover:bg-stone-100 rounded-lg"
+                        >
+                          <span className="text-lg leading-none">⋮</span>
+                        </button>
                       </div>
-                      {/* Row 2: recipient name */}
-                      <p style={{ fontSize: 16, fontWeight: 700, color: '#202124', lineHeight: 1.2, marginBottom: 2 }} className="truncate">{name}</p>
-                      {/* Row 3: CITY + ZIP */}
-                      <p style={{ fontSize: 22, fontWeight: 800, color: '#202124', lineHeight: 1.1, letterSpacing: '-0.5px' }}>
-                        {order.address?.city || '—'} <span style={{ fontSize: 15, fontWeight: 500, color: '#5F6368' }}>{order.address?.zip}</span>
-                      </p>
-                      {/* Row 4: street address — tappable Google Maps link */}
+                    </div>
+
+                    {/* BODY: Recipient name + Product */}
+                    <div className="px-3 py-2 cursor-pointer" onClick={() => onSelectOrder(order)}>
+                      <p className="text-base font-bold text-stone-900 truncate">{name}</p>
+                      {order.items?.[0] && (
+                        <p className="text-xs text-stone-500 truncate mt-0.5">{order.items[0].name}</p>
+                      )}
+                      {/* Delivery instructions alert */}
+                      {order.deliveryInstructions && (
+                        <div className="flex items-start gap-1.5 mt-2 bg-red-50 border border-red-200 rounded-lg px-2 py-1.5">
+                          <AlertTriangle size={12} className="text-red-500 shrink-0 mt-0.5" />
+                          <p className="text-[11px] font-bold text-red-700 line-clamp-2">{order.deliveryInstructions}</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* NAVIGATE BUTTON — Primary Action */}
+                    <div className="px-3 pb-3">
                       <a
                         href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${order.address?.street || ''}${order.address?.unit ? ' #' + order.address.unit : ''}, ${order.address?.city || ''}, FL ${order.address?.zip || ''}`)}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         onClick={e => e.stopPropagation()}
-                        style={{ fontSize: 14, fontWeight: 600, color: '#1A73E8', textDecoration: 'underline', marginTop: 4, display: 'block' }}
-                        className="truncate"
+                        className="flex items-center justify-center gap-2 w-full py-2.5 bg-stone-900 text-white rounded-lg font-bold text-sm active:scale-[0.98] transition-all"
                       >
-                        📍 {order.address?.street}{order.address?.unit ? ` #${order.address.unit}` : ''}
+                        <Navigation size={16} />
+                        Navigate to {order.address?.street?.split(' ').slice(0, 3).join(' ')}{order.address?.unit ? ` #${order.address.unit}` : ''}
                       </a>
-                      {/* Row 5: product */}
-                      {order.items?.[0] && (
-                        <p style={{ fontSize: 11, fontWeight: 400, color: '#80868b', marginTop: 3 }} className="truncate">{order.items[0].name}</p>
-                      )}
-                      {/* Row 6: delivery instructions — red alert */}
-                      {order.deliveryInstructions && (
-                        <div style={{ marginTop: 6, background: '#fff1f2', border: '1px solid #fecdd3', borderRadius: 8, padding: '5px 10px', display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <AlertTriangle size={11} style={{ color: '#dc2626', flexShrink: 0 }} />
-                          <p style={{ fontSize: 11, fontWeight: 700, color: '#dc2626' }} className="truncate">{order.deliveryInstructions}</p>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Admin action row: driver + date */}
-                    <div style={{ borderTop: '1px solid #f0f0f0', background: '#fafafa', padding: '8px 14px' }}>
-                      <OrderAdminRow
-                        order={order}
-                        allUsers={allUsers}
-                        activeDrivers={activeDrivers}
-                        onUpdateOrder={onUpdateOrder}
-                      />
                     </div>
                   </div>
                 );
