@@ -968,15 +968,42 @@ const OrderDetail: React.FC<{
   return (
     <div className="flex flex-col h-screen bg-gray-50">
 
-      {/* ── DELIVERY CONFIRMED OVERLAY ── */}
+      {/* ── DELIVERY CONFIRMED OVERLAY — High-fidelity success animation ── */}
       {showDeliveredConfirm && (
-        <div className="fixed inset-0 z-[999] bg-green-500 flex flex-col items-center justify-center">
-          <div className="flex flex-col items-center gap-4">
-            <div className="w-28 h-28 rounded-full bg-white flex items-center justify-center shadow-xl">
-              <CheckCircle2 size={64} className="text-green-500" />
+        <div className="fixed inset-0 z-[999] bg-gradient-to-b from-green-400 to-green-600 flex flex-col items-center justify-center">
+          <style>{`
+            @keyframes checkScale {
+              0% { transform: scale(0); opacity: 0; }
+              50% { transform: scale(1.2); }
+              100% { transform: scale(1); opacity: 1; }
+            }
+            @keyframes checkDraw {
+              0% { stroke-dashoffset: 60; }
+              100% { stroke-dashoffset: 0; }
+            }
+            @keyframes fadeUp {
+              0% { opacity: 0; transform: translateY(20px); }
+              100% { opacity: 1; transform: translateY(0); }
+            }
+            @keyframes pulse {
+              0%, 100% { transform: scale(1); }
+              50% { transform: scale(1.05); }
+            }
+            .success-circle { animation: checkScale 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+            .success-check { stroke-dasharray: 60; stroke-dashoffset: 60; animation: checkDraw 0.4s ease-out 0.3s forwards; }
+            .success-text { animation: fadeUp 0.4s ease-out 0.5s forwards; opacity: 0; }
+            .success-pulse { animation: pulse 1.5s ease-in-out infinite 0.8s; }
+          `}</style>
+          <div className="flex flex-col items-center gap-6">
+            <div className="success-circle success-pulse w-32 h-32 rounded-full bg-white flex items-center justify-center shadow-2xl">
+              <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                <polyline className="success-check" points="20 6 9 17 4 12" />
+              </svg>
             </div>
-            <p className="text-white text-3xl font-black uppercase tracking-widest">Delivered!</p>
-            <p className="text-white/70 text-sm font-bold">#{order.orderNumber?.replace(/^#+/, '') || order.id}</p>
+            <div className="text-center success-text">
+              <p className="text-white text-4xl font-black uppercase tracking-widest drop-shadow-lg">Delivered!</p>
+              <p className="text-white/80 text-base font-bold mt-2">#{order.orderNumber?.replace(/^#+/, '') || order.id}</p>
+            </div>
           </div>
         </div>
       )}
@@ -1282,221 +1309,243 @@ const OrderDetail: React.FC<{
           </div>
         )}
 
-        {/* ── ZONE 3: PROOF OF DELIVERY (main action zone) ── */}
+        {/* ── ZONE 3: PROOF OF DELIVERY — Tap-First Tile Interface ── */}
         {!isCompleted && (
-          <div className="mx-3 mt-4 bg-white rounded-xl border border-stone-200 overflow-hidden">
-            <div style={{ background: '#F5F5F0', padding: '12px 16px' }}>
-              <p style={{ color: '#374151', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>📋 Proof of Delivery</p>
-              <p style={{ color: '#9CA3AF', fontSize: 10, marginTop: 2 }}>Required for all deliveries — successful or not</p>
-            </div>
+          <div className="mx-3 mt-8 space-y-4">
+            <input type="file" accept="image/*" capture="environment" ref={fileRef} onChange={handlePhoto} className="hidden" />
 
-            <input type="file" accept="image/*" ref={fileRef} onChange={handlePhoto} className="hidden" />
-
-            <div className="p-4 space-y-3">
-              {/* PHOTO — primary, full width */}
+            {/* POD ACTION TILES — Side by side */}
+            <div className="flex gap-3">
+              {/* PHOTO TILE */}
               <button
                 onClick={() => fileRef.current?.click()}
-                className={`w-full py-5 rounded-xl font-black uppercase text-sm flex items-center justify-center gap-3 active:scale-95 transition-all ${photoData ? 'bg-green-600 text-white' : 'bg-stone-900 text-white'}`}
+                className="flex-1 bg-[#F9FAFB] rounded-2xl border border-stone-200 overflow-hidden active:scale-[0.98] transition-all"
+                style={{ minHeight: '140px' }}
               >
-                <Camera size={20} />
-                {photoData ? '✓ Photo Taken — Tap to Retake' : '📷 TAKE PHOTO'}
+                {photoData ? (
+                  <div className="relative w-full h-full">
+                    <img src={photoData} className="w-full h-full object-cover" alt="Delivery Photo" style={{ minHeight: '140px' }} />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                    <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between">
+                      <span className="text-white text-[10px] font-black uppercase bg-green-500 px-2 py-0.5 rounded-full">✓ Photo</span>
+                      <span className="text-white/80 text-[9px] font-bold">Tap to retake</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full p-4 gap-3">
+                    <div className="w-14 h-14 rounded-full bg-stone-900 flex items-center justify-center">
+                      <Camera size={28} className="text-white" />
+                    </div>
+                    <p className="text-stone-700 font-black text-sm text-center">Snap Photo</p>
+                  </div>
+                )}
               </button>
 
-              {/* Photo preview + timestamp */}
-              {photoData && (
-                <div className="rounded-xl overflow-hidden border border-stone-200">
-                  <img src={photoData} className="w-full max-h-48 object-cover" alt="POD" />
-                  {photoTimestamp && (
-                    <div className="bg-stone-900 px-3 py-1.5 flex items-center gap-2">
-                      <span className="text-green-400 text-[10px]">●</span>
-                      <p className="text-white text-[11px] font-black">
-                        {new Date(photoTimestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} at {new Date(photoTimestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-                      </p>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* SIGNATURE — secondary, shown after photo */}
+              {/* SIGNATURE TILE */}
               <button
                 onClick={() => setIsSigning(true)}
-                className={`w-full py-4 rounded-xl font-black uppercase text-sm flex items-center justify-center gap-3 active:scale-95 transition-all ${sigData ? 'bg-green-600 text-white' : 'bg-stone-100 text-stone-700 border border-stone-200'}`}
+                className="flex-1 bg-[#F9FAFB] rounded-2xl border border-stone-200 overflow-hidden active:scale-[0.98] transition-all"
+                style={{ minHeight: '140px' }}
               >
-                <PenTool size={18} />
-                {sigData ? '✓ Signature Captured' : 'Add Recipient Signature'}
-              </button>
-
-              {/* Signature preview */}
-              {sigData && (
-                <div className="bg-stone-50 border border-stone-200 rounded-xl p-3">
-                  <p className="text-[9px] font-black uppercase text-stone-400 mb-2">Captured Signature</p>
-                  <img src={sigData} className="w-full max-h-20 object-contain" alt="Signature" />
-                </div>
-              )}
-
-              {/* Driver note */}
-              <textarea
-                value={driverNote}
-                onChange={e => setDriverNote(e.target.value)}
-                placeholder="Driver note (e.g. left at front door, unit 4B)"
-                className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-sm outline-none resize-none"
-                style={{ minHeight: '64px' }}
-              />
-            </div>
-
-            {/* ACTION BUTTONS */}
-            <div className="px-4 pb-4 space-y-2">
-              {/* CONFIRM DELIVERY */}
-              <button
-                onClick={photoData ? handleComplete : () => alert('Please take a delivery photo first.')}
-                disabled={!photoData}
-                className={'w-full py-5 rounded-2xl font-black uppercase text-xl tracking-wide flex items-center justify-center gap-2 shadow-lg transition-all ' + (photoData ? 'bg-green-600 text-white active:scale-95' : 'bg-stone-200 text-stone-400 cursor-not-allowed')}
-              >
-                <CheckCircle2 size={24} /> CONFIRM DELIVERY
-              </button>
-              {!photoData && (
-                <p className="text-center text-[11px] font-bold text-stone-400 uppercase tracking-wide">📷 Take a photo first to confirm delivery</p>
-              )}
-
-              {/* ADMIN OVERRIDE — mark as delivered without photo */}
-              {isAdmin && !photoData && !showAdminOverrideConfirm && (
-                <button
-                  onClick={() => setShowAdminOverrideConfirm(true)}
-                  className="w-full py-3 bg-stone-800 text-stone-300 rounded-xl font-bold uppercase text-xs flex items-center justify-center gap-2 active:scale-95 border border-stone-600"
-                >
-                  🔐 Admin Override — Mark Delivered Without Photo
-                </button>
-              )}
-              {isAdmin && showAdminOverrideConfirm && (
-                <div className="bg-amber-50 border-2 border-amber-400 rounded-2xl p-4 space-y-3">
-                  <p className="text-amber-800 font-black text-sm text-center uppercase">⚠ Mark as Delivered Without Proof?</p>
-                  <p className="text-amber-700 text-xs text-center">This will mark the order as delivered without a photo or signature. Use only when delivery was completed but couldn't be logged normally.</p>
-                  <div className="flex gap-2">
-                    <button onClick={() => setShowAdminOverrideConfirm(false)}
-                      className="flex-1 py-3 bg-stone-100 text-stone-600 rounded-xl font-black uppercase text-xs">Cancel</button>
-                    <button onClick={handleAdminOverride}
-                      className="flex-1 py-3 bg-amber-500 text-white rounded-xl font-black uppercase text-xs">Yes, Mark Delivered</button>
+                {sigData ? (
+                  <div className="relative w-full h-full p-3 flex flex-col">
+                    <div className="flex-1 flex items-center justify-center">
+                      <img src={sigData} className="max-w-full max-h-[90px] object-contain" alt="Signature" />
+                    </div>
+                    <div className="flex items-center justify-between mt-2">
+                      <span className="text-[10px] font-black uppercase text-green-600 bg-green-100 px-2 py-0.5 rounded-full">✓ Signed</span>
+                      <span className="text-stone-400 text-[9px] font-bold">Tap to redo</span>
+                    </div>
                   </div>
-                </div>
-              )}
-
-              {/* COULDN'T DELIVER */}
-              <button
-                onClick={() => setShowFailFlow(true)}
-                className="w-full py-4 border-2 border-stone-300 text-stone-600 rounded-2xl font-black uppercase text-sm flex items-center justify-center gap-2 active:scale-95 active:border-stone-400"
-              >
-                <XCircle size={18} /> COULDN'T DELIVER — REPORT ATTEMPT
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full p-4 gap-3">
+                    <div className="w-14 h-14 rounded-full bg-stone-200 flex items-center justify-center">
+                      <PenTool size={26} className="text-stone-600" />
+                    </div>
+                    <p className="text-stone-600 font-black text-sm text-center">Collect Signature</p>
+                  </div>
+                )}
               </button>
             </div>
+
+            {/* Driver Note */}
+            <textarea
+              value={driverNote}
+              onChange={e => setDriverNote(e.target.value)}
+              placeholder="Add a note (e.g. left at door, with concierge)"
+              className="w-full bg-white border border-stone-200 rounded-2xl px-4 py-3 text-sm outline-none resize-none focus:border-stone-400"
+              style={{ minHeight: '64px' }}
+            />
+
+            {/* PRIMARY ACTION — Mark Delivered */}
+            <button
+              onClick={photoData ? handleComplete : undefined}
+              disabled={!photoData}
+              className={'w-full py-5 rounded-2xl font-black uppercase text-lg tracking-wide flex items-center justify-center gap-3 shadow-lg transition-all ' + (photoData ? 'bg-green-500 text-white active:scale-[0.98]' : 'bg-stone-200 text-stone-400 cursor-not-allowed')}
+            >
+              <CheckCircle2 size={26} /> Mark Delivered
+            </button>
+
+            {/* Secondary: Couldn't Deliver */}
+            <button
+              onClick={() => setShowFailFlow(true)}
+              className="w-full py-3.5 border-2 border-stone-200 text-stone-500 rounded-2xl font-bold uppercase text-sm flex items-center justify-center gap-2 active:scale-[0.98]"
+            >
+              <XCircle size={16} /> Couldn't Deliver
+            </button>
+
+            {/* Admin-only override — moved to small footer */}
+            {isAdmin && !photoData && (
+              <div className="pt-2 border-t border-stone-100">
+                {!showAdminOverrideConfirm ? (
+                  <button
+                    onClick={() => setShowAdminOverrideConfirm(true)}
+                    className="w-full py-2 text-stone-400 text-xs font-bold flex items-center justify-center gap-1 active:text-stone-600"
+                  >
+                    🔐 Admin: Mark without proof
+                  </button>
+                ) : (
+                  <div className="bg-amber-50 border border-amber-300 rounded-xl p-3 space-y-2">
+                    <p className="text-amber-800 font-black text-xs text-center uppercase">Mark Delivered Without Proof?</p>
+                    <div className="flex gap-2">
+                      <button onClick={() => setShowAdminOverrideConfirm(false)} className="flex-1 py-2 bg-stone-100 text-stone-600 rounded-lg font-bold text-xs">Cancel</button>
+                      <button onClick={handleAdminOverride} className="flex-1 py-2 bg-amber-500 text-white rounded-lg font-bold text-xs">Yes</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
-        {/* ── COMPLETED: POD summary ── */}
+        {/* ── COMPLETED: POD summary — Tile Layout ── */}
         {isCompleted && (() => {
           // Support both old field name (photo) and new (confirmationPhoto)
           const podPhoto = order.confirmationPhoto || (order as any).photo || null;
           const podSig = order.confirmationSignature || (order as any).signature || null;
           const podNotes = order.driverNotes || (order as any).notes || null;
           return (
-          <div className="mx-3 mt-3 mb-4 space-y-2">
+          <div className="mx-3 mt-6 mb-4 space-y-4">
             {/* Status + timestamp card */}
-            <div className="bg-white rounded-xl border border-stone-200 px-4 py-3">
-              <div className="flex items-center justify-between">
+            <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-2xl border border-green-200 px-4 py-4">
+              <div className="flex items-center justify-between mb-2">
                 <StatusBadge status={order.status} />
-                <span className="text-[10px] font-black uppercase text-stone-400">Proof of Delivery</span>
+                {order.completedAt && (
+                  <span className="text-[10px] font-bold text-stone-500">
+                    {new Date(order.completedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} at {new Date(order.completedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                )}
               </div>
-              {order.completedAt && (
-                <p className="text-xs font-bold text-stone-600 mt-2">
-                  🕐 {new Date(order.completedAt).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })} at {new Date(order.completedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-                </p>
-              )}
-              {!order.completedAt && (
-                <p className="text-[10px] text-stone-400 mt-1 italic">No timestamp recorded</p>
-              )}
-              {podNotes && <p className="text-sm italic text-stone-600 mt-2">"{podNotes}"</p>}
-              {order.driverId && <p className="text-[10px] text-stone-400 mt-1">Driver: {order.driverName || order.driverId}</p>}
+              {podNotes && <p className="text-sm italic text-stone-600 mt-2 bg-white/50 rounded-lg px-3 py-2">"{podNotes}"</p>}
             </div>
-            {/* Photo */}
-            {podPhoto ? (
-              <div className="rounded-xl overflow-hidden border border-stone-200">
-                <div className="bg-stone-100 px-3 py-2">
-                  <p className="text-[9px] font-black uppercase text-stone-500">📷 Delivery Photo</p>
-                </div>
-                <img src={podPhoto} className="w-full max-h-64 object-cover" alt="Delivery Photo" />
-              </div>
-            ) : (
-              <div className="rounded-xl border border-dashed border-stone-200 px-4 py-3 flex items-center gap-2">
-                <span className="text-lg">📷</span>
-                <p className="text-xs text-stone-400 font-bold">No delivery photo on file</p>
-              </div>
-            )}
-            {/* Signature */}
-            {podSig ? (
-              <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
-                <div className="bg-stone-100 px-3 py-2">
-                  <p className="text-[9px] font-black uppercase text-stone-500">✍️ Signature</p>
-                </div>
-                <div className="p-3">
-                  <img src={podSig} className="w-full max-h-24 object-contain" alt="Signature" />
-                </div>
-              </div>
-            ) : (
-              <div className="rounded-xl border border-dashed border-stone-200 px-4 py-3 flex items-center gap-2">
-                <span className="text-lg">✍️</span>
-                <p className="text-xs text-stone-400 font-bold">No signature on file</p>
-              </div>
-            )}
-            {/* Admin: REVERT accidentally confirmed delivery */}
-            {isAdmin && order.status === DeliveryStatus.DELIVERED && !order.successNotificationSent && (
-              !showRevertConfirm ? (
-                <button onClick={() => setShowRevertConfirm(true)}
-                  className="w-full py-3 bg-stone-100 text-stone-500 rounded-xl font-black uppercase text-xs flex items-center justify-center gap-2 active:scale-95 border border-stone-200">
-                  ↩ Undo — Marked Delivered by Mistake
-                </button>
-              ) : (
-                <div className="bg-red-50 border-2 border-red-300 rounded-2xl p-4 space-y-3">
-                  <p className="text-red-700 font-black text-sm text-center uppercase">⚠ Revert to Driver Assigned?</p>
-                  <p className="text-red-600 text-xs text-center">This will clear the photo, signature, and DELIVERED status. Cannot be undone.</p>
-                  <div className="flex gap-2">
-                    <button onClick={() => setShowRevertConfirm(false)}
-                      className="flex-1 py-3 bg-stone-100 text-stone-600 rounded-xl font-black uppercase text-xs">Cancel</button>
-                    <button onClick={handleRevert}
-                      className="flex-1 py-3 bg-red-600 text-white rounded-xl font-black uppercase text-xs">Yes, Revert</button>
+
+            {/* POD Tiles — Side by side */}
+            <div className="flex gap-3">
+              {/* Photo Tile */}
+              <div className="flex-1 bg-[#F9FAFB] rounded-2xl border border-stone-200 overflow-hidden" style={{ minHeight: '120px' }}>
+                {podPhoto ? (
+                  <div className="relative w-full h-full">
+                    <img src={podPhoto} className="w-full h-full object-cover" alt="Delivery Photo" style={{ minHeight: '120px' }} />
+                    <div className="absolute bottom-2 left-2">
+                      <span className="text-white text-[9px] font-black uppercase bg-green-500/90 px-2 py-0.5 rounded-full">✓ Photo</span>
+                    </div>
                   </div>
-                </div>
-              )
-            )}
-            {/* Admin: send notification */}
-            {isAdmin && order.status === DeliveryStatus.DELIVERED && !order.successNotificationSent && !showRevertConfirm && (
-              !showSendConfirm ? (
-                <button onClick={() => setShowSendConfirm(true)}
-                  className="w-full py-2.5 bg-stone-100 text-stone-500 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 active:scale-95 border border-stone-200">
-                  <Bell size={13} /> Send Delivery Confirmation to Customer
-                </button>
-              ) : (
-                <div className="bg-stone-900 rounded-2xl p-4 space-y-3">
-                  <p className="text-white font-black text-sm text-center uppercase">📧 Send confirmation to customer?</p>
-                  <p className="text-stone-400 text-xs text-center">This will email the customer that their order was delivered. Make sure the delivery actually happened first.</p>
-                  <div className="flex gap-2">
-                    <button onClick={() => setShowSendConfirm(false)}
-                      className="flex-1 py-3 bg-stone-700 text-white rounded-xl font-black uppercase text-xs">Cancel</button>
-                    <button onClick={() => { setShowSendConfirm(false); loadPreview('SUCCESS'); }}
-                      className="flex-1 py-3 bg-green-500 text-white rounded-xl font-black uppercase text-xs">Yes, Preview & Send</button>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full p-4 gap-2">
+                    <Camera size={24} className="text-stone-300" />
+                    <p className="text-stone-400 text-xs font-bold text-center">No photo</p>
                   </div>
-                </div>
-              )
-            )}
-            {isAdmin && (order.status === DeliveryStatus.FAILED || order.status === DeliveryStatus.PENDING_RESCHEDULE) && !order.failureNotificationSent && (
-              <button onClick={() => loadPreview('FAILURE')}
-                className="w-full py-3.5 bg-stone-800 text-white rounded-xl font-black uppercase text-sm flex items-center justify-center gap-2 active:scale-95">
-                <Bell size={16} /> Notify Customer of Delay
-              </button>
+                )}
+              </div>
+
+              {/* Signature Tile */}
+              <div className="flex-1 bg-[#F9FAFB] rounded-2xl border border-stone-200 overflow-hidden p-3 flex flex-col" style={{ minHeight: '120px' }}>
+                {podSig ? (
+                  <>
+                    <div className="flex-1 flex items-center justify-center">
+                      <img src={podSig} className="max-w-full max-h-[70px] object-contain" alt="Signature" />
+                    </div>
+                    <span className="text-[9px] font-black uppercase text-green-600 bg-green-100 px-2 py-0.5 rounded-full self-start">✓ Signed</span>
+                  </>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full gap-2">
+                    <PenTool size={24} className="text-stone-300" />
+                    <p className="text-stone-400 text-xs font-bold text-center">No signature</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Notification status */}
+            {order.successNotificationSent && (
+              <div className="flex items-center justify-center gap-2 py-2 bg-green-50 rounded-xl border border-green-100">
+                <span className="text-green-500">✓</span>
+                <p className="text-xs font-bold text-green-700">Delivery confirmation sent to customer</p>
+              </div>
             )}
             {order.failureNotificationSent && (
-              <p className="text-center text-xs font-bold text-green-600">✓ Customer notified</p>
+              <div className="flex items-center justify-center gap-2 py-2 bg-amber-50 rounded-xl border border-amber-100">
+                <span className="text-amber-500">✓</span>
+                <p className="text-xs font-bold text-amber-700">Customer notified of delay</p>
+              </div>
             )}
-            {order.successNotificationSent && (
-              <p className="text-center text-xs font-bold text-green-600">✓ Delivery confirmation sent</p>
+
+            {/* Admin actions — Small footer section */}
+            {isAdmin && (
+              <div className="pt-3 border-t border-stone-100 space-y-2">
+                <p className="text-[9px] font-bold uppercase text-stone-400 tracking-wider text-center">Admin Actions</p>
+                
+                {/* Undo button */}
+                {order.status === DeliveryStatus.DELIVERED && !order.successNotificationSent && (
+                  !showRevertConfirm ? (
+                    <button onClick={() => setShowRevertConfirm(true)}
+                      className="w-full py-2 text-stone-400 text-xs font-bold flex items-center justify-center gap-1 active:text-stone-600">
+                      ↩ Undo — Marked by mistake
+                    </button>
+                  ) : (
+                    <div className="bg-red-50 border border-red-200 rounded-xl p-3 space-y-2">
+                      <p className="text-red-700 font-bold text-xs text-center">Revert to assigned?</p>
+                      <div className="flex gap-2">
+                        <button onClick={() => setShowRevertConfirm(false)} className="flex-1 py-2 bg-stone-100 text-stone-600 rounded-lg font-bold text-xs">No</button>
+                        <button onClick={handleRevert} className="flex-1 py-2 bg-red-500 text-white rounded-lg font-bold text-xs">Yes</button>
+                      </div>
+                    </div>
+                  )
+                )}
+
+                {/* Send notification */}
+                {order.status === DeliveryStatus.DELIVERED && !order.successNotificationSent && !showRevertConfirm && (
+                  !showSendConfirm ? (
+                    <button onClick={() => setShowSendConfirm(true)}
+                      className="w-full py-2 text-stone-400 text-xs font-bold flex items-center justify-center gap-1 active:text-stone-600">
+                      <Bell size={12} /> Send delivery confirmation
+                    </button>
+                  ) : (
+                    <div className="bg-stone-900 rounded-xl p-3 space-y-2">
+                      <p className="text-white font-bold text-xs text-center">Send confirmation email?</p>
+                      <div className="flex gap-2">
+                        <button onClick={() => setShowSendConfirm(false)} className="flex-1 py-2 bg-stone-700 text-white rounded-lg font-bold text-xs">No</button>
+                        <button onClick={() => { setShowSendConfirm(false); loadPreview('SUCCESS'); }} className="flex-1 py-2 bg-green-500 text-white rounded-lg font-bold text-xs">Yes</button>
+                      </div>
+                    </div>
+                  )
+                )}
+
+                {/* Notify delay for failed orders */}
+                {(order.status === DeliveryStatus.FAILED || order.status === DeliveryStatus.PENDING_RESCHEDULE) && !order.failureNotificationSent && (
+                  <button onClick={() => loadPreview('FAILURE')}
+                    className="w-full py-2.5 bg-stone-800 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1 active:scale-[0.98]">
+                    <Bell size={12} /> Notify Customer of Delay
+                  </button>
+                )}
+
+                {/* Driver info - small footer text */}
+                {order.driverId && (
+                  <p className="text-[10px] text-stone-400 text-center pt-1">
+                    Delivered by {order.driverName || order.driverId}
+                  </p>
+                )}
+              </div>
             )}
           </div>
           );
