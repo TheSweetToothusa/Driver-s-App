@@ -2213,7 +2213,8 @@ const OrdersView: React.FC<OrdersViewProps> = ({
           const isDelivered = order.status === DeliveryStatus.DELIVERED;
           return (
             <div key={order.id}
-              className={`mx-3 mb-2 rounded-xl border border-stone-200 overflow-hidden transition-all ${isDelivered ? 'bg-[#F8F9FA]' : 'bg-white'}`}>
+              onClick={() => onSelectOrder(order)}
+              className={`mx-3 mb-2 rounded-xl border border-stone-200 overflow-hidden transition-all cursor-pointer active:scale-[0.98] ${isDelivered ? 'bg-[#F8F9FA]' : 'bg-white'}`}>
               {/* Status bar with BIG order number */}
               <div className={`${cardBg} px-3 py-2 flex items-center justify-between`}>
                 <span className={`text-[10px] font-black uppercase tracking-widest ${isDelivered ? 'text-stone-500' : 'text-white'}`}>{labelText}</span>
@@ -2242,7 +2243,7 @@ const OrdersView: React.FC<OrdersViewProps> = ({
                 ) : (
                   <span className="text-2xl font-black text-stone-200 w-7 shrink-0 text-center">{idx + 1}</span>
                 )}
-                <div className="flex-1 min-w-0 cursor-pointer" onClick={() => onSelectOrder(order)}>
+                <div className="flex-1 min-w-0">
                   {/* RECIPIENT NAME — first and largest */}
                   <p className="text-base font-black text-stone-900 leading-tight">{order.giftReceiverName || order.customer?.name}</p>
                   {renderAttemptBadge(order)}
@@ -2266,7 +2267,7 @@ const OrdersView: React.FC<OrdersViewProps> = ({
                     </div>
                   )}
                 </div>
-                <ChevronRight size={16} className="text-stone-300 shrink-0 cursor-pointer" onClick={() => onSelectOrder(order)} />
+                <ChevronRight size={16} className="text-stone-300 shrink-0 " />
               </div>
             </div>
           );
