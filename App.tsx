@@ -2486,6 +2486,13 @@ const ScheduleView: React.FC<{
       } else if (driverFilter !== 'ALL') {
         if (d.driverId !== driverFilter) return false;
       }
+      // HIDE PAST-DATED OPEN ORDERS — force end-of-day closeout
+      // Orders from before today that are still open should not appear
+      const orderDate = (d.deliveryDate || '').split('T')[0];
+      if (orderDate && orderDate < todayStr && OPEN_STATUSES.includes(d.status)) {
+        // Skip past-dated orders that weren't closed — admins can still see via search
+        if (!search.trim()) return false;
+      }
       // Status filter
       if (statusFilter === 'OPEN' && !OPEN_STATUSES.includes(d.status)) return false;
       if (statusFilter === 'DONE' && !DONE_STATUSES.includes(d.status)) return false;
@@ -2504,7 +2511,7 @@ const ScheduleView: React.FC<{
       }
       return true;
     });
-  }, [deliveries, driverFilter, statusFilter, search, isAdmin, currentUserId]);
+  }, [deliveries, driverFilter, statusFilter, search, isAdmin, currentUserId, todayStr]);
 
   // Group by date, sorted ascending
   const grouped = useMemo(() => {
