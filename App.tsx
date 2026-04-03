@@ -2845,8 +2845,8 @@ const ScheduleView: React.FC<{
         <div className="px-4 py-3 bg-stone-50 border-b border-stone-200 space-y-2">
           {/* Saved confirmation banner */}
           {routeSavedMsg ? (
-            <div className="w-full py-2.5 rounded-2xl bg-green-600 text-white font-black text-sm flex items-center justify-center gap-2">
-              {routeSavedMsg}
+            <div className="w-full py-2 rounded-2xl bg-stone-900 text-white font-black text-xs flex items-center justify-center gap-2">
+              ✓ Route ready
             </div>
           ) : null}
 
@@ -3484,6 +3484,48 @@ const DriversView: React.FC<{
           </div>
         )}
       </div>
+    </div>
+  );
+};
+
+interface DriverPayCardProps {
+  row: { id: string; name: string; count: number; total: number; stops: Delivery[] };
+}
+const DriverPayCard: React.FC<DriverPayCardProps> = ({ row }) => {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="bg-white border border-stone-100 rounded-[24px] shadow-sm overflow-hidden">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-5 py-4 active:bg-stone-50"
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-stone-900 flex items-center justify-center text-white font-black text-sm shrink-0">
+            {row.name.charAt(0).toUpperCase()}
+          </div>
+          <div className="text-left">
+            <p className="font-black text-stone-900 text-sm">{row.name}</p>
+            <p className="text-[10px] font-bold text-stone-400 uppercase">{row.count} {row.count === 1 ? 'delivery' : 'deliveries'}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-2xl font-black text-stone-900">${row.total.toFixed(2)}</span>
+          <ChevronDown size={16} className={`text-stone-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+        </div>
+      </button>
+      {open && (
+        <div className="border-t border-stone-100 divide-y divide-stone-50">
+          {row.stops.map(d => (
+            <div key={d.id} className="flex items-center justify-between px-5 py-3">
+              <div>
+                <p className="text-xs font-black text-stone-800">#{d.orderNumber}</p>
+                <p className="text-[10px] text-stone-400 font-medium">{d.address?.city || '—'} · {d.address?.zip || ''}</p>
+              </div>
+              <span className="text-sm font-black text-stone-700">${(d.deliveryFee || 0).toFixed(2)}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };
