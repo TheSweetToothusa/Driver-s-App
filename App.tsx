@@ -1157,7 +1157,12 @@ const OrderDetail: React.FC<{
           {/* ITEMS CARD */}
           {order.items?.length > 0 && (
             <div style={{ background: '#ffffff', borderRadius: 12, padding: 16, marginBottom: 12, boxShadow: '0 1px 3px rgba(0, 0, 0, 0.08)', borderLeft: '3px solid #E5E7EB' }}>
-              <p style={{ fontSize: 10, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 12 }}>Items</p>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <p style={{ fontSize: 10, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Items</p>
+                <p style={{ fontSize: 13, fontWeight: 800, color: '#111827', background: '#F3F4F6', padding: '4px 10px', borderRadius: 9999 }}>
+                  {order.items.reduce((sum: number, it: any) => sum + (it.quantity || 1), 0)} {order.items.reduce((sum: number, it: any) => sum + (it.quantity || 1), 0) === 1 ? 'product' : 'products'}
+                </p>
+              </div>
               
               {order.items.map((item, i) => (
                 <div key={i} style={{ paddingBottom: 12, marginBottom: 12, borderBottom: i < order.items.length - 1 ? '1px solid #F3F4F6' : 'none' }}>
