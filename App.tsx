@@ -30,6 +30,7 @@ const STATUSES_FOR_DROPDOWN = [
   { value: 'FAILED',             label: '1st Attempt Failed', color: '#dc2626' },
   { value: 'SECOND_ATTEMPT',     label: '2nd Attempt',        color: '#374151' },
   { value: 'PENDING_RESCHEDULE', label: 'Needs Reschedule',   color: '#d97706' },
+  { value: 'CANCELLED',          label: 'Cancelled',          color: '#ef4444' },
   { value: 'CLOSED',             label: 'Closed',             color: '#9ca3af' },
 ];
 const formatTime = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
