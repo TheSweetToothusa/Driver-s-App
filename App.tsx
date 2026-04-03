@@ -1568,8 +1568,7 @@ const OrderDetail: React.FC<{
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({ status: newStatus })
                         });
-                        setDeliveries(prev => prev.map(d => d.id === order.id ? { ...d, status: newStatus as any } : d));
-                        setSelectedOrder(prev => prev ? { ...prev, status: newStatus as any } : null);
+                        onUpdate(order.id, { status: newStatus as any });
                       } catch (err) { console.error('Failed to update status:', err); }
                     }}
                     className="w-full bg-stone-50 border border-stone-200 rounded-lg px-2 py-2 text-xs font-bold outline-none focus:border-black"
@@ -1586,7 +1585,7 @@ const OrderDetail: React.FC<{
                     value={order.driverId || ''}
                     onChange={async (e) => {
                       const newDriverId = e.target.value;
-                      const newDriver = users.find(u => u.id === newDriverId);
+                      const newDriver = allUsers.find(u => u.id === newDriverId);
                       if (!newDriverId || !newDriver) return;
                       try {
                         await fetch(`/api/deliveries/${order.id}/assign`, {
@@ -1594,14 +1593,13 @@ const OrderDetail: React.FC<{
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({ driverId: newDriverId, driverName: newDriver.name })
                         });
-                        setDeliveries(prev => prev.map(d => d.id === order.id ? { ...d, driverId: newDriverId, driverName: newDriver.name } : d));
-                        setSelectedOrder(prev => prev ? { ...prev, driverId: newDriverId, driverName: newDriver.name } : null);
+                        onUpdate(order.id, { driverId: newDriverId, driverName: newDriver.name });
                       } catch (err) { console.error('Failed to reassign:', err); }
                     }}
                     className="w-full bg-stone-50 border border-stone-200 rounded-lg px-2 py-2 text-xs font-bold outline-none focus:border-black"
                   >
                     <option value="">Select...</option>
-                    {users.filter(u => u.role === 'DRIVER' || u.role === 'ADMIN' || u.role === 'SUPER_ADMIN').map(u => (
+                    {allUsers.filter(u => u.role === 'DRIVER' || u.role === 'ADMIN' || u.role === 'SUPER_ADMIN').map(u => (
                       <option key={u.id} value={u.id}>{u.name}</option>
                     ))}
                   </select>
@@ -1622,8 +1620,7 @@ const OrderDetail: React.FC<{
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ deliveryDate: newDate })
                       });
-                      setDeliveries(prev => prev.map(d => d.id === order.id ? { ...d, deliveryDate: newDate } : d));
-                      setSelectedOrder(prev => prev ? { ...prev, deliveryDate: newDate } : null);
+                      onUpdate(order.id, { deliveryDate: newDate });
                     } catch (err) { console.error('Failed to reschedule:', err); }
                   }}
                   className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm font-bold outline-none focus:border-black"
