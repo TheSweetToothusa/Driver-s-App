@@ -3933,6 +3933,9 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
   const [resetPinId, setResetPinId] = useState<string | null>(null);
   const [newPinVal, setNewPinVal] = useState('');
   
+  // SMS Templates
+  const [templates, setTemplates] = useState<MessageTemplate[]>([]);
+  
   // Fee calculator states
   const [feeZip, setFeeZip] = useState('');
   const [feeResult, setFeeResult] = useState<number | null>(null);
@@ -3949,6 +3952,7 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
 
   useEffect(() => {
     fetch('/api/config/default-driver').then(r => r.json()).then(d => { if (d.driverId) setDefaultDriverId(d.driverId); });
+    fetch('/api/templates').then(r => r.json()).then(d => setTemplates(d.templates || []));
   }, []);
 
   const drivers = allUsers.filter(u => u.role === 'DRIVER');
@@ -4212,11 +4216,26 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
             </button>
             {smsTemplatesExpanded && (
               <div className="px-4 pb-4 border-t border-stone-100 pt-3 space-y-2">
-                <p className="text-xs text-stone-500 mb-2">Quick-send SMS templates for drivers.</p>
-                <button onClick={() => setActiveNav('MESSAGES')}
-                  className="w-full py-3 bg-stone-100 text-stone-700 rounded-xl font-bold text-sm active:scale-95">
-                  Open Messages Tab →
-                </button>
+                {templates.length === 0 ? (
+                  <p className="text-xs text-stone-400 text-center py-4">Loading templates...</p>
+                ) : (
+                  <>
+                    <p className="text-[9px] font-black uppercase text-stone-400 mb-2">Quick-send buttons for drivers</p>
+                    {templates.map(t => (
+                      <div key={t.id} className="p-3 bg-stone-50 rounded-xl">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-bold text-sm text-stone-800">{t.label}</span>
+                          <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${t.id === 'SUCCESS' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>{t.id}</span>
+                        </div>
+                        <p className="text-xs text-stone-500 leading-relaxed line-clamp-2">{t.body}</p>
+                      </div>
+                    ))}
+                    <button onClick={() => setActiveNav('MESSAGES')}
+                      className="w-full py-2 mt-2 text-xs font-bold text-stone-500 underline">
+                      Edit templates in Messages →
+                    </button>
+                  </>
+                )}
               </div>
             )}
           </div>
