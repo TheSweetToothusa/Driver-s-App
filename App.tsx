@@ -4206,8 +4206,8 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
           {/* Backdrop */}
           <div className="absolute inset-0 bg-black/50" onClick={() => setFeesModalOpen(false)} />
           
-          {/* Modal content */}
-          <div className="relative bg-white w-full max-h-[85vh] rounded-t-3xl overflow-hidden animate-in slide-in-from-bottom duration-300">
+          {/* Modal content - constrained to app width */}
+          <div className="relative bg-white w-full max-w-md max-h-[85vh] rounded-t-3xl overflow-hidden animate-in slide-in-from-bottom duration-300 shadow-2xl">
             {/* Header */}
             <div className="sticky top-0 bg-amber-400 px-4 py-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
