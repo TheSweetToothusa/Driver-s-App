@@ -1545,72 +1545,125 @@ const OrderDetail: React.FC<{
           </div>
         )}
 
-        {/* ── ADMIN SECTION — collapsed at bottom ── */}
+        {/* ── ADMIN SECTION — always visible, all controls in one place ── */}
         {isAdmin && (
           <div className="mx-3 mt-3 bg-white rounded-xl border border-stone-200 overflow-hidden">
-            <div className="px-4 py-2 bg-stone-50 border-b border-stone-100 flex items-center justify-between">
-              <p className="text-[10px] font-black uppercase text-stone-500 tracking-widest">Admin</p>
-              <button onClick={() => setEditingContact(e => !e)}
-                className={`text-[10px] font-black uppercase px-3 py-1 rounded-full transition-all ${editingContact ? 'bg-black text-white' : 'bg-stone-100 text-stone-600'}`}>
-                <Edit3 size={10} className="inline mr-1" />{editingContact ? 'Editing' : 'Edit Info'}
-              </button>
+            <div className="px-4 py-2 bg-stone-50 border-b border-stone-100">
+              <p className="text-[10px] font-black uppercase text-stone-500 tracking-widest">Admin Controls</p>
             </div>
 
-            {editingContact && (
-              <div className="px-4 py-3 border-b border-stone-100 space-y-2">
-                <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest mb-2">Recipient</p>
-                <input value={editFields.recipientName} onChange={e => setEditFields(p => ({ ...p, recipientName: e.target.value }))} placeholder="Recipient name" className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-black" />
-                <input value={editFields.recipientPhone} onChange={e => setEditFields(p => ({ ...p, recipientPhone: e.target.value }))} placeholder="Recipient phone" className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-black" />
-                <input value={editFields.recipientEmail} onChange={e => setEditFields(p => ({ ...p, recipientEmail: e.target.value }))} placeholder="Recipient email" className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-black" />
-                <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest mt-2 mb-2">Sender</p>
-                <input value={editFields.senderName} onChange={e => setEditFields(p => ({ ...p, senderName: e.target.value }))} placeholder="Sender name" className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-black" />
-                <input value={editFields.senderPhone} onChange={e => setEditFields(p => ({ ...p, senderPhone: e.target.value }))} placeholder="Sender phone" className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-black" />
-                <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest mt-2 mb-2">Address</p>
-                <input value={editFields.street} onChange={e => setEditFields(p => ({ ...p, street: e.target.value }))} placeholder="Street address" className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-black" />
-                <div className="grid grid-cols-2 gap-2">
-                  <input value={editFields.city} onChange={e => setEditFields(p => ({ ...p, city: e.target.value }))} placeholder="City" className="bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-black" />
-                  <input value={editFields.zip} onChange={e => setEditFields(p => ({ ...p, zip: e.target.value.replace(/\D/g,'').slice(0,5) }))} placeholder="ZIP" className="bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-black" />
+            {/* Quick Controls Row: Status + Driver + Date */}
+            <div className="px-4 py-3 border-b border-stone-100 space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                {/* Status */}
+                <div>
+                  <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest mb-1">Status</p>
+                  <select
+                    value={order.status}
+                    onChange={async (e) => {
+                      const newStatus = e.target.value;
+                      try {
+                        await fetch(`/api/orders/${order.id}/status`, {
+                          method: 'PATCH',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ status: newStatus })
+                        });
+                        setDeliveries(prev => prev.map(d => d.id === order.id ? { ...d, status: newStatus as any } : d));
+                        setSelectedOrder(prev => prev ? { ...prev, status: newStatus as any } : null);
+                      } catch (err) { console.error('Failed to update status:', err); }
+                    }}
+                    className="w-full bg-stone-50 border border-stone-200 rounded-lg px-2 py-2 text-xs font-bold outline-none focus:border-black"
+                  >
+                    {STATUSES_FOR_DROPDOWN.map(s => (
+                      <option key={s.value} value={s.value}>{s.label}</option>
+                    ))}
+                  </select>
                 </div>
-                {role === 'SUPER_ADMIN' && (
-                  <div>
-                    <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest mt-2 mb-2">Delivery Fee (Super Admin only)</p>
-                    <input value={editFields.deliveryFee} onChange={e => setEditFields(p => ({ ...p, deliveryFee: e.target.value }))} placeholder="Fee ($)" inputMode="decimal" className="w-full bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-sm font-black outline-none focus:border-amber-400" />
-                  </div>
-                )}
-                <div className="flex gap-2 pt-1">
-                  <button onClick={handleSaveContact} className="flex-1 py-3 bg-black text-white rounded-xl font-black uppercase text-xs">Save Changes</button>
-                  <button onClick={() => setEditingContact(false)} className="flex-1 py-3 bg-stone-100 text-stone-600 rounded-xl font-black uppercase text-xs">Cancel</button>
+                {/* Driver */}
+                <div>
+                  <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest mb-1">Driver</p>
+                  <select
+                    value={order.driverId || ''}
+                    onChange={async (e) => {
+                      const newDriverId = e.target.value;
+                      const newDriver = users.find(u => u.id === newDriverId);
+                      if (!newDriverId || !newDriver) return;
+                      try {
+                        await fetch(`/api/deliveries/${order.id}/assign`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ driverId: newDriverId, driverName: newDriver.name })
+                        });
+                        setDeliveries(prev => prev.map(d => d.id === order.id ? { ...d, driverId: newDriverId, driverName: newDriver.name } : d));
+                        setSelectedOrder(prev => prev ? { ...prev, driverId: newDriverId, driverName: newDriver.name } : null);
+                      } catch (err) { console.error('Failed to reassign:', err); }
+                    }}
+                    className="w-full bg-stone-50 border border-stone-200 rounded-lg px-2 py-2 text-xs font-bold outline-none focus:border-black"
+                  >
+                    <option value="">Select...</option>
+                    {users.filter(u => u.role === 'DRIVER' || u.role === 'ADMIN' || u.role === 'SUPER_ADMIN').map(u => (
+                      <option key={u.id} value={u.id}>{u.name}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
-            )}
-
-            <div className="px-4 py-3 border-b border-stone-100">
-              <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest mb-2">Assigned Driver</p>
-              <select
-                value={order.driverId || ''}
-                onChange={async (e) => {
-                  const newDriverId = e.target.value;
-                  const newDriver = users.find(u => u.id === newDriverId);
-                  if (!newDriverId || !newDriver) return;
-                  try {
-                    await fetch(`/api/deliveries/${order.id}/assign`, {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ driverId: newDriverId, driverName: newDriver.name })
-                    });
-                    setDeliveries(prev => prev.map(d => d.id === order.id ? { ...d, driverId: newDriverId, driverName: newDriver.name } : d));
-                    setSelectedOrder(prev => prev ? { ...prev, driverId: newDriverId, driverName: newDriver.name } : null);
-                  } catch (err) { console.error('Failed to reassign:', err); }
-                }}
-                className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm font-black outline-none focus:border-black"
-              >
-                <option value="">Select driver...</option>
-                {users.filter(u => u.role === 'DRIVER' || u.role === 'ADMIN' || u.role === 'SUPER_ADMIN').map(u => (
-                  <option key={u.id} value={u.id}>{u.name}</option>
-                ))}
-              </select>
+              {/* Delivery Date */}
+              <div>
+                <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest mb-1">Delivery Date</p>
+                <input
+                  type="date"
+                  value={(order.deliveryDate || '').split('T')[0]}
+                  onChange={async (e) => {
+                    const newDate = e.target.value;
+                    if (!newDate) return;
+                    try {
+                      await fetch(`/api/orders/${order.id}/reschedule`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ deliveryDate: newDate })
+                      });
+                      setDeliveries(prev => prev.map(d => d.id === order.id ? { ...d, deliveryDate: newDate } : d));
+                      setSelectedOrder(prev => prev ? { ...prev, deliveryDate: newDate } : null);
+                    } catch (err) { console.error('Failed to reschedule:', err); }
+                  }}
+                  className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm font-bold outline-none focus:border-black"
+                />
+              </div>
+              {role === 'SUPER_ADMIN' && (
+                <div>
+                  <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest mb-1">Delivery Fee</p>
+                  <input value={editFields.deliveryFee} onChange={e => setEditFields(p => ({ ...p, deliveryFee: e.target.value }))} onBlur={handleSaveContact} placeholder="$0.00" inputMode="decimal" className="w-full bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-sm font-black outline-none focus:border-amber-400" />
+                </div>
+              )}
             </div>
 
+            {/* Edit Contact Info - Collapsible */}
+            <div className="border-b border-stone-100">
+              <button onClick={() => setEditingContact(e => !e)} className="w-full px-4 py-2 flex items-center justify-between bg-stone-50 active:bg-stone-100">
+                <span className="text-[10px] font-black uppercase text-stone-500 tracking-widest">Edit Contact & Address</span>
+                <ChevronRight size={14} className={`text-stone-400 transition-transform ${editingContact ? 'rotate-90' : ''}`} />
+              </button>
+              {editingContact && (
+                <div className="px-4 py-3 space-y-2">
+                  <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest">Recipient</p>
+                  <input value={editFields.recipientName} onChange={e => setEditFields(p => ({ ...p, recipientName: e.target.value }))} placeholder="Recipient name" className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-black" />
+                  <input value={editFields.recipientPhone} onChange={e => setEditFields(p => ({ ...p, recipientPhone: e.target.value }))} placeholder="Recipient phone" className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-black" />
+                  <input value={editFields.recipientEmail} onChange={e => setEditFields(p => ({ ...p, recipientEmail: e.target.value }))} placeholder="Recipient email" className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-black" />
+                  <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest mt-2">Sender</p>
+                  <input value={editFields.senderName} onChange={e => setEditFields(p => ({ ...p, senderName: e.target.value }))} placeholder="Sender name" className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-black" />
+                  <input value={editFields.senderPhone} onChange={e => setEditFields(p => ({ ...p, senderPhone: e.target.value }))} placeholder="Sender phone" className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-black" />
+                  <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest mt-2">Address</p>
+                  <input value={editFields.street} onChange={e => setEditFields(p => ({ ...p, street: e.target.value }))} placeholder="Street address" className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-black" />
+                  <div className="grid grid-cols-2 gap-2">
+                    <input value={editFields.city} onChange={e => setEditFields(p => ({ ...p, city: e.target.value }))} placeholder="City" className="bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-black" />
+                    <input value={editFields.zip} onChange={e => setEditFields(p => ({ ...p, zip: e.target.value.replace(/\D/g,'').slice(0,5) }))} placeholder="ZIP" className="bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-black" />
+                  </div>
+                  <button onClick={handleSaveContact} className="w-full py-3 bg-black text-white rounded-xl font-black uppercase text-xs mt-2">Save Contact Changes</button>
+                </div>
+              )}
+            </div>
+
+            {/* Admin Notes */}
             <div className="px-4 py-3">
               {order.adminNotes && <div className="text-xs text-stone-600 mb-2 bg-stone-50 rounded-lg p-2 whitespace-pre-line">{order.adminNotes}</div>}
               <div className="flex gap-2">
