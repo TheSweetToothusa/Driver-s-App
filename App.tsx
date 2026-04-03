@@ -3919,8 +3919,9 @@ const PendingRescheduleQueue: React.FC<{ allUsers: UserAccount[] }> = ({ allUser
 };
 
 const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: UserAccount[]; setAllUsers: React.Dispatch<React.SetStateAction<UserAccount[]>>; }> = ({ role, deliveries, allUsers, setAllUsers }) => {
-  // Section visibility states
+  // Modal/accordion states
   const [feesModalOpen, setFeesModalOpen] = useState(false);
+  const [activeNav, setActiveNav] = useState<'RESCHEDULE' | 'MESSAGES' | null>(null);
   const [addDriverExpanded, setAddDriverExpanded] = useState(false);
   const [smsTemplatesExpanded, setSmsTemplatesExpanded] = useState(false);
   const [driverMenuOpen, setDriverMenuOpen] = useState<string | null>(null);
@@ -3945,9 +3946,6 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
   // Default driver
   const [defaultDriverId, setDefaultDriverId] = useState<string>('');
   const [defaultDriverSaved, setDefaultDriverSaved] = useState(false);
-
-  // Navigation states
-  const [activeNav, setActiveNav] = useState<'DRIVERS' | 'RESCHEDULE' | 'MESSAGES' | null>('DRIVERS');
 
   useEffect(() => {
     fetch('/api/config/default-driver').then(r => r.json()).then(d => { if (d.driverId) setDefaultDriverId(d.driverId); });
@@ -4023,357 +4021,288 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
   const grandTotal = filteredRows.reduce((s, r) => s + r.total, 0);
   const grandCount = filteredRows.reduce((s, r) => s + r.count, 0);
 
-  // Stats for header
-  const activeDriverCount = drivers.filter(d => d.isActive).length;
-  const completedToday = deliveries.filter(d => d.status === DeliveryStatus.DELIVERED && (d.completedAt || '').startsWith(new Date().toISOString().split('T')[0])).length;
-  const openOrders = deliveries.filter(d => ![DeliveryStatus.DELIVERED, DeliveryStatus.CLOSED].includes(d.status)).length;
-
   return (
-    <div className="flex flex-col h-full" style={{ background: '#F8F9FA' }}>
-      
+    <div className="px-4 pt-3 space-y-3 pb-4">
+
       {/* ═══════════════════════════════════════════════════════════════════
-          STAT BAR — Open / Out / Done
+          1. ADMIN TOOLS TILES (Fees highlighted yellow)
           ═══════════════════════════════════════════════════════════════════ */}
-      <div className="bg-white border-b border-stone-100 px-4 py-3">
-        <div className="flex justify-around">
-          <div className="text-center">
-            <p className="text-2xl font-black text-stone-800">{openOrders}</p>
-            <p className="text-[9px] font-bold uppercase text-stone-400">Open</p>
-          </div>
-          <div className="text-center">
-            <p className="text-2xl font-black text-amber-500">{deliveries.filter(d => d.status === DeliveryStatus.IN_TRANSIT).length}</p>
-            <p className="text-[9px] font-bold uppercase text-stone-400">Out</p>
-          </div>
-          <div className="text-center">
-            <p className="text-2xl font-black text-green-600">{completedToday}</p>
-            <p className="text-[9px] font-bold uppercase text-stone-400">Done Today</p>
-          </div>
-        </div>
+      <div className="grid grid-cols-4 gap-2">
+        <button onClick={() => setFeesModalOpen(true)}
+          className="flex flex-col items-center justify-center py-3 rounded-2xl bg-amber-400 shadow-md active:scale-95 transition-all">
+          <DollarSign size={20} className="text-amber-900" />
+          <span className="text-[9px] font-black uppercase mt-1 text-amber-900">Fees</span>
+        </button>
+        <button onClick={() => setActiveNav(null)}
+          className="flex flex-col items-center justify-center py-3 rounded-2xl bg-white border border-stone-200 text-stone-600 active:scale-95">
+          <Users size={20} />
+          <span className="text-[9px] font-black uppercase mt-1">Drivers</span>
+        </button>
+        <button onClick={() => setActiveNav('RESCHEDULE')}
+          className={`flex flex-col items-center justify-center py-3 rounded-2xl transition-all active:scale-95 ${activeNav === 'RESCHEDULE' ? 'bg-black text-white' : 'bg-white border border-stone-200 text-stone-600'}`}>
+          <Calendar size={20} />
+          <span className="text-[9px] font-black uppercase mt-1">Reschedule</span>
+        </button>
+        <button onClick={() => setActiveNav('MESSAGES')}
+          className={`flex flex-col items-center justify-center py-3 rounded-2xl transition-all active:scale-95 ${activeNav === 'MESSAGES' ? 'bg-black text-white' : 'bg-white border border-stone-200 text-stone-600'}`}>
+          <MessageSquare size={20} />
+          <span className="text-[9px] font-black uppercase mt-1">Messages</span>
+        </button>
       </div>
 
       {/* ═══════════════════════════════════════════════════════════════════
-          ADMIN TOOL TILES — The "Big Four" (Fees highlighted)
+          2. DEFAULT DRIVER (Slim white card)
           ═══════════════════════════════════════════════════════════════════ */}
-      <div className="px-4 py-3">
-        <div className="grid grid-cols-4 gap-2">
-          {/* FEES — Gold highlight, opens modal */}
-          <button onClick={() => setFeesModalOpen(true)}
-            className="flex flex-col items-center justify-center py-3 rounded-2xl bg-amber-400 shadow-md active:scale-95 transition-all">
-            <DollarSign size={22} className="text-amber-900" />
-            <span className="text-[9px] font-black uppercase mt-1 text-amber-900">Fees</span>
-          </button>
-
-          {/* DRIVERS */}
-          <button onClick={() => setActiveNav('DRIVERS')}
-            className={`flex flex-col items-center justify-center py-3 rounded-2xl transition-all ${activeNav === 'DRIVERS' ? 'bg-black text-white shadow-md' : 'bg-white border border-stone-200 text-stone-600'}`}>
-            <Users size={20} />
-            <span className="text-[9px] font-black uppercase mt-1">Drivers</span>
-          </button>
-
-          {/* RESCHEDULE */}
-          <button onClick={() => setActiveNav('RESCHEDULE')}
-            className={`flex flex-col items-center justify-center py-3 rounded-2xl transition-all ${activeNav === 'RESCHEDULE' ? 'bg-black text-white shadow-md' : 'bg-white border border-stone-200 text-stone-600'}`}>
-            <Calendar size={20} />
-            <span className="text-[9px] font-black uppercase mt-1">Reschedule</span>
-          </button>
-
-          {/* MESSAGES */}
-          <button onClick={() => setActiveNav('MESSAGES')}
-            className={`flex flex-col items-center justify-center py-3 rounded-2xl transition-all ${activeNav === 'MESSAGES' ? 'bg-black text-white shadow-md' : 'bg-white border border-stone-200 text-stone-600'}`}>
-            <MessageSquare size={20} />
-            <span className="text-[9px] font-black uppercase mt-1">Messages</span>
-          </button>
+      <div className="bg-white rounded-2xl p-3 shadow-sm flex items-center gap-3">
+        <div className="w-9 h-9 rounded-full bg-green-500 flex items-center justify-center text-white font-black text-sm shrink-0">
+          {currentDefaultDriver?.name?.charAt(0) || 'K'}
         </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-[9px] font-bold uppercase text-stone-400">Default Driver</p>
+          <p className="font-black text-stone-900 text-sm truncate">{currentDefaultDriver?.name || 'Katie'}</p>
+        </div>
+        <select value={defaultDriverId} onChange={e => setDefaultDriverId(e.target.value)}
+          className="bg-stone-50 border border-stone-200 rounded-xl px-2 py-1.5 text-sm font-bold outline-none max-w-[100px]">
+          {allUsers.filter(u => (u.role === 'DRIVER' || u.role === 'MANAGER') && u.isActive).map(u => (
+            <option key={u.id} value={u.id}>{u.name}</option>
+          ))}
+        </select>
+        <button onClick={handleSaveDefaultDriver}
+          className="px-3 py-1.5 bg-black text-white rounded-xl font-black text-[10px] uppercase active:scale-95">
+          {defaultDriverSaved ? '✓' : 'Save'}
+        </button>
       </div>
 
       {/* ═══════════════════════════════════════════════════════════════════
-          MAIN CONTENT AREA
+          RESCHEDULE TAB CONTENT
           ═══════════════════════════════════════════════════════════════════ */}
-      <div className="flex-1 overflow-y-auto px-4 pb-28 space-y-4">
-
-        {/* ─────────────────────────────────────────────────────────────────
-            DRIVERS TAB
-            ───────────────────────────────────────────────────────────────── */}
-        {activeNav === 'DRIVERS' && (
-          <>
-            {/* Default Driver — Compact display */}
-            <div className="bg-white rounded-2xl p-4 shadow-sm flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-green-500 flex items-center justify-center text-white font-black">
-                  {currentDefaultDriver?.name?.charAt(0) || 'K'}
-                </div>
-                <div>
-                  <p className="text-[9px] font-bold uppercase text-stone-400">Default Driver</p>
-                  <p className="font-black text-stone-900">{currentDefaultDriver?.name || 'Katie'}</p>
-                </div>
-              </div>
-              <select value={defaultDriverId} onChange={e => { setDefaultDriverId(e.target.value); }}
-                className="bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-sm font-bold outline-none">
-                {allUsers.filter(u => (u.role === 'DRIVER' || u.role === 'MANAGER') && u.isActive).map(u => (
-                  <option key={u.id} value={u.id}>{u.name}</option>
-                ))}
-              </select>
-              <button onClick={handleSaveDefaultDriver}
-                className="px-4 py-2 bg-black text-white rounded-xl font-black text-xs uppercase active:scale-95">
-                {defaultDriverSaved ? '✓' : 'Save'}
-              </button>
-            </div>
-
-            {/* ───────────────────────────────────────────────────────────
-                MASTER DRIVER LIST — Condensed cards
-                ─────────────────────────────────────────────────────────── */}
-            <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-              <div className="px-4 py-3 border-b border-stone-100">
-                <p className="text-[10px] font-black uppercase text-stone-400">Active Drivers ({activeDriverCount})</p>
-              </div>
-              
-              {drivers.length === 0 ? (
-                <div className="py-8 text-center text-stone-300">
-                  <Users size={24} className="mx-auto mb-2" />
-                  <p className="text-xs font-bold">No drivers yet</p>
-                </div>
-              ) : (
-                <div className="divide-y divide-stone-100">
-                  {drivers.map(u => (
-                    <div key={u.id} className={`px-4 py-3 flex items-center gap-3 ${!u.isActive ? 'opacity-40' : ''}`}>
-                      {/* Left: Avatar + Name */}
-                      <div className="w-10 h-10 rounded-full bg-stone-200 flex items-center justify-center font-black text-stone-600 shrink-0">
-                        {u.name.split(' ').map(n => n[0]).join('').slice(0,2).toUpperCase()}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-bold text-stone-900 truncate">{u.name}</p>
-                        <p className="text-xs text-stone-400 truncate">{u.phone || 'No phone'}{u.vehicle ? ` · ${u.vehicle}` : ''}</p>
-                      </div>
-                      
-                      {/* Right: Status + Menu */}
-                      <div className={`px-2 py-1 rounded-full text-[9px] font-black uppercase ${u.isActive ? 'bg-green-100 text-green-700' : 'bg-stone-100 text-stone-500'}`}>
-                        {u.isActive ? 'Active' : 'Off'}
-                      </div>
-                      
-                      {/* Three-dot menu */}
-                      <div className="relative">
-                        <button onClick={() => setDriverMenuOpen(driverMenuOpen === u.id ? null : u.id)}
-                          className="w-8 h-8 rounded-full hover:bg-stone-100 flex items-center justify-center">
-                          <MoreVertical size={16} className="text-stone-400" />
-                        </button>
-                        
-                        {/* Dropdown menu */}
-                        {driverMenuOpen === u.id && (
-                          <div className="absolute right-0 top-10 bg-white rounded-xl shadow-lg border border-stone-200 py-1 z-50 min-w-[160px]">
-                            <button onClick={() => toggleActive(u)}
-                              className={`w-full px-4 py-2.5 text-left text-sm font-medium ${u.isActive ? 'text-red-600 hover:bg-red-50' : 'text-green-600 hover:bg-green-50'}`}>
-                              {u.isActive ? 'Deactivate' : 'Activate'}
-                            </button>
-                            <button onClick={() => { setResetPinId(u.id); setNewPinVal(''); }}
-                              className="w-full px-4 py-2.5 text-left text-sm font-medium text-stone-700 hover:bg-stone-50">
-                              Change PIN
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Reset PIN inline form */}
-              {resetPinId && (
-                <div className="px-4 py-3 bg-stone-50 border-t border-stone-200 flex items-center gap-2">
-                  <span className="text-xs font-bold text-stone-600">New PIN for {drivers.find(d => d.id === resetPinId)?.name}:</span>
-                  <input type="text" placeholder="4 digits" maxLength={4} inputMode="numeric"
-                    value={newPinVal} onChange={e => setNewPinVal(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                    className="w-20 bg-white border border-stone-200 rounded-lg px-3 py-2 text-sm font-black text-center tracking-widest outline-none" />
-                  <button onClick={() => handleResetPin(resetPinId)}
-                    className="px-3 py-2 bg-black text-white rounded-lg font-bold text-xs">Save</button>
-                  <button onClick={() => { setResetPinId(null); setNewPinVal(''); }}
-                    className="px-3 py-2 bg-stone-200 text-stone-600 rounded-lg font-bold text-xs">Cancel</button>
-                </div>
-              )}
-            </div>
-
-            {/* ───────────────────────────────────────────────────────────
-                ADD NEW DRIVER — Collapsed by default
-                ─────────────────────────────────────────────────────────── */}
-            <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-              <button onClick={() => setAddDriverExpanded(!addDriverExpanded)}
-                className="w-full px-4 py-4 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-stone-100 flex items-center justify-center">
-                    <Plus size={18} className="text-stone-500" />
-                  </div>
-                  <span className="font-bold text-stone-800">Add New Driver</span>
-                </div>
-                <ChevronDown size={20} className={`text-stone-400 transition-transform ${addDriverExpanded ? 'rotate-180' : ''}`} />
-              </button>
-              
-              {addDriverExpanded && (
-                <div className="px-4 pb-4 space-y-2 border-t border-stone-100 pt-3">
-                  <input type="text" placeholder="Name" value={newDriver.name} 
-                    onChange={e => setNewDriver(p => ({ ...p, name: e.target.value }))}
-                    className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-sm font-medium outline-none" />
-                  <input type="tel" placeholder="Phone" value={newDriver.phone} 
-                    onChange={e => setNewDriver(p => ({ ...p, phone: e.target.value }))}
-                    className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-sm font-medium outline-none" />
-                  <input type="text" placeholder="4-digit PIN" maxLength={4} inputMode="numeric" value={newDriver.pin}
-                    onChange={e => setNewDriver(p => ({ ...p, pin: e.target.value.replace(/\D/g, '').slice(0, 4) }))}
-                    className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-sm font-medium outline-none" />
-                  <input type="text" placeholder="Vehicle" value={newDriver.vehicle} 
-                    onChange={e => setNewDriver(p => ({ ...p, vehicle: e.target.value }))}
-                    className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-sm font-medium outline-none" />
-                  {addError && <p className="text-xs font-bold text-red-500">{addError}</p>}
-                  {addSuccess && <p className="text-xs font-bold text-green-600">{addSuccess}</p>}
-                  <button onClick={handleAddDriver}
-                    className="w-full py-3 bg-black text-white rounded-xl font-black uppercase text-sm active:scale-95">
-                    Add Driver
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* ───────────────────────────────────────────────────────────
-                SMS TEMPLATES — Collapsed accordion
-                ─────────────────────────────────────────────────────────── */}
-            <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-              <button onClick={() => setSmsTemplatesExpanded(!smsTemplatesExpanded)}
-                className="w-full px-4 py-4 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-stone-100 flex items-center justify-center">
-                    <MessageCircle size={18} className="text-stone-500" />
-                  </div>
-                  <span className="font-bold text-stone-800">SMS Templates</span>
-                </div>
-                <ChevronDown size={20} className={`text-stone-400 transition-transform ${smsTemplatesExpanded ? 'rotate-180' : ''}`} />
-              </button>
-              
-              {smsTemplatesExpanded && (
-                <div className="px-4 pb-4 border-t border-stone-100 pt-3 space-y-2">
-                  <p className="text-xs text-stone-500">Quick-send templates are configured in the Messages tab.</p>
-                  <button onClick={() => setActiveNav('MESSAGES')}
-                    className="w-full py-3 bg-stone-100 text-stone-700 rounded-xl font-bold text-sm">
-                    Go to Messages →
-                  </button>
-                </div>
-              )}
-            </div>
-          </>
-        )}
-
-        {/* ─────────────────────────────────────────────────────────────────
-            RESCHEDULE TAB
-            ───────────────────────────────────────────────────────────────── */}
-        {activeNav === 'RESCHEDULE' && (
+      {activeNav === 'RESCHEDULE' && (
+        <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
           <PendingRescheduleQueue allUsers={allUsers} />
-        )}
-
-        {/* ─────────────────────────────────────────────────────────────────
-            MESSAGES TAB
-            ───────────────────────────────────────────────────────────────── */}
-        {activeNav === 'MESSAGES' && (
-          <MessagesPanel role={role} />
-        )}
-
-      </div>
+        </div>
+      )}
 
       {/* ═══════════════════════════════════════════════════════════════════
-          FEES MODAL — Slide-over calculator
+          MESSAGES TAB CONTENT
+          ═══════════════════════════════════════════════════════════════════ */}
+      {activeNav === 'MESSAGES' && (
+        <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+          <MessagesPanel role={role} />
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════════════════════════════════
+          3. TEAM MANAGEMENT — Consolidated Driver List (when not on other tabs)
+          ═══════════════════════════════════════════════════════════════════ */}
+      {activeNav === null && (
+        <>
+          <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+            <div className="px-4 py-3 border-b border-stone-100">
+              <p className="text-[10px] font-black uppercase text-stone-500 tracking-wider">Team Management</p>
+            </div>
+            
+            {drivers.length === 0 ? (
+              <div className="py-8 text-center text-stone-300">
+                <Users size={24} className="mx-auto mb-2" />
+                <p className="text-xs font-bold">No drivers yet</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-stone-100">
+                {drivers.map(u => (
+                  <div key={u.id} className={`px-4 py-3 flex items-center gap-3 ${!u.isActive ? 'opacity-40' : ''}`}>
+                    {/* Avatar */}
+                    <div className="w-10 h-10 rounded-full bg-stone-200 flex items-center justify-center font-black text-stone-600 text-sm shrink-0">
+                      {u.name.split(' ').map(n => n[0]).join('').slice(0,2).toUpperCase()}
+                    </div>
+                    {/* Name + details */}
+                    <div className="flex-1 min-w-0">
+                      <p className="font-bold text-stone-900 truncate">{u.name}</p>
+                      <p className="text-xs text-stone-400 truncate">{u.phone || 'No phone'}{u.vehicle ? ` · ${u.vehicle}` : ''}</p>
+                    </div>
+                    {/* Status badge */}
+                    <div className={`px-2 py-1 rounded-full text-[9px] font-black uppercase ${u.isActive ? 'bg-green-100 text-green-700' : 'bg-stone-100 text-stone-500'}`}>
+                      {u.isActive ? 'Active' : 'Off'}
+                    </div>
+                    {/* Three-dot menu */}
+                    <div className="relative">
+                      <button onClick={() => setDriverMenuOpen(driverMenuOpen === u.id ? null : u.id)}
+                        className="w-8 h-8 rounded-full hover:bg-stone-100 flex items-center justify-center">
+                        <MoreVertical size={16} className="text-stone-400" />
+                      </button>
+                      {driverMenuOpen === u.id && (
+                        <div className="absolute right-0 top-10 bg-white rounded-xl shadow-lg border border-stone-200 py-1 z-50 min-w-[140px]">
+                          <button onClick={() => toggleActive(u)}
+                            className={`w-full px-4 py-2 text-left text-sm font-medium ${u.isActive ? 'text-red-600' : 'text-green-600'}`}>
+                            {u.isActive ? 'Deactivate' : 'Activate'}
+                          </button>
+                          <button onClick={() => { setResetPinId(u.id); setNewPinVal(''); setDriverMenuOpen(null); }}
+                            className="w-full px-4 py-2 text-left text-sm font-medium text-stone-700">
+                            Change PIN
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Reset PIN inline */}
+            {resetPinId && (
+              <div className="px-4 py-3 bg-amber-50 border-t border-amber-200 flex items-center gap-2">
+                <span className="text-xs font-bold text-amber-800">New PIN:</span>
+                <input type="text" placeholder="4 digits" maxLength={4} inputMode="numeric"
+                  value={newPinVal} onChange={e => setNewPinVal(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                  className="w-20 bg-white border border-amber-300 rounded-lg px-3 py-2 text-sm font-black text-center tracking-widest outline-none" />
+                <button onClick={() => handleResetPin(resetPinId)}
+                  className="px-3 py-2 bg-black text-white rounded-lg font-bold text-xs">Save</button>
+                <button onClick={() => { setResetPinId(null); setNewPinVal(''); }}
+                  className="px-3 py-2 bg-stone-200 text-stone-600 rounded-lg font-bold text-xs">Cancel</button>
+              </div>
+            )}
+          </div>
+
+          {/* ═══════════════════════════════════════════════════════════════════
+              4. COLLAPSIBLE ACCORDIONS (At bottom, collapsed by default)
+              ═══════════════════════════════════════════════════════════════════ */}
+          
+          {/* [+] Add New Driver */}
+          <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+            <button onClick={() => setAddDriverExpanded(!addDriverExpanded)}
+              className="w-full px-4 py-3 flex items-center gap-3">
+              <div className={`w-7 h-7 rounded-full flex items-center justify-center ${addDriverExpanded ? 'bg-black' : 'bg-stone-100'}`}>
+                <Plus size={16} className={addDriverExpanded ? 'text-white' : 'text-stone-500'} />
+              </div>
+              <span className="font-bold text-stone-800 flex-1 text-left">Add New Driver</span>
+              <ChevronDown size={18} className={`text-stone-400 transition-transform ${addDriverExpanded ? 'rotate-180' : ''}`} />
+            </button>
+            {addDriverExpanded && (
+              <div className="px-4 pb-4 space-y-2 border-t border-stone-100 pt-3">
+                <input type="text" placeholder="Name" value={newDriver.name} 
+                  onChange={e => setNewDriver(p => ({ ...p, name: e.target.value }))}
+                  className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-sm font-medium outline-none" />
+                <input type="tel" placeholder="Phone" value={newDriver.phone} 
+                  onChange={e => setNewDriver(p => ({ ...p, phone: e.target.value }))}
+                  className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-sm font-medium outline-none" />
+                <input type="text" placeholder="4-digit PIN" maxLength={4} inputMode="numeric" value={newDriver.pin}
+                  onChange={e => setNewDriver(p => ({ ...p, pin: e.target.value.replace(/\D/g, '').slice(0, 4) }))}
+                  className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-sm font-medium outline-none" />
+                <input type="text" placeholder="Vehicle" value={newDriver.vehicle} 
+                  onChange={e => setNewDriver(p => ({ ...p, vehicle: e.target.value }))}
+                  className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-sm font-medium outline-none" />
+                {addError && <p className="text-xs font-bold text-red-500">{addError}</p>}
+                {addSuccess && <p className="text-xs font-bold text-green-600">{addSuccess}</p>}
+                <button onClick={handleAddDriver}
+                  className="w-full py-3 bg-black text-white rounded-xl font-black uppercase text-sm active:scale-95">
+                  Add Driver
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* 💬 Driver SMS Templates */}
+          <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+            <button onClick={() => setSmsTemplatesExpanded(!smsTemplatesExpanded)}
+              className="w-full px-4 py-3 flex items-center gap-3">
+              <div className={`w-7 h-7 rounded-full flex items-center justify-center ${smsTemplatesExpanded ? 'bg-black' : 'bg-stone-100'}`}>
+                <MessageCircle size={16} className={smsTemplatesExpanded ? 'text-white' : 'text-stone-500'} />
+              </div>
+              <span className="font-bold text-stone-800 flex-1 text-left">Driver SMS Templates</span>
+              <ChevronDown size={18} className={`text-stone-400 transition-transform ${smsTemplatesExpanded ? 'rotate-180' : ''}`} />
+            </button>
+            {smsTemplatesExpanded && (
+              <div className="px-4 pb-4 border-t border-stone-100 pt-3 space-y-2">
+                <p className="text-xs text-stone-500 mb-2">Quick-send SMS templates for drivers.</p>
+                <button onClick={() => setActiveNav('MESSAGES')}
+                  className="w-full py-3 bg-stone-100 text-stone-700 rounded-xl font-bold text-sm active:scale-95">
+                  Open Messages Tab →
+                </button>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* ═══════════════════════════════════════════════════════════════════
+          FEES MODAL — Slide-up calculator (constrained to app width)
           ═══════════════════════════════════════════════════════════════════ */}
       {feesModalOpen && (
         <div className="fixed inset-0 z-50 flex items-end justify-center">
-          {/* Backdrop */}
           <div className="absolute inset-0 bg-black/50" onClick={() => setFeesModalOpen(false)} />
-          
-          {/* Modal content - constrained to app width */}
-          <div className="relative bg-white w-full max-w-md max-h-[85vh] rounded-t-3xl overflow-hidden animate-in slide-in-from-bottom duration-300 shadow-2xl">
-            {/* Header */}
-            <div className="sticky top-0 bg-amber-400 px-4 py-4 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <DollarSign size={24} className="text-amber-900" />
-                <span className="font-black text-lg text-amber-900">Delivery Fees</span>
+          <div className="relative bg-white w-full max-w-md max-h-[85vh] rounded-t-3xl overflow-hidden shadow-2xl">
+            <div className="sticky top-0 bg-amber-400 px-4 py-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <DollarSign size={20} className="text-amber-900" />
+                <span className="font-black text-amber-900">Delivery Fees</span>
               </div>
               <button onClick={() => setFeesModalOpen(false)}
-                className="w-8 h-8 rounded-full bg-amber-500 flex items-center justify-center">
-                <X size={20} className="text-amber-900" />
+                className="w-8 h-8 rounded-full bg-amber-500/50 flex items-center justify-center">
+                <X size={18} className="text-amber-900" />
               </button>
             </div>
-            
-            <div className="overflow-y-auto p-4 space-y-4" style={{ maxHeight: 'calc(85vh - 60px)' }}>
+            <div className="overflow-y-auto p-4 space-y-4" style={{ maxHeight: 'calc(85vh - 56px)' }}>
               {/* Quick ZIP lookup */}
               <div className="bg-stone-50 rounded-2xl p-4">
-                <p className="text-[10px] font-black uppercase text-stone-400 mb-3">Quick ZIP Lookup</p>
+                <p className="text-[9px] font-black uppercase text-stone-400 mb-2">Quick ZIP Lookup</p>
                 <div className="flex gap-2">
                   <input type="text" placeholder="ZIP" maxLength={5} inputMode="numeric"
                     value={feeZip} onChange={e => { setFeeZip(e.target.value.replace(/\D/g, '').slice(0,5)); setFeeResult(null); }}
-                    className="flex-1 bg-white border border-stone-200 rounded-xl px-4 py-3 text-xl font-black text-center tracking-widest outline-none focus:border-amber-400" />
+                    className="flex-1 bg-white border border-stone-200 rounded-xl px-4 py-3 text-xl font-black text-center tracking-widest outline-none" />
                   <button onClick={handleZipLookup} disabled={feeZip.length !== 5}
-                    className={`px-6 rounded-xl font-black uppercase text-sm transition-all ${feeZip.length === 5 ? 'bg-amber-400 text-amber-900 active:scale-95' : 'bg-stone-200 text-stone-400'}`}>
+                    className={`px-5 rounded-xl font-black uppercase text-sm ${feeZip.length === 5 ? 'bg-amber-400 text-amber-900' : 'bg-stone-200 text-stone-400'}`}>
                     Check
                   </button>
                 </div>
                 {feeResult !== null && (
-                  <div className={`mt-3 p-4 rounded-xl text-center ${feeResult === -1 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-                    <span className="font-black text-2xl">{feeResult === -1 ? 'Not Found' : `$${feeResult.toFixed(2)}`}</span>
+                  <div className={`mt-3 p-3 rounded-xl text-center font-black text-xl ${feeResult === -1 ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-700'}`}>
+                    {feeResult === -1 ? 'Not Found' : `$${feeResult.toFixed(2)}`}
                   </div>
                 )}
               </div>
-
-              {/* Date range calculator */}
+              {/* Date range */}
               <div className="bg-stone-50 rounded-2xl p-4 space-y-3">
-                <p className="text-[10px] font-black uppercase text-stone-400">Fee Report by Date</p>
+                <p className="text-[9px] font-black uppercase text-stone-400">Fee Report</p>
                 <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="text-[9px] font-bold uppercase text-stone-400 mb-1 block">From</label>
-                    <input type="date" value={feeStart} onChange={e => { setFeeStart(e.target.value); setFeeCalculated(false); }}
-                      className="w-full bg-white border border-stone-200 rounded-xl px-3 py-2.5 text-sm font-bold outline-none" />
-                  </div>
-                  <div>
-                    <label className="text-[9px] font-bold uppercase text-stone-400 mb-1 block">To</label>
-                    <input type="date" value={feeEnd} onChange={e => { setFeeEnd(e.target.value); setFeeCalculated(false); }}
-                      className="w-full bg-white border border-stone-200 rounded-xl px-3 py-2.5 text-sm font-bold outline-none" />
-                  </div>
+                  <input type="date" value={feeStart} onChange={e => { setFeeStart(e.target.value); setFeeCalculated(false); }}
+                    className="bg-white border border-stone-200 rounded-xl px-3 py-2 text-sm font-bold outline-none" />
+                  <input type="date" value={feeEnd} onChange={e => { setFeeEnd(e.target.value); setFeeCalculated(false); }}
+                    className="bg-white border border-stone-200 rounded-xl px-3 py-2 text-sm font-bold outline-none" />
                 </div>
                 <select value={feeDriverFilter} onChange={e => { setFeeDriverFilter(e.target.value); setFeeCalculated(false); }}
-                  className="w-full bg-white border border-stone-200 rounded-xl px-3 py-3 text-sm font-bold outline-none appearance-none">
+                  className="w-full bg-white border border-stone-200 rounded-xl px-3 py-2.5 text-sm font-bold outline-none">
                   <option value="ALL">All Drivers</option>
                   {allUsers.filter(u => (u.role === 'DRIVER' || u.role === 'MANAGER') && u.isActive).map(u => (
                     <option key={u.id} value={u.id}>{u.name}</option>
                   ))}
                 </select>
                 <button onClick={() => { setCalcStart(feeStart); setCalcEnd(feeEnd); setFeeCalculated(true); }}
-                  className="w-full py-3 bg-amber-400 text-amber-900 rounded-xl font-black uppercase text-sm active:scale-95">
+                  className="w-full py-3 bg-amber-400 text-amber-900 rounded-xl font-black uppercase text-sm">
                   Calculate
                 </button>
-                
                 {feeCalculated && (
                   <div className="p-4 bg-black rounded-xl flex items-center justify-between">
                     <div>
                       <p className="text-[9px] font-bold uppercase text-white/50">{feeDriverFilter === 'ALL' ? 'All Drivers' : allUsers.find(u => u.id === feeDriverFilter)?.name}</p>
                       <p className="text-xs text-white/60">{grandCount} deliveries</p>
                     </div>
-                    <span className="text-3xl font-black text-white">${grandTotal.toFixed(2)}</span>
+                    <span className="text-2xl font-black text-white">${grandTotal.toFixed(2)}</span>
                   </div>
                 )}
               </div>
-
-              {/* Per-driver breakdown */}
-              {feeCalculated && filteredRows.length > 0 && (
-                <div className="space-y-2">
-                  {filteredRows.map(row => (
-                    <DriverPayCard key={row.id} row={row} />
-                  ))}
-                </div>
-              )}
+              {feeCalculated && filteredRows.length > 0 && filteredRows.map(row => (
+                <DriverPayCard key={row.id} row={row} />
+              ))}
             </div>
           </div>
         </div>
       )}
 
       {/* Click outside to close driver menu */}
-      {driverMenuOpen && (
-        <div className="fixed inset-0 z-40" onClick={() => setDriverMenuOpen(null)} />
-      )}
+      {driverMenuOpen && <div className="fixed inset-0 z-40" onClick={() => setDriverMenuOpen(null)} />}
     </div>
   );
 };
+
 
 
 
@@ -5763,7 +5692,8 @@ export default function App() {
 
         {/* ── MANAGE TAB — admin only ── */}
         {tab === 'ADMIN' && isAdmin && (
-          <div className="pb-24" style={{ background: '#FFFFFF' }}>
+          <div className="pb-24" style={{ background: '#F8F9FA' }}>
+            {/* Stats Bar */}
             <div className="grid grid-cols-3" style={{ background: '#FFFFFF', borderBottom: '1px solid #E5E7EB' }}>
               {[
                 { label: 'Open', val: activeOrders.length, color: '#374151' },
@@ -5776,20 +5706,15 @@ export default function App() {
                 </div>
               ))}
             </div>
-            <div className="px-4 pt-4 pb-2">
+            {/* Add Delivery Button */}
+            <div className="px-4 pt-4 pb-2" style={{ background: '#FFFFFF' }}>
               <button onClick={openAddManual}
                 className="w-full py-4 bg-black text-white rounded-2xl font-black text-sm flex items-center justify-center gap-2 active:scale-95 transition-all">
                 <Plus size={18} /> Add Delivery Manually
               </button>
             </div>
-            <div className="px-4 pt-3 pb-2">
-              <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest mb-2">Drivers & Settings</p>
-              <DriversView allUsers={allUsers} setAllUsers={setAllUsers} currentUser={currentUser} />
-            </div>
-            <div className="px-0 pt-2">
-              <div className="px-4 mb-2"><p className="text-[9px] font-black uppercase text-stone-400 tracking-widest">Admin Tools</p></div>
-              <AdminPanel role={currentUser.role} deliveries={deliveries} allUsers={allUsers} setAllUsers={setAllUsers} />
-            </div>
+            {/* AdminPanel handles ALL admin features */}
+            <AdminPanel role={currentUser.role} deliveries={deliveries} allUsers={allUsers} setAllUsers={setAllUsers} />
           </div>
         )}
 
