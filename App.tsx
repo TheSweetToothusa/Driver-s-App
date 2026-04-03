@@ -1585,8 +1585,30 @@ const OrderDetail: React.FC<{
             )}
 
             <div className="px-4 py-3 border-b border-stone-100">
-              <p className="text-xs font-black text-stone-500">Driver: <span className="text-stone-900 font-black">{order.driverName || 'Not assigned'}</span></p>
-              <p className="text-[10px] text-stone-400 mt-0.5">To reassign, use the Schedule or Orders list view</p>
+              <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest mb-2">Assigned Driver</p>
+              <select
+                value={order.driverId || ''}
+                onChange={async (e) => {
+                  const newDriverId = e.target.value;
+                  const newDriver = users.find(u => u.id === newDriverId);
+                  if (!newDriverId || !newDriver) return;
+                  try {
+                    await fetch(`/api/deliveries/${order.id}/assign`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ driverId: newDriverId, driverName: newDriver.name })
+                    });
+                    setDeliveries(prev => prev.map(d => d.id === order.id ? { ...d, driverId: newDriverId, driverName: newDriver.name } : d));
+                    setSelectedOrder(prev => prev ? { ...prev, driverId: newDriverId, driverName: newDriver.name } : null);
+                  } catch (err) { console.error('Failed to reassign:', err); }
+                }}
+                className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm font-black outline-none focus:border-black"
+              >
+                <option value="">Select driver...</option>
+                {users.filter(u => u.role === 'DRIVER' || u.role === 'ADMIN' || u.role === 'SUPER_ADMIN').map(u => (
+                  <option key={u.id} value={u.id}>{u.name}</option>
+                ))}
+              </select>
             </div>
 
             <div className="px-4 py-3">
@@ -1726,12 +1748,12 @@ const OrdersView: React.FC<OrdersViewProps> = ({
 
   // ── ADMIN VIEW ──
   if (isAdmin) {
-    // Sort by delivery date ASC, then order number ASC — so groups are clean
+    // Sort by delivery date DESC (most recent first), then order number DESC
     const sorted = [...deliveries].sort((a, b) => {
-      const da = (a.deliveryDate || '9999').split('T')[0];
-      const db = (b.deliveryDate || '9999').split('T')[0];
-      if (da !== db) return da.localeCompare(db);
-      return (a.orderNumber || '').localeCompare(b.orderNumber || '');
+      const da = (a.deliveryDate || '0000').split('T')[0];
+      const db = (b.deliveryDate || '0000').split('T')[0];
+      if (da !== db) return db.localeCompare(da); // DESC - newest first
+      return (b.orderNumber || '').localeCompare(a.orderNumber || ''); // DESC
     });
     const unassignedCount = deliveries.filter(d => !d.driverId || d.status === DeliveryStatus.PENDING).length;
 
