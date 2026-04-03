@@ -2901,12 +2901,10 @@ const ScheduleView: React.FC<{
             </div>
           )}
 
-          {/* Hint text when route is active */}
-          {routeSaved && (
-            <p className="text-[10px] text-stone-400 font-bold text-center">
-              Drag the ≡ handle on any stop to reorder • Order auto-saves
-            </p>
-          )}
+          {/* Drag hint - always visible */}
+          <p className="text-[10px] text-stone-400 font-bold text-center">
+            Drag ≡ to reorder stops • Tap Optimize for best route
+          </p>
         </div>
       )}
 
@@ -2951,7 +2949,7 @@ const ScheduleView: React.FC<{
                   return (
                     <div
                       key={order.id}
-                      draggable={!isDone && routeSaved}
+                      draggable={!isDone}
                       onDragStart={() => setDragOrderId(order.id)}
                       onDragOver={e => { e.preventDefault(); setDragOverId(order.id); }}
                       onDrop={() => { if (dragOrderId) handleDropOnStop(orders, dragOrderId, order.id); setDragOrderId(null); setDragOverId(null); }}
@@ -2959,14 +2957,14 @@ const ScheduleView: React.FC<{
                       className={`flex items-center gap-2 p-2 rounded-xl border transition-all ${isDone ? 'bg-stone-50 border-stone-200' : dragOverId === order.id ? 'bg-blue-50 border-blue-400 scale-[1.02]' : 'bg-white border-stone-200'}`}
                     >
                       {/* Drag handle — only when route is active */}
-                      {!isDone && routeSaved && (
+                      {!isDone && (
                         <div className="flex flex-col items-center shrink-0 px-1 py-2 cursor-grab active:cursor-grabbing text-stone-300">
                           <span style={{ fontSize: 18, lineHeight: 1 }}>≡</span>
                         </div>
                       )}
                       {/* Stop number */}
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 font-black text-sm ${isDone ? 'bg-green-100 text-green-600' : routeSaved ? 'bg-black text-white' : 'bg-stone-200 text-stone-600'}`}>
-                        {isDone ? '✓' : routeSaved ? idx + 1 : idx + 1}
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 font-black text-sm ${isDone ? 'bg-green-100 text-green-600' : 'bg-black text-white'}`}>
+                        {isDone ? '✓' : idx + 1}
                       </div>
                       {/* Main info — tappable */}
                       <div className="flex-1 min-w-0 cursor-pointer" onClick={() => onSelectOrder(order)}>
@@ -2997,7 +2995,7 @@ const ScheduleView: React.FC<{
                 
                 return (
                   <div key={order.id}
-                    draggable={!isDone && routeSaved}
+                    draggable={!isDone}
                     onDragStart={() => setDragOrderId(order.id)}
                     onDragOver={e => { e.preventDefault(); setDragOverId(order.id); }}
                     onDrop={() => { if (dragOrderId) handleDropOnStop(orders, dragOrderId, order.id); setDragOrderId(null); setDragOverId(null); }}
