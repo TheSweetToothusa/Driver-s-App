@@ -3616,6 +3616,155 @@ const DriverPayCard: React.FC<DriverPayCardProps> = ({ row }) => {
   );
 };
 
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PENDING RESCHEDULE QUEUE — Shows orders that need to be rescheduled
+// ─────────────────────────────────────────────────────────────────────────────
+const PendingRescheduleQueue: React.FC<{ allUsers: UserAccount[] }> = ({ allUsers }) => {
+  const [orders, setOrders] = useState<Delivery[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [rescheduleId, setRescheduleId] = useState<string | null>(null);
+  const [rescheduleDate, setRescheduleDate] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  // Fetch orders that need rescheduling
+  useEffect(() => {
+    const fetchOrders = async () => {
+      try {
+        const res = await fetch('/api/deliveries');
+        const data = await res.json();
+        const needsReschedule = (data.deliveries || []).filter((d: Delivery) => 
+          d.status === DeliveryStatus.FAILED || 
+          d.status === DeliveryStatus.PENDING_RESCHEDULE ||
+          d.status === DeliveryStatus.SECOND_ATTEMPT
+        );
+        setOrders(needsReschedule);
+      } catch (err) {
+        console.error('Failed to fetch orders:', err);
+      }
+      setLoading(false);
+    };
+    fetchOrders();
+  }, []);
+
+  const handleReschedule = async (orderId: string, newDate: string) => {
+    setSaving(true);
+    try {
+      await fetch(`/api/orders/${orderId}/reschedule`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deliveryDate: newDate })
+      });
+      // Update local state
+      setOrders(prev => prev.filter(o => o.id !== orderId));
+      setRescheduleId(null);
+      setRescheduleDate('');
+    } catch (err) {
+      console.error('Failed to reschedule:', err);
+    }
+    setSaving(false);
+  };
+
+  const getNextBusinessDay = () => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    // Skip weekends
+    while (d.getDay() === 0 || d.getDay() === 6) {
+      d.setDate(d.getDate() + 1);
+    }
+    return d.toISOString().split('T')[0];
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <RefreshCw size={24} className="animate-spin text-stone-300" />
+      </div>
+    );
+  }
+
+  if (orders.length === 0) {
+    return (
+      <div className="text-center py-12">
+        <CheckCircle2 size={40} className="mx-auto text-green-400 mb-3" />
+        <p className="font-black text-green-600">All caught up!</p>
+        <p className="text-xs text-stone-400 mt-1">No orders need rescheduling</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between mb-2">
+        <p className="font-black text-sm text-red-600">{orders.length} Need Attention</p>
+      </div>
+
+      {orders.map(order => {
+        const isExpanded = rescheduleId === order.id;
+        return (
+          <div key={order.id} className="bg-white border border-red-100 rounded-2xl overflow-hidden">
+            <div className="px-4 py-3">
+              <div className="flex items-center justify-between mb-1">
+                <span className="font-black text-xs text-stone-400">#{(order.orderNumber || '').replace(/^#+/, '')}</span>
+                <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
+                  order.status === DeliveryStatus.FAILED ? 'bg-red-100 text-red-700' :
+                  order.status === DeliveryStatus.PENDING_RESCHEDULE ? 'bg-amber-100 text-amber-700' :
+                  'bg-stone-100 text-stone-600'
+                }`}>
+                  {order.status === DeliveryStatus.FAILED ? '1st Failed' : 
+                   order.status === DeliveryStatus.PENDING_RESCHEDULE ? 'Needs Reschedule' : 
+                   '2nd Attempt'}
+                </span>
+              </div>
+              <p className="font-black text-base">{order.giftReceiverName || order.customer?.name || '—'}</p>
+              <p className="text-xs text-stone-500">{order.address?.city} {order.address?.zip}</p>
+              
+              {!isExpanded ? (
+                <div className="flex gap-2 mt-3">
+                  <button 
+                    onClick={() => handleReschedule(order.id, getNextBusinessDay())}
+                    disabled={saving}
+                    className="flex-1 py-2 bg-amber-500 text-white rounded-xl font-black text-xs uppercase active:scale-95 disabled:opacity-50">
+                    ↻ Next Business Day
+                  </button>
+                  <button 
+                    onClick={() => { setRescheduleId(order.id); setRescheduleDate(''); }}
+                    className="px-4 py-2 bg-stone-100 text-stone-600 rounded-xl font-black text-xs uppercase active:scale-95">
+                    Pick Date
+                  </button>
+                </div>
+              ) : (
+                <div className="mt-3 space-y-2">
+                  <input 
+                    type="date" 
+                    value={rescheduleDate}
+                    onChange={e => setRescheduleDate(e.target.value)}
+                    min={new Date().toISOString().split('T')[0]}
+                    className="w-full border border-stone-200 rounded-xl px-3 py-2 text-sm font-bold"
+                  />
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => { if (rescheduleDate) handleReschedule(order.id, rescheduleDate); }}
+                      disabled={!rescheduleDate || saving}
+                      className="flex-1 py-2 bg-green-600 text-white rounded-xl font-black text-xs uppercase active:scale-95 disabled:opacity-50">
+                      {saving ? 'Saving...' : '✓ Confirm'}
+                    </button>
+                    <button 
+                      onClick={() => setRescheduleId(null)}
+                      className="px-4 py-2 bg-stone-100 text-stone-600 rounded-xl font-black text-xs uppercase active:scale-95">
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
 const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: UserAccount[]; setAllUsers: React.Dispatch<React.SetStateAction<UserAccount[]>>; }> = ({ role, deliveries, allUsers, setAllUsers }) => {
   // Section visibility states
   const [feesModalOpen, setFeesModalOpen] = useState(false);
