@@ -2995,6 +2995,28 @@ const ScheduleView: React.FC<{
       {/* ── STICKY HEADER ── */}
       <div className="sticky top-0 z-10 bg-white px-4 pt-3 pb-3">
 
+        {/* Search Input */}
+        <div className="mb-3">
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="Search orders, names, addresses..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="w-full bg-stone-100 border-0 rounded-xl px-4 py-3 pl-10 text-sm font-medium outline-none focus:ring-2 focus:ring-black"
+            />
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="11" cy="11" r="8"/>
+              <path d="m21 21-4.3-4.3"/>
+            </svg>
+            {search && (
+              <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600">
+                <X size={18} />
+              </button>
+            )}
+          </div>
+        </div>
+
         {/* Driver filter (admin only) - light beige background */}
         <div className="flex gap-2 items-center">
           {isAdmin && (
