@@ -2486,13 +2486,6 @@ const ScheduleView: React.FC<{
       } else if (driverFilter !== 'ALL') {
         if (d.driverId !== driverFilter) return false;
       }
-      // HIDE PAST-DATED OPEN ORDERS — force end-of-day closeout
-      // Orders from before today that are still open should not appear
-      const orderDate = (d.deliveryDate || '').split('T')[0];
-      if (orderDate && orderDate < todayStr && OPEN_STATUSES.includes(d.status)) {
-        // Skip past-dated orders that weren't closed — admins can still see via search
-        if (!search.trim()) return false;
-      }
       // Status filter
       if (statusFilter === 'OPEN' && !OPEN_STATUSES.includes(d.status)) return false;
       if (statusFilter === 'DONE' && !DONE_STATUSES.includes(d.status)) return false;
@@ -2511,11 +2504,13 @@ const ScheduleView: React.FC<{
       }
       return true;
     });
-  }, [deliveries, driverFilter, statusFilter, search, isAdmin, currentUserId, todayStr]);
+  }, [deliveries, driverFilter, statusFilter, search, isAdmin, currentUserId]);
 
   // Group by date, sorted ascending
   const grouped = useMemo(() => {
     const map: Record<string, Delivery[]> = {};
+    // ALWAYS include today as the first group (even if empty)
+    map[todayStr] = [];
     filtered.forEach(d => {
       const key = (d.deliveryDate || 'unscheduled').split('T')[0];
       if (!map[key]) map[key] = [];
@@ -2541,12 +2536,15 @@ const ScheduleView: React.FC<{
         return (a.orderNumber || '').localeCompare(b.orderNumber || '');
       });
     });
+    // Sort dates: today first, then chronological, unscheduled last
     return Object.entries(map).sort(([a], [b]) => {
       if (a === 'unscheduled') return 1;
       if (b === 'unscheduled') return -1;
+      if (a === todayStr) return -1;
+      if (b === todayStr) return 1;
       return a.localeCompare(b);
     });
-  }, [filtered, sortBy, customOrder]);
+  }, [filtered, sortBy, customOrder, todayStr]);
   
   // Move order up/down in the list
   const moveOrder = (orderId: string, direction: 'up' | 'down', dateOrders: Delivery[]) => {
@@ -2937,6 +2935,11 @@ const ScheduleView: React.FC<{
 
               {/* Cards for this date */}
               <div style={{ padding: '12px 16px' }}>
+              {orders.length === 0 && hdr.isToday && (
+                <div className="text-center py-8">
+                  <p className="text-stone-400 font-medium">No deliveries scheduled for today</p>
+                </div>
+              )}
               {orders.map((order, idx) => {
                 const name = order.giftReceiverName || order.customer?.name || '—';
                 const cleanNum = (order.orderNumber || order.id).replace(/^#+/, '');
