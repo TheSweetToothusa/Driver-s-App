@@ -1768,6 +1768,9 @@ const OrdersView: React.FC<OrdersViewProps> = ({
   const [search, setSearch] = useState('');
   const [ordersDriverFilter, setOrdersDriverFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState<'OPEN'|'CLOSED'>('CLOSED');
+  const [showDateFilter, setShowDateFilter] = useState(false);
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [rescheduleOrder, setRescheduleOrder] = useState<Delivery | null>(null);
   const [rescheduleDate, setRescheduleDate] = useState('');
   const [rescheduleSaved, setRescheduleSaved] = useState(false);
@@ -1828,6 +1831,12 @@ const OrdersView: React.FC<OrdersViewProps> = ({
     const filtered = todayFiltered.filter(d => {
       // Driver filter
       if (ordersDriverFilter !== 'ALL' && d.driverId !== ordersDriverFilter) return false;
+      // Date range filter
+      if (dateFrom || dateTo) {
+        const orderDate = (d.deliveryDate || d.completedAt || '').split('T')[0];
+        if (dateFrom && orderDate < dateFrom) return false;
+        if (dateTo && orderDate > dateTo) return false;
+      }
       // Status filter
       if (statusFilter === 'OPEN' && !OPEN_STATUSES.includes(d.status)) return false;
       if (statusFilter === 'CLOSED' && !CLOSED_STATUSES.includes(d.status)) return false;
@@ -1865,13 +1874,80 @@ const OrdersView: React.FC<OrdersViewProps> = ({
 
         {/* Driver filter - matching Deliveries */}
         <div className="px-4 pt-3 pb-3 bg-white">
-          <select value={ordersDriverFilter} onChange={e => setOrdersDriverFilter(e.target.value)}
-            style={{ background: '#F5F5F0', color: '#374151', border: 'none', borderRadius: 12, padding: '10px 14px', fontSize: 14, fontWeight: 600 }}>
-            <option value="ALL">Viewing: All drivers</option>
-            {uniqueOrderDrivers.filter(d => d.id !== 'ALL').map(d => (
-              <option key={d.id} value={d.id}>Viewing: {d.name}</option>
-            ))}
-          </select>
+          <div className="flex gap-2 items-center">
+            <select value={ordersDriverFilter} onChange={e => setOrdersDriverFilter(e.target.value)}
+              style={{ background: '#F5F5F0', color: '#374151', border: 'none', borderRadius: 12, padding: '10px 14px', fontSize: 14, fontWeight: 600 }}>
+              <option value="ALL">Viewing: All drivers</option>
+              {uniqueOrderDrivers.filter(d => d.id !== 'ALL').map(d => (
+                <option key={d.id} value={d.id}>Viewing: {d.name}</option>
+              ))}
+            </select>
+            {/* Date Range Filter Toggle */}
+            <button 
+              onClick={() => setShowDateFilter(!showDateFilter)}
+              className={`px-3 py-2 rounded-xl text-xs font-black uppercase flex items-center gap-1 ${dateFrom || dateTo ? 'bg-black text-white' : 'bg-stone-100 text-stone-600'}`}>
+              <Calendar size={14} />
+              {dateFrom || dateTo ? 'Dates ✓' : 'Dates'}
+            </button>
+          </div>
+
+          {/* Date Range Picker */}
+          {showDateFilter && (
+            <div className="mt-3 p-3 bg-stone-50 rounded-xl border border-stone-200">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-[10px] font-black uppercase text-stone-500">Filter by Date Range</p>
+                {(dateFrom || dateTo) && (
+                  <button onClick={() => { setDateFrom(''); setDateTo(''); }} className="text-[10px] font-black text-red-500 uppercase">Clear</button>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <p className="text-[9px] font-bold text-stone-400 mb-1">From</p>
+                  <input 
+                    type="date" 
+                    value={dateFrom}
+                    onChange={e => setDateFrom(e.target.value)}
+                    className="w-full bg-white border border-stone-200 rounded-lg px-2 py-2 text-sm font-bold"
+                  />
+                </div>
+                <div className="flex-1">
+                  <p className="text-[9px] font-bold text-stone-400 mb-1">To</p>
+                  <input 
+                    type="date" 
+                    value={dateTo}
+                    onChange={e => setDateTo(e.target.value)}
+                    className="w-full bg-white border border-stone-200 rounded-lg px-2 py-2 text-sm font-bold"
+                  />
+                </div>
+              </div>
+              {/* Quick presets */}
+              <div className="flex gap-2 mt-2 flex-wrap">
+                <button onClick={() => { setDateFrom(adminToday); setDateTo(adminToday); }} className="px-2 py-1 bg-white border border-stone-200 rounded-lg text-[10px] font-bold">Today</button>
+                <button onClick={() => { 
+                  const y = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+                  setDateFrom(y); setDateTo(y); 
+                }} className="px-2 py-1 bg-white border border-stone-200 rounded-lg text-[10px] font-bold">Yesterday</button>
+                <button onClick={() => { 
+                  const d = new Date(); 
+                  const day = d.getDay();
+                  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+                  const monday = new Date(d.setDate(diff)).toISOString().split('T')[0];
+                  setDateFrom(monday); setDateTo(adminToday); 
+                }} className="px-2 py-1 bg-white border border-stone-200 rounded-lg text-[10px] font-bold">This Week</button>
+                <button onClick={() => { 
+                  const d = new Date();
+                  const lastWeekStart = new Date(d.setDate(d.getDate() - d.getDay() - 6)).toISOString().split('T')[0];
+                  const lastWeekEnd = new Date(new Date().setDate(new Date().getDate() - new Date().getDay())).toISOString().split('T')[0];
+                  setDateFrom(lastWeekStart); setDateTo(lastWeekEnd); 
+                }} className="px-2 py-1 bg-white border border-stone-200 rounded-lg text-[10px] font-bold">Last Week</button>
+                <button onClick={() => { 
+                  const d = new Date();
+                  const firstDay = new Date(d.getFullYear(), d.getMonth(), 1).toISOString().split('T')[0];
+                  setDateFrom(firstDay); setDateTo(adminToday); 
+                }} className="px-2 py-1 bg-white border border-stone-200 rounded-lg text-[10px] font-bold">This Month</button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Cards - matching Deliveries page exactly */}
