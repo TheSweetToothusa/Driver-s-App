@@ -448,7 +448,30 @@ async function startServer() {
       existing.completedAt = new Date().toISOString();
     }
     await writePodOrder(req.params.id, existing);
-    res.json({ success: true });
+    
+    // Sync status to Shopify as a tag
+    if (SHOPIFY_STORE_URL && SHOPIFY_ACCESS_TOKEN) {
+      try {
+        const orderId = req.params.id;
+        const existingResp = await fetch(`https://${SHOPIFY_STORE_URL}/admin/api/2025-01/orders/${orderId}.json?fields=tags`, {
+          headers: { 'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN }
+        });
+        const existingData = await existingResp.json();
+        const currentTags = existingData.order?.tags || '';
+        const tagsList = currentTags.split(',').map((t: string) => t.trim()).filter((t: string) => t && !t.startsWith('st_status:'));
+        tagsList.push(`st_status:${status}`);
+        await fetch(`https://${SHOPIFY_STORE_URL}/admin/api/2025-01/orders/${orderId}.json`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN },
+          body: JSON.stringify({ order: { id: orderId, tags: tagsList.join(', ') } })
+        });
+        console.log(`Synced status ${status} to Shopify for order ${orderId}`);
+      } catch (err) {
+        console.error('Failed to sync status to Shopify:', err);
+      }
+    }
+    
+    res.json({ success: true, status });
   });
 
   app.post("/api/orders/:id/note", async (req, res) => {

@@ -1568,16 +1568,36 @@ const OrderDetail: React.FC<{
                     value={order.status}
                     onChange={async (e) => {
                       const newStatus = e.target.value;
+                      const select = e.target;
+                      select.style.opacity = '0.5';
                       try {
-                        await fetch(`/api/orders/${order.id}/status`, {
+                        const resp = await fetch(`/api/orders/${order.id}/status`, {
                           method: 'PATCH',
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({ status: newStatus })
                         });
-                        onUpdate(order.id, { status: newStatus as any });
-                      } catch (err) { console.error('Failed to update status:', err); }
+                        if (resp.ok) {
+                          select.style.opacity = '1';
+                          select.style.background = '#dcfce7'; // green flash
+                          setTimeout(() => { select.style.background = '#fafaf9'; }, 800);
+                          onUpdate(order.id, { status: newStatus as any });
+                          // If closed/cancelled, go back to list after brief delay
+                          if (newStatus === 'CLOSED' || newStatus === 'CANCELLED') {
+                            setTimeout(() => onBack(), 500);
+                          }
+                        } else {
+                          select.style.opacity = '1';
+                          select.style.background = '#fee2e2'; // red flash
+                          setTimeout(() => { select.style.background = '#fafaf9'; }, 800);
+                        }
+                      } catch (err) { 
+                        console.error('Failed to update status:', err);
+                        select.style.opacity = '1';
+                        select.style.background = '#fee2e2';
+                        setTimeout(() => { select.style.background = '#fafaf9'; }, 800);
+                      }
                     }}
-                    className="w-full bg-stone-50 border border-stone-200 rounded-lg px-2 py-2 text-xs font-bold outline-none focus:border-black"
+                    className="w-full bg-stone-50 border border-stone-200 rounded-lg px-2 py-2 text-xs font-bold outline-none focus:border-black transition-all"
                   >
                     {STATUSES_FOR_DROPDOWN.map(s => (
                       <option key={s.value} value={s.value}>{s.label}</option>
