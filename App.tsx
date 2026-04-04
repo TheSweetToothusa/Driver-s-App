@@ -3945,6 +3945,7 @@ const PendingRescheduleQueue: React.FC<{ allUsers: UserAccount[] }> = ({ allUser
 const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: UserAccount[]; setAllUsers: React.Dispatch<React.SetStateAction<UserAccount[]>>; }> = ({ role, deliveries, allUsers, setAllUsers }) => {
   // Modal/accordion states
   const [feesModalOpen, setFeesModalOpen] = useState(false);
+  const [feesTab, setFeesTab] = useState<'LOOKUP' | 'PAY_CALC'>('PAY_CALC');
   const [activeNav, setActiveNav] = useState<'RESCHEDULE' | 'MESSAGES' | null>(null);
   const [addDriverExpanded, setAddDriverExpanded] = useState(false);
   const [smsTemplatesExpanded, setSmsTemplatesExpanded] = useState(false);
@@ -3970,6 +3971,21 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
   const [calcEnd, setCalcEnd] = useState(() => new Date().toISOString().split('T')[0]);
   const [feeDriverFilter, setFeeDriverFilter] = useState<string>('ALL');
   
+  // Driver Pay Calculator states
+  const [payCalcOpen, setPayCalcOpen] = useState(false);
+  const [payDriverId, setPayDriverId] = useState<string>('');
+  const [payDateRange, setPayDateRange] = useState<'THIS_WEEK' | 'LAST_WEEK' | 'CUSTOM'>('THIS_WEEK');
+  const [payStartDate, setPayStartDate] = useState(() => { const d = new Date(); const day = d.getDay(); const diff = d.getDate() - day + (day === 0 ? -6 : 1); return new Date(d.setDate(diff)).toISOString().split('T')[0]; });
+  const [payEndDate, setPayEndDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [payRatePerDelivery, setPayRatePerDelivery] = useState<string>('');
+  const [payDeduction, setPayDeduction] = useState<string>('');
+  const [payDeductionNote, setPayDeductionNote] = useState<string>('');
+  const [payBonus, setPayBonus] = useState<string>('');
+  const [payBonusNote, setPayBonusNote] = useState<string>('');
+  const [driverRates, setDriverRates] = useState<Record<string, number>>({});
+  const [payCalculated, setPayCalculated] = useState(false);
+  const [payAllDrivers, setPayAllDrivers] = useState(false);
+  
   // Default driver
   const [defaultDriverId, setDefaultDriverId] = useState<string>('');
   const [defaultDriverSaved, setDefaultDriverSaved] = useState(false);
@@ -3977,7 +3993,53 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
   useEffect(() => {
     fetch('/api/config/default-driver').then(r => r.json()).then(d => { if (d.driverId) setDefaultDriverId(d.driverId); });
     fetch('/api/templates').then(r => r.json()).then(d => setTemplates(d.templates || []));
+    fetch('/api/config/driver-rates').then(r => r.json()).then(d => { if (d.rates) setDriverRates(d.rates); }).catch(() => {});
   }, []);
+  
+  // Driver Pay Calculator helpers
+  const getDateRangeForPay = () => {
+    const today = new Date();
+    if (payDateRange === 'THIS_WEEK') {
+      const day = today.getDay();
+      const monday = new Date(today);
+      monday.setDate(today.getDate() - day + (day === 0 ? -6 : 1));
+      return { start: monday.toISOString().split('T')[0], end: today.toISOString().split('T')[0] };
+    } else if (payDateRange === 'LAST_WEEK') {
+      const day = today.getDay();
+      const lastMonday = new Date(today);
+      lastMonday.setDate(today.getDate() - day - 6);
+      const lastSunday = new Date(lastMonday);
+      lastSunday.setDate(lastMonday.getDate() + 6);
+      return { start: lastMonday.toISOString().split('T')[0], end: lastSunday.toISOString().split('T')[0] };
+    }
+    return { start: payStartDate, end: payEndDate };
+  };
+  
+  const getDeliveredCountForDriver = (driverId: string, start: string, end: string) => {
+    return deliveries.filter(d => 
+      d.driverId === driverId && 
+      d.status === 'DELIVERED' &&
+      d.completedAt &&
+      d.completedAt.split('T')[0] >= start &&
+      d.completedAt.split('T')[0] <= end
+    ).length;
+  };
+  
+  const calculateDriverPay = (driverId: string) => {
+    const { start, end } = getDateRangeForPay();
+    const count = getDeliveredCountForDriver(driverId, start, end);
+    const rate = parseFloat(payRatePerDelivery) || driverRates[driverId] || 0;
+    const subtotal = count * rate;
+    const deduction = parseFloat(payDeduction) || 0;
+    const bonus = parseFloat(payBonus) || 0;
+    return { count, rate, subtotal, deduction, bonus, total: subtotal - deduction + bonus };
+  };
+  
+  const handleSaveDriverRate = async (driverId: string, rate: number) => {
+    const newRates = { ...driverRates, [driverId]: rate };
+    setDriverRates(newRates);
+    await fetch('/api/config/driver-rates', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rates: newRates }) });
+  };
 
   const drivers = allUsers.filter(u => u.role === 'DRIVER');
   const currentDefaultDriver = allUsers.find(u => u.id === defaultDriverId) || allUsers.find(u => u.name === 'Katie');
@@ -4267,74 +4329,287 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
       )}
 
       {/* ═══════════════════════════════════════════════════════════════════
-          FEES MODAL — Slide-up calculator (constrained to app width)
+          FEES MODAL — Tabbed: Pay Calculator + ZIP Lookup
           ═══════════════════════════════════════════════════════════════════ */}
       {feesModalOpen && (
         <div className="fixed inset-0 z-50 flex items-end justify-center">
           <div className="absolute inset-0 bg-black/50" onClick={() => setFeesModalOpen(false)} />
-          <div className="relative bg-white w-full max-w-md max-h-[85vh] rounded-t-3xl overflow-hidden shadow-2xl">
-            <div className="sticky top-0 bg-amber-400 px-4 py-3 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <DollarSign size={20} className="text-amber-900" />
-                <span className="font-black text-amber-900">Delivery Fees</span>
-              </div>
-              <button onClick={() => setFeesModalOpen(false)}
-                className="w-8 h-8 rounded-full bg-amber-500/50 flex items-center justify-center">
-                <X size={18} className="text-amber-900" />
-              </button>
-            </div>
-            <div className="overflow-y-auto p-4 space-y-4" style={{ maxHeight: 'calc(85vh - 56px)' }}>
-              {/* Quick ZIP lookup */}
-              <div className="bg-stone-50 rounded-2xl p-4">
-                <p className="text-[9px] font-black uppercase text-stone-400 mb-2">Quick ZIP Lookup</p>
-                <div className="flex gap-2">
-                  <input type="text" placeholder="ZIP" maxLength={5} inputMode="numeric"
-                    value={feeZip} onChange={e => { setFeeZip(e.target.value.replace(/\D/g, '').slice(0,5)); setFeeResult(null); }}
-                    className="flex-1 bg-white border border-stone-200 rounded-xl px-4 py-3 text-xl font-black text-center tracking-widest outline-none" />
-                  <button onClick={handleZipLookup} disabled={feeZip.length !== 5}
-                    className={`px-5 rounded-xl font-black uppercase text-sm ${feeZip.length === 5 ? 'bg-amber-400 text-amber-900' : 'bg-stone-200 text-stone-400'}`}>
-                    Check
-                  </button>
+          <div className="relative bg-white w-full max-w-md max-h-[90vh] rounded-t-3xl overflow-hidden shadow-2xl">
+            {/* Header */}
+            <div className="sticky top-0 bg-gradient-to-r from-emerald-500 to-emerald-600 px-4 py-3">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <DollarSign size={20} className="text-white" />
+                  <span className="font-black text-white text-lg">Driver Pay</span>
                 </div>
-                {feeResult !== null && (
-                  <div className={`mt-3 p-3 rounded-xl text-center font-black text-xl ${feeResult === -1 ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-700'}`}>
-                    {feeResult === -1 ? 'Not Found' : `$${feeResult.toFixed(2)}`}
-                  </div>
-                )}
-              </div>
-              {/* Date range */}
-              <div className="bg-stone-50 rounded-2xl p-4 space-y-3">
-                <p className="text-[9px] font-black uppercase text-stone-400">Fee Report</p>
-                <div className="grid grid-cols-2 gap-2">
-                  <input type="date" value={feeStart} onChange={e => { setFeeStart(e.target.value); setFeeCalculated(false); }}
-                    className="bg-white border border-stone-200 rounded-xl px-3 py-2 text-sm font-bold outline-none" />
-                  <input type="date" value={feeEnd} onChange={e => { setFeeEnd(e.target.value); setFeeCalculated(false); }}
-                    className="bg-white border border-stone-200 rounded-xl px-3 py-2 text-sm font-bold outline-none" />
-                </div>
-                <select value={feeDriverFilter} onChange={e => { setFeeDriverFilter(e.target.value); setFeeCalculated(false); }}
-                  className="w-full bg-white border border-stone-200 rounded-xl px-3 py-2.5 text-sm font-bold outline-none">
-                  <option value="ALL">All Drivers</option>
-                  {allUsers.filter(u => (u.role === 'DRIVER' || u.role === 'MANAGER') && u.isActive).map(u => (
-                    <option key={u.id} value={u.id}>{u.name}</option>
-                  ))}
-                </select>
-                <button onClick={() => { setCalcStart(feeStart); setCalcEnd(feeEnd); setFeeCalculated(true); }}
-                  className="w-full py-3 bg-amber-400 text-amber-900 rounded-xl font-black uppercase text-sm">
-                  Calculate
+                <button onClick={() => setFeesModalOpen(false)}
+                  className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
+                  <X size={18} className="text-white" />
                 </button>
-                {feeCalculated && (
-                  <div className="p-4 bg-black rounded-xl flex items-center justify-between">
-                    <div>
-                      <p className="text-[9px] font-bold uppercase text-white/50">{feeDriverFilter === 'ALL' ? 'All Drivers' : allUsers.find(u => u.id === feeDriverFilter)?.name}</p>
-                      <p className="text-xs text-white/60">{grandCount} deliveries</p>
-                    </div>
-                    <span className="text-2xl font-black text-white">${grandTotal.toFixed(2)}</span>
-                  </div>
-                )}
               </div>
-              {feeCalculated && filteredRows.length > 0 && filteredRows.map(row => (
-                <DriverPayCard key={row.id} row={row} />
-              ))}
+              {/* Tabs */}
+              <div className="flex gap-2">
+                <button onClick={() => setFeesTab('PAY_CALC')}
+                  className={`flex-1 py-2 rounded-xl font-bold text-sm transition-all ${feesTab === 'PAY_CALC' ? 'bg-white text-emerald-700' : 'bg-white/20 text-white'}`}>
+                  Pay Calculator
+                </button>
+                <button onClick={() => setFeesTab('LOOKUP')}
+                  className={`flex-1 py-2 rounded-xl font-bold text-sm transition-all ${feesTab === 'LOOKUP' ? 'bg-white text-emerald-700' : 'bg-white/20 text-white'}`}>
+                  ZIP Lookup
+                </button>
+              </div>
+            </div>
+            
+            <div className="overflow-y-auto p-4 space-y-4" style={{ maxHeight: 'calc(90vh - 120px)' }}>
+              
+              {/* ══════════ PAY CALCULATOR TAB ══════════ */}
+              {feesTab === 'PAY_CALC' && (
+                <>
+                  {/* Driver Selection */}
+                  <div className="bg-stone-50 rounded-2xl p-4">
+                    <p className="text-[10px] font-black uppercase text-stone-400 mb-3">Select Driver</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {allUsers.filter(u => (u.role === 'DRIVER' || u.role === 'MANAGER') && u.isActive).map(u => (
+                        <button key={u.id} onClick={() => { setPayDriverId(u.id); setPayCalculated(false); setPayAllDrivers(false); if (driverRates[u.id]) setPayRatePerDelivery(driverRates[u.id].toString()); else setPayRatePerDelivery(''); }}
+                          className={`p-3 rounded-xl font-bold text-sm transition-all ${payDriverId === u.id && !payAllDrivers ? 'bg-emerald-500 text-white shadow-lg' : 'bg-white border border-stone-200 text-stone-700'}`}>
+                          {u.name}
+                        </button>
+                      ))}
+                    </div>
+                    <button onClick={() => { setPayAllDrivers(true); setPayDriverId(''); setPayCalculated(false); }}
+                      className={`w-full mt-2 p-3 rounded-xl font-bold text-sm transition-all ${payAllDrivers ? 'bg-emerald-500 text-white shadow-lg' : 'bg-white border border-stone-200 text-stone-700'}`}>
+                      📊 Calculate All Drivers
+                    </button>
+                  </div>
+                  
+                  {/* Date Range */}
+                  <div className="bg-stone-50 rounded-2xl p-4">
+                    <p className="text-[10px] font-black uppercase text-stone-400 mb-3">Date Range</p>
+                    <div className="flex gap-2 mb-3">
+                      {(['THIS_WEEK', 'LAST_WEEK', 'CUSTOM'] as const).map(range => (
+                        <button key={range} onClick={() => setPayDateRange(range)}
+                          className={`flex-1 py-2 rounded-xl font-bold text-xs transition-all ${payDateRange === range ? 'bg-emerald-500 text-white' : 'bg-white border border-stone-200 text-stone-600'}`}>
+                          {range === 'THIS_WEEK' ? 'This Week' : range === 'LAST_WEEK' ? 'Last Week' : 'Custom'}
+                        </button>
+                      ))}
+                    </div>
+                    {payDateRange === 'CUSTOM' && (
+                      <div className="grid grid-cols-2 gap-2">
+                        <input type="date" value={payStartDate} onChange={e => setPayStartDate(e.target.value)}
+                          className="bg-white border border-stone-200 rounded-xl px-3 py-2 text-sm font-bold outline-none" />
+                        <input type="date" value={payEndDate} onChange={e => setPayEndDate(e.target.value)}
+                          className="bg-white border border-stone-200 rounded-xl px-3 py-2 text-sm font-bold outline-none" />
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Fee Per Delivery (only for single driver) */}
+                  {!payAllDrivers && payDriverId && (
+                    <div className="bg-stone-50 rounded-2xl p-4">
+                      <p className="text-[10px] font-black uppercase text-stone-400 mb-3">Fee Per Delivery</p>
+                      <div className="flex items-center gap-2">
+                        <span className="text-2xl font-black text-stone-400">$</span>
+                        <input type="number" inputMode="decimal" placeholder="0.00" step="0.01"
+                          value={payRatePerDelivery} onChange={e => setPayRatePerDelivery(e.target.value)}
+                          className="flex-1 bg-white border border-stone-200 rounded-xl px-4 py-3 text-2xl font-black text-center outline-none" />
+                      </div>
+                      {payRatePerDelivery && parseFloat(payRatePerDelivery) !== driverRates[payDriverId] && (
+                        <button onClick={() => handleSaveDriverRate(payDriverId, parseFloat(payRatePerDelivery))}
+                          className="w-full mt-2 py-2 bg-blue-100 text-blue-700 rounded-xl text-xs font-bold">
+                          💾 Save as {allUsers.find(u => u.id === payDriverId)?.name}'s default rate
+                        </button>
+                      )}
+                      {driverRates[payDriverId] && (
+                        <p className="text-xs text-stone-400 mt-2 text-center">Saved rate: ${driverRates[payDriverId].toFixed(2)}</p>
+                      )}
+                    </div>
+                  )}
+                  
+                  {/* Deductions & Bonus (only for single driver) */}
+                  {!payAllDrivers && payDriverId && (
+                    <div className="bg-stone-50 rounded-2xl p-4 space-y-4">
+                      <div>
+                        <p className="text-[10px] font-black uppercase text-red-400 mb-2">Deductions</p>
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg font-black text-red-400">−$</span>
+                          <input type="number" inputMode="decimal" placeholder="0.00" step="0.01"
+                            value={payDeduction} onChange={e => setPayDeduction(e.target.value)}
+                            className="w-24 bg-white border border-stone-200 rounded-xl px-3 py-2 text-lg font-black text-center outline-none" />
+                          <input type="text" placeholder="Reason (e.g. damaged package)"
+                            value={payDeductionNote} onChange={e => setPayDeductionNote(e.target.value)}
+                            className="flex-1 bg-white border border-stone-200 rounded-xl px-3 py-2 text-sm outline-none" />
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-black uppercase text-emerald-500 mb-2">Bonus</p>
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg font-black text-emerald-500">+$</span>
+                          <input type="number" inputMode="decimal" placeholder="0.00" step="0.01"
+                            value={payBonus} onChange={e => setPayBonus(e.target.value)}
+                            className="w-24 bg-white border border-stone-200 rounded-xl px-3 py-2 text-lg font-black text-center outline-none" />
+                          <input type="text" placeholder="Reason (e.g. holiday weekend)"
+                            value={payBonusNote} onChange={e => setPayBonusNote(e.target.value)}
+                            className="flex-1 bg-white border border-stone-200 rounded-xl px-3 py-2 text-sm outline-none" />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Calculate Button */}
+                  <button onClick={() => setPayCalculated(true)} 
+                    disabled={!payAllDrivers && (!payDriverId || !payRatePerDelivery)}
+                    className={`w-full py-4 rounded-2xl font-black uppercase text-lg shadow-lg transition-all ${(!payAllDrivers && (!payDriverId || !payRatePerDelivery)) ? 'bg-stone-200 text-stone-400' : 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white'}`}>
+                    Calculate Pay
+                  </button>
+                  
+                  {/* Results — Single Driver */}
+                  {payCalculated && !payAllDrivers && payDriverId && (() => {
+                    const result = calculateDriverPay(payDriverId);
+                    const driverName = allUsers.find(u => u.id === payDriverId)?.name || 'Driver';
+                    const { start, end } = getDateRangeForPay();
+                    return (
+                      <div className="bg-gradient-to-br from-stone-900 to-stone-800 rounded-2xl p-5 space-y-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-emerald-400 font-black text-lg">{driverName}</p>
+                            <p className="text-stone-400 text-xs">{start} — {end}</p>
+                          </div>
+                          <div className="bg-emerald-500/20 px-3 py-1 rounded-full">
+                            <span className="text-emerald-400 font-bold text-sm">{result.count} deliveries</span>
+                          </div>
+                        </div>
+                        
+                        <div className="space-y-2 pt-2 border-t border-stone-700">
+                          <div className="flex justify-between text-stone-300">
+                            <span>{result.count} × ${result.rate.toFixed(2)}</span>
+                            <span className="font-bold">${result.subtotal.toFixed(2)}</span>
+                          </div>
+                          {result.deduction > 0 && (
+                            <div className="flex justify-between text-red-400">
+                              <span>Deduction {payDeductionNote && `(${payDeductionNote})`}</span>
+                              <span className="font-bold">−${result.deduction.toFixed(2)}</span>
+                            </div>
+                          )}
+                          {result.bonus > 0 && (
+                            <div className="flex justify-between text-emerald-400">
+                              <span>Bonus {payBonusNote && `(${payBonusNote})`}</span>
+                              <span className="font-bold">+${result.bonus.toFixed(2)}</span>
+                            </div>
+                          )}
+                        </div>
+                        
+                        <div className="pt-3 border-t border-stone-700 flex items-center justify-between">
+                          <span className="text-stone-400 font-bold uppercase text-sm">Total Pay</span>
+                          <span className="text-4xl font-black text-white">${result.total.toFixed(2)}</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                  
+                  {/* Results — All Drivers */}
+                  {payCalculated && payAllDrivers && (() => {
+                    const { start, end } = getDateRangeForPay();
+                    const activeDrivers = allUsers.filter(u => (u.role === 'DRIVER' || u.role === 'MANAGER') && u.isActive);
+                    const driverResults = activeDrivers.map(u => {
+                      const count = getDeliveredCountForDriver(u.id, start, end);
+                      const rate = driverRates[u.id] || 0;
+                      return { id: u.id, name: u.name, count, rate, total: count * rate };
+                    }).filter(r => r.count > 0 || r.rate > 0);
+                    const grandTotal = driverResults.reduce((s, r) => s + r.total, 0);
+                    const totalDeliveries = driverResults.reduce((s, r) => s + r.count, 0);
+                    
+                    return (
+                      <div className="space-y-3">
+                        <div className="bg-gradient-to-br from-stone-900 to-stone-800 rounded-2xl p-4">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-stone-400 text-xs uppercase font-bold">All Drivers Total</span>
+                            <span className="text-emerald-400 text-xs font-bold">{start} — {end}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-stone-300">{totalDeliveries} deliveries</span>
+                            <span className="text-3xl font-black text-white">${grandTotal.toFixed(2)}</span>
+                          </div>
+                        </div>
+                        
+                        {driverResults.map(r => (
+                          <div key={r.id} className="bg-stone-100 rounded-xl p-4 flex items-center justify-between">
+                            <div>
+                              <p className="font-bold text-stone-800">{r.name}</p>
+                              <p className="text-xs text-stone-500">{r.count} deliveries × ${r.rate.toFixed(2)}</p>
+                            </div>
+                            <span className="text-xl font-black text-emerald-600">${r.total.toFixed(2)}</span>
+                          </div>
+                        ))}
+                        
+                        {driverResults.length === 0 && (
+                          <div className="text-center py-8 text-stone-400">
+                            <p>No deliveries found in this period</p>
+                            <p className="text-xs mt-1">Make sure driver rates are saved</p>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </>
+              )}
+              
+              {/* ══════════ ZIP LOOKUP TAB ══════════ */}
+              {feesTab === 'LOOKUP' && (
+                <>
+                  {/* Quick ZIP lookup */}
+                  <div className="bg-stone-50 rounded-2xl p-4">
+                    <p className="text-[10px] font-black uppercase text-stone-400 mb-3">Quick ZIP Lookup</p>
+                    <div className="flex gap-2">
+                      <input type="text" placeholder="ZIP" maxLength={5} inputMode="numeric"
+                        value={feeZip} onChange={e => { setFeeZip(e.target.value.replace(/\D/g, '').slice(0,5)); setFeeResult(null); }}
+                        className="flex-1 bg-white border border-stone-200 rounded-xl px-4 py-3 text-xl font-black text-center tracking-widest outline-none" />
+                      <button onClick={handleZipLookup} disabled={feeZip.length !== 5}
+                        className={`px-5 rounded-xl font-black uppercase text-sm ${feeZip.length === 5 ? 'bg-emerald-500 text-white' : 'bg-stone-200 text-stone-400'}`}>
+                        Check
+                      </button>
+                    </div>
+                    {feeResult !== null && (
+                      <div className={`mt-3 p-4 rounded-xl text-center font-black text-2xl ${feeResult === -1 ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-700'}`}>
+                        {feeResult === -1 ? 'ZIP Not Found' : `$${feeResult.toFixed(2)}`}
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Date range fee report */}
+                  <div className="bg-stone-50 rounded-2xl p-4 space-y-3">
+                    <p className="text-[10px] font-black uppercase text-stone-400">Fee Report</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input type="date" value={feeStart} onChange={e => { setFeeStart(e.target.value); setFeeCalculated(false); }}
+                        className="bg-white border border-stone-200 rounded-xl px-3 py-2 text-sm font-bold outline-none" />
+                      <input type="date" value={feeEnd} onChange={e => { setFeeEnd(e.target.value); setFeeCalculated(false); }}
+                        className="bg-white border border-stone-200 rounded-xl px-3 py-2 text-sm font-bold outline-none" />
+                    </div>
+                    <select value={feeDriverFilter} onChange={e => { setFeeDriverFilter(e.target.value); setFeeCalculated(false); }}
+                      className="w-full bg-white border border-stone-200 rounded-xl px-3 py-2.5 text-sm font-bold outline-none">
+                      <option value="ALL">All Drivers</option>
+                      {allUsers.filter(u => (u.role === 'DRIVER' || u.role === 'MANAGER') && u.isActive).map(u => (
+                        <option key={u.id} value={u.id}>{u.name}</option>
+                      ))}
+                    </select>
+                    <button onClick={() => { setCalcStart(feeStart); setCalcEnd(feeEnd); setFeeCalculated(true); }}
+                      className="w-full py-3 bg-emerald-500 text-white rounded-xl font-black uppercase text-sm">
+                      Calculate
+                    </button>
+                    {feeCalculated && (
+                      <div className="p-4 bg-stone-900 rounded-xl flex items-center justify-between">
+                        <div>
+                          <p className="text-[9px] font-bold uppercase text-white/50">{feeDriverFilter === 'ALL' ? 'All Drivers' : allUsers.find(u => u.id === feeDriverFilter)?.name}</p>
+                          <p className="text-xs text-white/60">{grandCount} deliveries</p>
+                        </div>
+                        <span className="text-2xl font-black text-white">${grandTotal.toFixed(2)}</span>
+                      </div>
+                    )}
+                  </div>
+                  {feeCalculated && filteredRows.length > 0 && filteredRows.map(row => (
+                    <DriverPayCard key={row.id} row={row} />
+                  ))}
+                </>
+              )}
             </div>
           </div>
         </div>

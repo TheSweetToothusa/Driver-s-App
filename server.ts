@@ -825,6 +825,20 @@ async function startServer() {
     res.json({ ok: true, driverId, driverName });
   });
 
+  // ── DRIVER PAY RATES ─────────────────────────────────────────────────────
+  app.get("/api/config/driver-rates", async (_req, res) => {
+    try {
+      const val = await getKV('driver_rates');
+      res.json(val ? JSON.parse(val) : { rates: {} });
+    } catch { res.json({ rates: {} }); }
+  });
+
+  app.post("/api/config/driver-rates", async (req, res) => {
+    const { rates } = req.body;
+    await setKV('driver_rates', JSON.stringify({ rates }));
+    res.json({ ok: true, rates });
+  });
+
   // ── TEST NOTIFICATION ────────────────────────────────────────────────────
   app.post("/api/notify/test", async (req, res) => {
     const { to } = req.body;
