@@ -1570,8 +1570,12 @@ const OrderDetail: React.FC<{
                       const newStatus = e.target.value;
                       const select = e.target;
                       select.style.opacity = '0.5';
+                      const isManualOrder = (order as any).isManual;
                       try {
-                        const resp = await fetch(`/api/orders/${order.id}/status`, {
+                        const endpoint = isManualOrder 
+                          ? `/api/manual-orders/${order.id}`
+                          : `/api/orders/${order.id}/status`;
+                        const resp = await fetch(endpoint, {
                           method: 'PATCH',
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({ status: newStatus })
@@ -1971,7 +1975,7 @@ const OrdersView: React.FC<OrdersViewProps> = ({
           )}
         </div>
 
-        {/* Cards - matching Deliveries page exactly */}
+        {/* Compact spreadsheet-style rows — one line per order */}
         <div className="flex-1 overflow-y-auto" style={{ background: '#FFFFFF' }}>
           {filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20">
@@ -1990,74 +1994,51 @@ const OrdersView: React.FC<OrdersViewProps> = ({
             return Object.entries(grouped).map(([dateKey, orders]) => {
               const d = dateKey !== 'unscheduled' ? new Date(dateKey + 'T12:00:00') : null;
               const isToday = dateKey === adminToday;
-              const dayLabel = d ? d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }).toUpperCase() : 'UNSCHEDULED';
+              const dayLabel = d ? d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).toUpperCase() : 'UNSCHEDULED';
               
               return (
                 <div key={dateKey}>
-                  {/* Date header bar - light beige */}
-                  <div style={{ background: '#F5F5F0', padding: '10px 16px' }}>
-                    <p style={{ color: '#374151', fontSize: 13, fontWeight: 500, letterSpacing: '0.3px' }}>
-                      {isToday ? `TODAY — ${dayLabel}` : dayLabel}
+                  {/* Date header bar */}
+                  <div style={{ background: '#F5F5F0', padding: '8px 12px', borderBottom: '1px solid #E5E7EB' }}>
+                    <p style={{ color: '#6B7280', fontSize: 11, fontWeight: 700, letterSpacing: '0.5px' }}>
+                      {isToday ? `TODAY` : dayLabel} <span style={{ color: '#9CA3AF', fontWeight: 500 }}>({orders.length})</span>
                     </p>
                   </div>
                   
-                  {/* Cards */}
-                  <div style={{ padding: '12px 16px' }}>
+                  {/* Compact rows — one line per order */}
+                  <div>
                     {orders.map(order => {
                       const name = order.giftReceiverName || order.customer?.name || '—';
+                      const truncatedName = name.length > 20 ? name.slice(0, 18) + '…' : name;
                       const cleanNum = (order.orderNumber || order.id).replace(/^#+/, '');
-                      const isDone = CLOSED_STATUSES.includes(order.status);
-                      const isOutForDelivery = order.status === 'IN_TRANSIT';
-                      const isManualOrder = (order as any).isManual;
-                      
-                      // Driver pill colors
-                      const driverName = order.driverName || 'Unassigned';
-                      let pillBg = '#F3F4F6';
-                      let pillColor = '#6B7280';
-                      if (driverName.toLowerCase().includes('mike')) {
-                        pillBg = '#DBEAFE'; pillColor = '#1E40AF';
-                      } else if (driverName.toLowerCase().includes('katie')) {
-                        pillBg = '#FCE7F3'; pillColor = '#BE185D';
-                      } else if (driverName.toLowerCase().includes('smith')) {
-                        pillBg = '#D1FAE5'; pillColor = '#065F46';
-                      } else if (driverName !== 'Unassigned') {
-                        pillBg = '#E0E7FF'; pillColor = '#3730A3';
-                      }
+                      const isDone = order.status === 'DELIVERED' || order.status === 'CLOSED';
+                      const isCancelled = order.status === 'CANCELLED';
+                      const city = (order.address?.city || '').toUpperCase().slice(0, 12);
                       
                       return (
                         <div key={order.id}
                           onClick={() => onSelectOrder(order)}
                           style={{ 
-                            background: '#ffffff',
-                            borderRadius: 12,
-                            padding: 16,
-                            marginBottom: 12,
-                            boxShadow: '0 1px 3px rgba(0, 0, 0, 0.08)',
-                            borderLeft: isManualOrder ? '3px solid #D4AF37' : isOutForDelivery ? '3px solid #F59E0B' : '3px solid #E5E7EB',
-                            cursor: 'pointer'
+                            display: 'flex',
+                            alignItems: 'center',
+                            padding: '10px 12px',
+                            borderBottom: '1px solid #F3F4F6',
+                            cursor: 'pointer',
+                            background: isCancelled ? '#FEF2F2' : '#FFFFFF'
                           }}>
-                          
-                          {/* Header */}
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                            <span style={{ color: '#6B7280', fontSize: 12, fontWeight: 500 }}>#{cleanNum}</span>
-                            <span style={{ color: '#D1D5DB' }}>|</span>
-                            <span style={{ color: '#374151', fontSize: 13, fontWeight: 600, textTransform: 'uppercase' }}>{order.address?.city || '—'}</span>
-                            {isOutForDelivery && <span style={{ background: '#FEF3C7', color: '#92400E', fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 9999 }}>OUT</span>}
-                            <div style={{ marginLeft: 'auto' }}>
-                              <span style={{ background: pillBg, color: pillColor, fontSize: 12, fontWeight: 500, padding: '4px 10px', borderRadius: 9999 }}>
-                                {driverName}{isDone ? ' ✓' : ''}
-                              </span>
-                            </div>
-                          </div>
-                          
-                          {/* Body */}
-                          <p style={{ color: '#111827', fontSize: 15, fontWeight: 600, marginBottom: 2 }}>{name}</p>
-                          {order.items?.[0] && (
-                            <p style={{ color: '#9CA3AF', fontSize: 12, marginBottom: 6 }}>{order.items[0].name}</p>
-                          )}
-                          <p style={{ color: '#2563EB', fontSize: 12 }}>
-                            {order.address?.street}{order.address?.unit ? ` #${order.address.unit}` : ''}, {order.address?.city} {order.address?.zip}
-                          </p>
+                          {/* Order # */}
+                          <span style={{ width: 70, fontSize: 11, fontWeight: 600, color: '#6B7280', flexShrink: 0 }}>#{cleanNum}</span>
+                          {/* Name - takes remaining space */}
+                          <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{truncatedName}</span>
+                          {/* City */}
+                          <span style={{ width: 80, fontSize: 10, fontWeight: 500, color: '#9CA3AF', textAlign: 'right', flexShrink: 0 }}>{city}</span>
+                          {/* Status indicator */}
+                          <span style={{ width: 24, textAlign: 'center', flexShrink: 0 }}>
+                            {isDone && <span style={{ color: '#22C55E', fontSize: 14 }}>✓</span>}
+                            {isCancelled && <span style={{ color: '#EF4444', fontSize: 12 }}>✕</span>}
+                          </span>
+                          {/* Chevron */}
+                          <ChevronRight size={14} style={{ color: '#D1D5DB', flexShrink: 0 }} />
                         </div>
                       );
                     })}
