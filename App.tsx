@@ -3264,7 +3264,7 @@ const ScheduleView: React.FC<{
                       padding: 16,
                       marginBottom: 12,
                       boxShadow: '0 1px 3px rgba(0, 0, 0, 0.08)',
-                      borderLeft: isManualOrder ? '3px solid #D4AF37' : isOutForDelivery ? '3px solid #F59E0B' : '3px solid #E5E7EB',
+                      borderLeft: order.attemptNumber === 2 ? '3px solid #D4AF37' : isOutForDelivery ? '3px solid #F59E0B' : '3px solid #E5E7EB',
                     }}>
                     
                     {/* HEADER: #35213 | MIAMI | [Driver Pill] */}
