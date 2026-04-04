@@ -2633,7 +2633,7 @@ const ScheduleView: React.FC<{
   );
 
   const OPEN_STATUSES = ['PENDING','ASSIGNED','IN_TRANSIT','SCHEDULED','SECOND_ATTEMPT','FAILED','PENDING_RESCHEDULE'];
-  const DONE_STATUSES = ['DELIVERED','CLOSED'];
+  const DONE_STATUSES = ['DELIVERED','CLOSED','CANCELLED'];
 
   // Filter deliveries
   const filtered = useMemo(() => {
