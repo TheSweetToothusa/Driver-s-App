@@ -9,7 +9,7 @@ import {
   MessageCircle, MessageSquare, ChevronLeft, Edit3,
   Bell, Clock, XCircle, Gift, User,
   AlertTriangle, RotateCcw, Inbox, Home, DollarSign, Store, Truck, Map as MapIcon, Route, Trash2, Plus,
-  ChevronUp, ChevronDown, MoreVertical
+  ChevronUp, ChevronDown, MoreVertical, Printer
 } from 'lucide-react';
 import { Delivery, DeliveryStatus, AppRole, FailureReason, FAILURE_REASON_LABELS, ViewMode, UserAccount, MessageTemplate } from './types';
 import { getDeliveries } from './services/shopifyService';
@@ -719,7 +719,8 @@ const OrderDetail: React.FC<{
   onUpdate: (id: string, updates: Partial<Delivery>) => void;
   onAddDelivery: (delivery: Delivery) => void;
   onBack: () => void;
-}> = ({ order, role, currentUser, allUsers, onUpdate, onAddDelivery, onBack }) => {
+  stopNumber?: number;
+}> = ({ order, role, currentUser, allUsers, onUpdate, onAddDelivery, onBack, stopNumber }) => {
   const [isSigning, setIsSigning] = useState(false);
   const [photoData, setPhotoData] = useState<string | null>(order.confirmationPhoto || null);
   const [sigData, setSigData] = useState<string | null>(order.confirmationSignature || null);
@@ -951,6 +952,154 @@ const OrderDetail: React.FC<{
   const senderName = editingContact ? editFields.senderName : (order.giftSenderName || '');
   const cleanOrderNum = order.orderNumber?.replace(/^#+/, '') || order.id;
 
+  // Print Label Function — generates 4x6 thermal label
+  const printLabel = () => {
+    const driverName = order.driverName || currentUser.name || 'Driver';
+    const deliveryDate = order.deliveryDate 
+      ? new Date(order.deliveryDate + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+      : new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+    const city = (order.address?.city || 'MIAMI').toUpperCase();
+    const itemCount = order.items?.reduce((sum: number, it: any) => sum + (it.quantity || 1), 0) || 1;
+    const itemNames = order.items?.map((it: any) => it.name).join(', ') || 'Gift Basket';
+    const hasGiftCard = order.giftMessage ? true : false;
+    const gateCode = order.deliveryInstructions || '';
+    const receiverPhone = order.customer?.phone || '';
+    const senderPhoneNum = order.giftSenderPhone || '';
+    const receiverName = order.giftReceiverName || order.customer?.name || '';
+    const is2ndAttempt = order.attemptNumber === 2;
+    const stopNum = stopNumber || 1;
+
+    const labelHtml = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Delivery Label #${cleanOrderNum}</title>
+  <style>
+    @page { size: 4in 6in; margin: 0; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { 
+      font-family: 'Arial Black', Arial, sans-serif; 
+      width: 4in; 
+      height: 6in; 
+      padding: 0.15in;
+      display: flex;
+      flex-direction: column;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 6px;
+      border-bottom: 2px solid #000;
+      margin-bottom: 8px;
+    }
+    .driver-name { font-size: 14px; font-weight: 900; text-transform: uppercase; }
+    .date { font-size: 11px; font-weight: 700; }
+    .stop-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .stop-box {
+      border: 3px solid #000;
+      width: 50px;
+      height: 50px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 32px;
+      font-weight: 900;
+    }
+    .city { font-size: 22px; font-weight: 900; text-transform: uppercase; flex: 1; }
+    .order-num { font-size: 14px; font-weight: 700; color: #666; }
+    .info-section { margin-bottom: 6px; }
+    .label { font-size: 10px; color: #666; text-transform: uppercase; }
+    .value { font-size: 13px; font-weight: 700; }
+    .items-row { margin-bottom: 6px; }
+    .gift-card { display: flex; align-items: center; gap: 4px; margin-bottom: 6px; }
+    .checkmark { font-size: 16px; }
+    .phone-row { margin-bottom: 4px; }
+    .address-section { margin-bottom: 8px; }
+    .street { font-size: 12px; font-weight: 600; }
+    .instructions { font-size: 11px; font-weight: 600; margin-bottom: 6px; padding: 4px 6px; background: #f5f5f5; border-left: 3px solid #000; }
+    
+    .tear-off {
+      margin-top: auto;
+      border-top: 2px dashed #999;
+      padding-top: 8px;
+    }
+    .tear-header {
+      font-size: 11px;
+      font-weight: 900;
+      text-align: center;
+      margin-bottom: 4px;
+    }
+    .tear-info {
+      font-size: 11px;
+      font-weight: 700;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <span class="driver-name">${driverName}</span>
+    <span class="date">${deliveryDate}</span>
+  </div>
+  
+  <div class="stop-row">
+    <div class="stop-box">${stopNum}</div>
+    <span class="city">${city}</span>
+    <span class="order-num">#${cleanOrderNum}</span>
+  </div>
+  
+  <div class="info-section">
+    <span class="label">Gift Receiver:</span>
+    <span class="value">${receiverName}</span>
+  </div>
+  
+  <div class="items-row">
+    <span class="value">📦 ${itemCount} items: ${itemNames.substring(0, 50)}${itemNames.length > 50 ? '...' : ''}</span>
+  </div>
+  
+  ${hasGiftCard ? '<div class="gift-card"><span class="checkmark">✓</span><span class="value">Gift Card</span></div>' : ''}
+  
+  ${gateCode ? '<div class="instructions">' + gateCode.substring(0, 80) + '</div>' : ''}
+  
+  <div class="phone-row">
+    <span class="value">Receiver: ${receiverPhone || '—'}</span>
+  </div>
+  
+  <div class="phone-row">
+    <span class="value">Sender: ${senderPhoneNum || '—'}</span>
+  </div>
+  
+  <div class="address-section">
+    <div class="street">${order.address?.street || ''}</div>
+    <div class="street">${order.address?.unit ? 'Unit ' + order.address.unit + ', ' : ''}${city}, FL ${order.address?.zip || ''}</div>
+  </div>
+  
+  <div class="tear-off">
+    <div class="tear-header">
+      ${is2ndAttempt ? 'FAILED 2ND ATTEMPT' : 'FAILED 1ST ATTEMPT'}
+    </div>
+    <div class="tear-info">#${cleanOrderNum} | ${receiverName.split(' ')[0] || 'Customer'} | ${city}</div>
+  </div>
+</body>
+</html>`;
+
+    const printWindow = window.open('', '_blank', 'width=400,height=600');
+    if (printWindow) {
+      printWindow.document.write(labelHtml);
+      printWindow.document.close();
+      printWindow.onload = () => {
+        printWindow.print();
+      };
+    }
+  };
+
   const openNavChoice = (addr: string) => {
     setNavAddress(addr);
     setShowNavChoice(true);
@@ -1122,6 +1271,14 @@ const OrderDetail: React.FC<{
             <Trash2 size={14} className="text-white" />
           </button>
         )}
+        {/* Print Label Button */}
+        <button
+          onClick={printLabel}
+          className="w-9 h-9 flex items-center justify-center bg-white/20 rounded-full active:bg-white/30 ml-1"
+          title="Print Label"
+        >
+          <Printer size={14} className="text-white" />
+        </button>
       </div>
 
       {/* ── SCROLLABLE CONTENT ── */}
@@ -3945,7 +4102,7 @@ const PendingRescheduleQueue: React.FC<{ allUsers: UserAccount[] }> = ({ allUser
 const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: UserAccount[]; setAllUsers: React.Dispatch<React.SetStateAction<UserAccount[]>>; }> = ({ role, deliveries, allUsers, setAllUsers }) => {
   // Modal/accordion states
   const [feesModalOpen, setFeesModalOpen] = useState(false);
-  const [feesTab, setFeesTab] = useState<'LOOKUP' | 'PAY_CALC'>('PAY_CALC');
+  const [feesTab, setFeesTab] = useState<'LOOKUP' | 'PAY_CALC' | 'HISTORY'>('PAY_CALC');
   const [activeNav, setActiveNav] = useState<'RESCHEDULE' | 'MESSAGES' | null>(null);
   const [addDriverExpanded, setAddDriverExpanded] = useState(false);
   const [smsTemplatesExpanded, setSmsTemplatesExpanded] = useState(false);
@@ -4039,6 +4196,59 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
     const newRates = { ...driverRates, [driverId]: rate };
     setDriverRates(newRates);
     await fetch('/api/config/driver-rates', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rates: newRates }) });
+  };
+  
+  // Fee History
+  const [feeHistory, setFeeHistory] = useState<Array<{
+    id: string;
+    driverId: string;
+    driverName: string;
+    dateRange: string;
+    deliveries: number;
+    rate: number;
+    subtotal: number;
+    deduction: number;
+    deductionNote: string;
+    bonus: number;
+    bonusNote: string;
+    total: number;
+    calculatedAt: string;
+  }>>([]);
+  
+  // Load fee history on mount
+  useEffect(() => {
+    fetch('/api/config/fee-history').then(r => r.json()).then(d => { if (d.history) setFeeHistory(d.history); }).catch(() => {});
+  }, []);
+  
+  const saveFeeCalculation = async () => {
+    if (!payDriverId || !payCalculated) return;
+    const result = calculateDriverPay(payDriverId);
+    const { start, end } = getDateRangeForPay();
+    const driverName = allUsers.find(u => u.id === payDriverId)?.name || 'Unknown';
+    const entry = {
+      id: Date.now().toString(),
+      driverId: payDriverId,
+      driverName,
+      dateRange: `${start} — ${end}`,
+      deliveries: result.count,
+      rate: result.rate,
+      subtotal: result.subtotal,
+      deduction: result.deduction,
+      deductionNote: payDeductionNote,
+      bonus: result.bonus,
+      bonusNote: payBonusNote,
+      total: result.total,
+      calculatedAt: new Date().toISOString(),
+    };
+    const newHistory = [entry, ...feeHistory];
+    setFeeHistory(newHistory);
+    await fetch('/api/config/fee-history', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ history: newHistory }) });
+  };
+  
+  const deleteFeeHistoryEntry = async (id: string) => {
+    const newHistory = feeHistory.filter(h => h.id !== id);
+    setFeeHistory(newHistory);
+    await fetch('/api/config/fee-history', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ history: newHistory }) });
   };
 
   const drivers = allUsers.filter(u => u.role === 'DRIVER');
@@ -4348,13 +4558,17 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
                 </button>
               </div>
               {/* Tabs */}
-              <div className="flex gap-2">
+              <div className="flex gap-1">
                 <button onClick={() => setFeesTab('PAY_CALC')}
-                  className={`flex-1 py-2 rounded-xl font-bold text-sm transition-all ${feesTab === 'PAY_CALC' ? 'bg-white text-emerald-700' : 'bg-white/20 text-white'}`}>
-                  Pay Calculator
+                  className={`flex-1 py-2 rounded-xl font-bold text-xs transition-all ${feesTab === 'PAY_CALC' ? 'bg-white text-emerald-700' : 'bg-white/20 text-white'}`}>
+                  Calculator
+                </button>
+                <button onClick={() => setFeesTab('HISTORY')}
+                  className={`flex-1 py-2 rounded-xl font-bold text-xs transition-all ${feesTab === 'HISTORY' ? 'bg-white text-emerald-700' : 'bg-white/20 text-white'}`}>
+                  History
                 </button>
                 <button onClick={() => setFeesTab('LOOKUP')}
-                  className={`flex-1 py-2 rounded-xl font-bold text-sm transition-all ${feesTab === 'LOOKUP' ? 'bg-white text-emerald-700' : 'bg-white/20 text-white'}`}>
+                  className={`flex-1 py-2 rounded-xl font-bold text-xs transition-all ${feesTab === 'LOOKUP' ? 'bg-white text-emerald-700' : 'bg-white/20 text-white'}`}>
                   ZIP Lookup
                 </button>
               </div>
@@ -4502,6 +4716,11 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
                           <span className="text-stone-400 font-bold uppercase text-sm">Total Pay</span>
                           <span className="text-4xl font-black text-white">${result.total.toFixed(2)}</span>
                         </div>
+                        
+                        <button onClick={saveFeeCalculation}
+                          className="w-full py-3 mt-2 bg-emerald-500 text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2">
+                          💾 Save to History
+                        </button>
                       </div>
                     );
                   })()}

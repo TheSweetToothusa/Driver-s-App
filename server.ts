@@ -839,6 +839,20 @@ async function startServer() {
     res.json({ ok: true, rates });
   });
 
+  // ── FEE HISTORY ──────────────────────────────────────────────────────────
+  app.get("/api/config/fee-history", async (_req, res) => {
+    try {
+      const val = await getKV('fee_history');
+      res.json(val ? JSON.parse(val) : { history: [] });
+    } catch { res.json({ history: [] }); }
+  });
+
+  app.post("/api/config/fee-history", async (req, res) => {
+    const { history } = req.body;
+    await setKV('fee_history', JSON.stringify({ history }));
+    res.json({ ok: true });
+  });
+
   // ── TEST NOTIFICATION ────────────────────────────────────────────────────
   app.post("/api/notify/test", async (req, res) => {
     const { to } = req.body;
