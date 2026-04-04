@@ -2031,7 +2031,9 @@ const OrdersView: React.FC<OrdersViewProps> = ({
         d.customer?.name?.toLowerCase().includes(q) ||
         d.address?.street?.toLowerCase().includes(q) ||
         d.address?.city?.toLowerCase().includes(q) ||
+        d.address?.zip?.toLowerCase().includes(q) ||
         d.giftReceiverName?.toLowerCase().includes(q) ||
+        d.giftSenderName?.toLowerCase().includes(q) ||
         statusLabel.includes(q)
       );
     });
@@ -2054,8 +2056,31 @@ const OrdersView: React.FC<OrdersViewProps> = ({
           </div>
         </div>
 
-        {/* Driver filter - matching Deliveries */}
+        {/* Search + Filters */}
         <div className="px-4 pt-3 pb-3 bg-white">
+          {/* Search Input */}
+          <div className="mb-3">
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Search orders, names, addresses..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                className="w-full bg-stone-100 border-0 rounded-xl px-4 py-3 pl-10 text-sm font-medium outline-none focus:ring-2 focus:ring-black"
+              />
+              <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="11" cy="11" r="8"/>
+                <path d="m21 21-4.3-4.3"/>
+              </svg>
+              {search && (
+                <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600">
+                  <X size={18} />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Driver filter */}
           <div className="flex gap-2 items-center">
             <select value={ordersDriverFilter} onChange={e => setOrdersDriverFilter(e.target.value)}
               style={{ background: '#F5F5F0', color: '#374151', border: 'none', borderRadius: 12, padding: '10px 14px', fontSize: 14, fontWeight: 600 }}>
