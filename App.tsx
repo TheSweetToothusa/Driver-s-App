@@ -450,23 +450,12 @@ const OrderCard: React.FC<{ order: Delivery; role: AppRole; onTap: () => void; i
             {order.deliveryFee ? <p className="text-sm font-black text-green-700">${order.deliveryFee.toFixed(2)}</p> : null}
           </div>
         </div>
-        {/* Driver row — admin: shows driver name + inline reassign dropdown */}
+        {/* Driver row — admin: shows driver name + inline reassign dropdown + Save button */}
         {isAdmin && (
           <div className="mt-1.5 flex items-center gap-2" onClick={e => e.stopPropagation()}>
             <select
               value={reassignTo || order.driverId || ''}
-              onChange={async e => {
-                const u = allUsers?.find(u => u.id === e.target.value);
-                if (!u) return;
-                setReassignTo(e.target.value);
-                const isManualOrder = (order as any).isManual;
-                await fetch(isManualOrder ? `/api/manual-orders/${order.id}` : `/api/orders/${order.id}/assign`, {
-                  method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ driverId: u.id, driverName: u.name })
-                });
-                if (onUpdate) onUpdate(order.id, { driverId: u.id, driverName: u.name });
-                setReassignTo('');
-              }}
+              onChange={e => setReassignTo(e.target.value)}
               className="flex-1 bg-stone-50 border border-stone-200 rounded-lg px-2 py-1.5 text-xs font-bold outline-none text-stone-700"
             >
               <option value="">👤 {order.driverName || 'Assign driver...'}</option>
@@ -474,6 +463,14 @@ const OrderCard: React.FC<{ order: Delivery; role: AppRole; onTap: () => void; i
                 <option key={u.id} value={u.id}>{u.name}</option>
               ))}
             </select>
+            {reassignTo && reassignTo !== order.driverId && (
+              <button
+                onClick={handleReassign}
+                className="shrink-0 bg-green-500 text-white text-xs font-black px-3 py-1.5 rounded-lg active:bg-green-600"
+              >
+                Save
+              </button>
+            )}
           </div>
         )}
       </div>
