@@ -3255,21 +3255,24 @@ const ScheduleView: React.FC<{
 
     const labelsHtml = orderedStops.map((order, idx) => {
       const stopNum = idx + 1;
-      const name = order.giftReceiverName || order.customer?.name || '—';
+      const receiverName = order.giftReceiverName || order.customer?.name || '—';
+      const receiverPhone = order.customer?.phone || '';
       const street = order.address?.street || '';
       const unit = order.address?.unit || '';
       const city = order.address?.city || '';
       const zip = order.address?.zip || '';
       const orderNum = (order.orderNumber || order.id).replace(/^#+/, '');
-      const sender = order.giftSenderName || '';
+      const senderName = order.giftSenderName || '';
+      const senderPhone = order.giftSenderPhone || '';
       const instructions = order.deliveryInstructions || '';
-      const phone = order.customer?.phone || '';
       const items = (order.items || []).map((it: any) => it.name || '').filter(Boolean).join(', ');
       const driver = order.driverName || driverLabel;
       const delivDate = order.deliveryDate
         ? new Date(order.deliveryDate + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
         : dateLabel;
       const itemCount = (order.items || []).reduce((s: number, it: any) => s + (it.quantity || 1), 0);
+      // Check if order has a gift message/card
+      const hasGiftCard = !!(order.giftMessage && order.giftMessage.trim());
 
       return `
         <div class="label">
@@ -3277,14 +3280,27 @@ const ScheduleView: React.FC<{
           <div class="stop-of">Stop ${stopNum} of ${orderedStops.length}</div>
 
           <div class="order-num">#${orderNum}</div>
-          <div class="recipient">${name}</div>
+          <div class="section-label">GIFT RECEIVER</div>
+          <div class="recipient">${receiverName}</div>
+          ${receiverPhone ? `<div class="phone">📞 ${receiverPhone}</div>` : ''}
           <div class="address">${street}${unit ? `, ${unit}` : ''}</div>
           <div class="address">${city}, FL ${zip}</div>
-          ${phone ? `<div class="phone">📞 ${phone}</div>` : ''}
-          ${sender ? `<div class="sender">🎁 From: ${sender}</div>` : ''}
-          ${items ? `<div class="items">📦 ${itemCount > 1 ? itemCount + ' items: ' : ''}${items}</div>` : ''}
+          
+          ${senderName ? `
+          <div class="section-label sender-label">GIFT SENDER</div>
+          <div class="sender-name">${senderName}</div>
+          ${senderPhone ? `<div class="sender-phone">📞 ${senderPhone}</div>` : ''}
+          ` : ''}
+          
+          <div class="items-box">
+            <div class="items-count">${itemCount} ${itemCount === 1 ? 'Item' : 'Items'}</div>
+            ${items ? `<div class="items-list">${items}</div>` : ''}
+            <div class="gift-card-check">${hasGiftCard ? '✓' : '☐'} Gift Card Message</div>
+          </div>
+          
           ${instructions ? `<div class="instructions">⚠️ ${instructions}</div>` : ''}
 
+          <div class="tear-spacer"></div>
           <div class="tear-line">
             <span class="tear-text">✂ &nbsp; TEAR HERE — LEAVE IF UNDELIVERABLE &nbsp; ✂</span>
           </div>
@@ -3296,17 +3312,12 @@ const ScheduleView: React.FC<{
               <span class="ud-icon">⚠️</span>
             </div>
             <div class="ud-row"><span class="ud-label">Order:</span> <span>#${orderNum}</span></div>
-            <div class="ud-row"><span class="ud-label">Recipient:</span> <span>${name}</span></div>
+            <div class="ud-row"><span class="ud-label">Recipient:</span> <span>${receiverName}</span></div>
             <div class="ud-row"><span class="ud-label">Address:</span> <span>${street}${unit ? ` ${unit}` : ''}, ${city} ${zip}</span></div>
-            ${phone ? `<div class="ud-row"><span class="ud-label">Phone:</span> <span>${phone}</span></div>` : ''}
+            ${receiverPhone ? `<div class="ud-row"><span class="ud-label">Phone:</span> <span>${receiverPhone}</span></div>` : ''}
             <div class="ud-row"><span class="ud-label">Driver:</span> <span>${driver}</span></div>
             <div class="ud-row"><span class="ud-label">Date:</span> <span>${delivDate}</span></div>
             <div class="ud-row"><span class="ud-label">Printed:</span> <span>${dateLabel} ${timeLabel}</span></div>
-            <div class="ud-attempt-row">
-              <span class="ud-attempt-box" id="att1_${orderNum}">☐ 1st Attempt</span>
-              <span class="ud-attempt-box" id="att2_${orderNum}">☐ 2nd Attempt</span>
-            </div>
-            <div class="ud-note">⚠️ We will reattempt delivery. Questions? (305) 682-1400</div>
           </div>
         </div>
       `;
@@ -3383,7 +3394,7 @@ const ScheduleView: React.FC<{
     font-weight: 900;
     color: #000;
     line-height: 1.1;
-    margin-bottom: 6px;
+    margin-bottom: 2px;
   }
   .address {
     font-size: 15px;
@@ -3396,32 +3407,77 @@ const ScheduleView: React.FC<{
     color: #444;
     margin-top: 4px;
   }
-  .sender {
-    font-size: 12px;
-    color: #666;
-    margin-top: 8px;
-    font-style: italic;
+  .section-label {
+    font-size: 9px;
+    font-weight: 900;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-top: 4px;
+    margin-bottom: 2px;
   }
-  .items {
+  .sender-label {
+    margin-top: 12px;
+    border-top: 1px dashed #ddd;
+    padding-top: 8px;
+  }
+  .sender-name {
+    font-size: 18px;
+    font-weight: 900;
+    color: #000;
+    line-height: 1.1;
+    margin-bottom: 2px;
+  }
+  .sender-phone {
+    font-size: 13px;
+    color: #444;
+    margin-top: 2px;
+  }
+  .items-box {
+    margin-top: 12px;
+    padding: 8px 10px;
+    border: 2px solid #000;
+    border-radius: 6px;
+    background: #f9f9f9;
+  }
+  .items-count {
+    font-size: 16px;
+    font-weight: 900;
+    color: #000;
+    margin-bottom: 4px;
+  }
+  .items-list {
     font-size: 11px;
     color: #555;
+    line-height: 1.4;
+    margin-bottom: 6px;
+  }
+  .gift-card-check {
+    font-size: 12px;
+    font-weight: 700;
+    color: #333;
     margin-top: 4px;
-    border-top: 1px dashed #ddd;
     padding-top: 4px;
+    border-top: 1px dashed #ccc;
   }
   .instructions {
     font-size: 12px;
     font-weight: 900;
     color: #c00;
-    margin-top: 6px;
+    margin-top: 10px;
     padding: 6px 8px;
     border: 2px solid #c00;
     border-radius: 6px;
   }
 
+  /* Tear spacer — pushes tear line down */
+  .tear-spacer {
+    flex-grow: 1;
+    min-height: 0.8in;
+  }
+
   /* Tear line */
   .tear-line {
-    margin-top: auto;
     padding: 7px 0 5px;
     border-top: 2px dashed #aaa;
   }
@@ -3463,26 +3519,6 @@ const ScheduleView: React.FC<{
     gap: 4px;
   }
   .ud-label { font-weight: 800; min-width: 52px; }
-  .ud-attempt-row {
-    display: flex;
-    gap: 12px;
-    margin: 5px 0 3px;
-    font-size: 9px;
-    font-weight: 700;
-  }
-  .ud-attempt-box {
-    background: #f5f5f5;
-    border: 1px solid #ccc;
-    border-radius: 3px;
-    padding: 2px 6px;
-  }
-  .ud-note {
-    font-size: 8px;
-    color: #666;
-    margin-top: 4px;
-    text-align: center;
-    font-style: italic;
-  }
 
   @media print {
     body { margin: 0; }
