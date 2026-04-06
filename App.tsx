@@ -1479,7 +1479,7 @@ const OrderDetail: React.FC<{
         {/* ── ZONE 3: PROOF OF DELIVERY — Matching card style ── */}
         {!isCompleted && (
           <div style={{ padding: '0 16px', marginTop: 16 }}>
-            <input type="file" accept="image/*" capture="environment" ref={fileRef} onChange={handlePhoto} className="hidden" />
+            <input type="file" accept="image/*" ref={fileRef} onChange={handlePhoto} className="hidden" />
 
             {/* POD Card */}
             <div style={{ background: '#ffffff', borderRadius: 12, padding: 16, marginBottom: 12, boxShadow: '0 1px 3px rgba(0, 0, 0, 0.08)', borderLeft: '3px solid #E5E7EB' }}>
