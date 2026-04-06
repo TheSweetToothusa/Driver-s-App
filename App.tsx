@@ -961,7 +961,7 @@ const OrderDetail: React.FC<{
       giftSenderName: editFields.senderName,
       giftSenderPhone: editFields.senderPhone,
     };
-    if (role === 'SUPER_ADMIN') {
+    if (role === 'SUPER_ADMIN' || role === 'MANAGER') {
       updates.deliveryFee = parseFloat(editFields.deliveryFee) || order.deliveryFee;
     }
     onUpdate(order.id, updates);
@@ -1843,7 +1843,7 @@ const OrderDetail: React.FC<{
                   className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm font-bold outline-none focus:border-black"
                 />
               </div>
-              {role === 'SUPER_ADMIN' && (
+              {(role === 'SUPER_ADMIN' || role === 'MANAGER') && (
                 <div>
                   <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest mb-1">Delivery Fee</p>
                   <input value={editFields.deliveryFee} onChange={e => setEditFields(p => ({ ...p, deliveryFee: e.target.value }))} onBlur={handleSaveContact} placeholder="$0.00" inputMode="decimal" className="w-full bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-sm font-black outline-none focus:border-amber-400" />
@@ -1870,9 +1870,51 @@ const OrderDetail: React.FC<{
                   <input value={editFields.street} onChange={e => setEditFields(p => ({ ...p, street: e.target.value }))} placeholder="Street address" className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-black" />
                   <div className="grid grid-cols-2 gap-2">
                     <input value={editFields.city} onChange={e => setEditFields(p => ({ ...p, city: e.target.value }))} placeholder="City" className="bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-black" />
-                    <input value={editFields.zip} onChange={e => setEditFields(p => ({ ...p, zip: e.target.value.replace(/\D/g,'').slice(0,5) }))} placeholder="ZIP" className="bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-black" />
+                    <input
+                      value={editFields.zip}
+                      onChange={e => {
+                        const zip = e.target.value.replace(/\D/g,'').slice(0,5);
+                        const autoFee = zip.length === 5 ? (DELIVERY_FEES[zip] ?? null) : null;
+                        setEditFields(p => ({
+                          ...p,
+                          zip,
+                          deliveryFee: autoFee !== null ? String(autoFee) : p.deliveryFee
+                        }));
+                      }}
+                      placeholder="ZIP"
+                      className="bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-black"
+                    />
                   </div>
-                  <button onClick={handleSaveContact} className="w-full py-3 bg-black text-white rounded-xl font-black uppercase text-xs mt-2">Save Contact Changes</button>
+                  {/* Fee preview — shows whenever ZIP is 5 digits */}
+                  {editFields.zip.length === 5 && (() => {
+                    const lookedUp = DELIVERY_FEES[editFields.zip] ?? null;
+                    const current = parseFloat(editFields.deliveryFee) || 0;
+                    const changed = lookedUp !== null && lookedUp !== (order.deliveryFee || 0);
+                    return (
+                      <div className={`rounded-xl px-3 py-2.5 flex items-center justify-between ${lookedUp !== null ? 'bg-green-50 border border-green-200' : 'bg-amber-50 border border-amber-200'}`}>
+                        {lookedUp !== null ? (
+                          <>
+                            <span className="text-xs font-bold text-green-700">
+                              {changed ? '✓ Fee auto-updated' : '✓ Fee confirmed'}
+                            </span>
+                            <span className="text-lg font-black text-green-700">${current.toFixed(2)}</span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="text-xs font-bold text-amber-700">ZIP not in table — enter fee manually</span>
+                            <input
+                              value={editFields.deliveryFee}
+                              onChange={e => setEditFields(p => ({ ...p, deliveryFee: e.target.value }))}
+                              placeholder="0.00"
+                              inputMode="decimal"
+                              className="w-20 text-right bg-white border border-amber-300 rounded-lg px-2 py-1 text-sm font-black outline-none"
+                            />
+                          </>
+                        )}
+                      </div>
+                    );
+                  })()}
+                  <button onClick={handleSaveContact} className="w-full py-3 bg-black text-white rounded-xl font-black uppercase text-xs mt-2">Save Changes</button>
                 </div>
               )}
             </div>
