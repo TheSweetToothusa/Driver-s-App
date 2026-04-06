@@ -3128,6 +3128,263 @@ const ScheduleView: React.FC<{
     setTimeout(() => setRouteSavedMsg(''), 2000);
   };
 
+  const printRouteSheet = () => {
+    // Build ordered list of today's active stops
+    const todayActive = grouped.flatMap(([, orders]) => orders).filter(o => !DONE_STATUSES.includes(o.status));
+    const orderedStops = customOrder.length > 0
+      ? [...todayActive].sort((a, b) => {
+          const ai = customOrder.indexOf(a.id);
+          const bi = customOrder.indexOf(b.id);
+          return (ai === -1 ? 9999 : ai) - (bi === -1 ? 9999 : bi);
+        })
+      : todayActive;
+
+    const dateLabel = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+
+    const labelsHtml = orderedStops.map((order, idx) => {
+      const stopNum = idx + 1;
+      const name = order.giftReceiverName || order.customer?.name || '—';
+      const street = order.address?.street || '';
+      const unit = order.address?.unit || '';
+      const city = order.address?.city || '';
+      const zip = order.address?.zip || '';
+      const orderNum = (order.orderNumber || order.id).replace(/^#+/, '');
+      const sender = order.giftSenderName || order.customer?.name || '';
+      const instructions = order.deliveryInstructions || '';
+      const phone = order.customer?.phone || '';
+      const items = (order.items || []).map((it: any) => it.name || '').filter(Boolean).join(', ');
+
+      return `
+        <div class="label">
+          <!-- TOP: Big stop number circle -->
+          <div class="stop-circle">${stopNum}</div>
+          <div class="stop-of">${stopNum} of ${orderedStops.length}</div>
+
+          <!-- ORDER INFO -->
+          <div class="order-num">#${orderNum}</div>
+          <div class="recipient">${name}</div>
+          <div class="address">${street}${unit ? `, ${unit}` : ''}</div>
+          <div class="address">${city}, FL ${zip}</div>
+          ${phone ? `<div class="phone">${phone}</div>` : ''}
+          ${sender ? `<div class="sender">From: ${sender}</div>` : ''}
+          ${items ? `<div class="items">${items}</div>` : ''}
+          ${instructions ? `<div class="instructions">⚠ ${instructions}</div>` : ''}
+
+          <!-- TEAR LINE -->
+          <div class="tear-line">
+            <span class="tear-text">✂ &nbsp; TEAR HERE — LEAVE WITH RECIPIENT IF UNDELIVERABLE &nbsp; ✂</span>
+          </div>
+
+          <!-- BOTTOM: Undeliverable slip -->
+          <div class="undeliverable">
+            <div class="ud-title">UNDELIVERABLE NOTICE</div>
+            <div class="ud-row"><span class="ud-label">Order:</span> #${orderNum}</div>
+            <div class="ud-row"><span class="ud-label">For:</span> ${name}</div>
+            <div class="ud-row"><span class="ud-label">Address:</span> ${street}${unit ? ` ${unit}` : ''}, ${city} ${zip}</div>
+            <div class="ud-row ud-attempt">□ &nbsp;1st Attempt &nbsp;&nbsp;&nbsp; □ &nbsp;2nd Attempt</div>
+            <div class="ud-row"><span class="ud-label">Date:</span> _____________ &nbsp; <span class="ud-label">Time:</span> _____________</div>
+            <div class="ud-row"><span class="ud-label">Driver:</span> _______________________________</div>
+            <div class="ud-note">We will attempt redelivery. Questions? Call (305) 682-1400</div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Route Sheet — ${dateLabel}</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: Arial, sans-serif; background: #fff; }
+
+  /* Cover page */
+  .cover {
+    width: 4in;
+    min-height: 6in;
+    padding: 0.4in;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    page-break-after: always;
+    border: 2px solid #000;
+  }
+  .cover-logo { font-size: 28px; font-weight: 900; margin-bottom: 8px; }
+  .cover-date { font-size: 14px; color: #555; margin-bottom: 24px; }
+  .cover-total { font-size: 72px; font-weight: 900; line-height: 1; }
+  .cover-total-label { font-size: 16px; font-weight: 700; text-transform: uppercase; color: #555; margin-top: 4px; }
+  .cover-stops { margin-top: 32px; }
+  .cover-stop-row { font-size: 13px; padding: 4px 0; border-bottom: 1px solid #eee; text-align: left; }
+  .cover-stop-num { display: inline-block; width: 28px; height: 28px; border-radius: 50%; background: #000; color: #fff; font-weight: 900; font-size: 13px; text-align: center; line-height: 28px; margin-right: 8px; }
+
+  /* Labels */
+  .label {
+    width: 4in;
+    min-height: 6in;
+    padding: 0.25in 0.3in 0.2in;
+    page-break-after: always;
+    border: 1px solid #ccc;
+    display: flex;
+    flex-direction: column;
+  }
+  .stop-circle {
+    width: 1.4in;
+    height: 1.4in;
+    border-radius: 50%;
+    background: #000;
+    color: #fff;
+    font-size: 72px;
+    font-weight: 900;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 6px;
+    line-height: 1;
+  }
+  .stop-of {
+    text-align: center;
+    font-size: 12px;
+    color: #777;
+    margin-bottom: 14px;
+  }
+  .order-num {
+    font-size: 22px;
+    font-weight: 900;
+    color: #000;
+    margin-bottom: 2px;
+  }
+  .recipient {
+    font-size: 26px;
+    font-weight: 900;
+    color: #000;
+    line-height: 1.1;
+    margin-bottom: 6px;
+  }
+  .address {
+    font-size: 15px;
+    font-weight: 600;
+    color: #222;
+    line-height: 1.4;
+  }
+  .phone {
+    font-size: 14px;
+    color: #444;
+    margin-top: 4px;
+  }
+  .sender {
+    font-size: 12px;
+    color: #666;
+    margin-top: 8px;
+    font-style: italic;
+  }
+  .items {
+    font-size: 11px;
+    color: #555;
+    margin-top: 4px;
+    border-top: 1px dashed #ddd;
+    padding-top: 4px;
+  }
+  .instructions {
+    font-size: 12px;
+    font-weight: 900;
+    color: #c00;
+    margin-top: 6px;
+    padding: 6px 8px;
+    border: 2px solid #c00;
+    border-radius: 6px;
+  }
+
+  /* Tear line */
+  .tear-line {
+    margin-top: auto;
+    padding: 10px 0 6px;
+    border-top: 2px dashed #999;
+  }
+  .tear-text {
+    font-size: 8px;
+    color: #999;
+    letter-spacing: 0.5px;
+    display: block;
+    text-align: center;
+  }
+
+  /* Undeliverable slip */
+  .undeliverable {
+    padding-top: 8px;
+    border-top: 1px solid #ddd;
+  }
+  .ud-title {
+    font-size: 11px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    text-align: center;
+    color: #000;
+    margin-bottom: 8px;
+    border-bottom: 1px solid #000;
+    padding-bottom: 4px;
+  }
+  .ud-row {
+    font-size: 10px;
+    color: #333;
+    padding: 2px 0;
+    line-height: 1.6;
+  }
+  .ud-label { font-weight: 700; }
+  .ud-attempt {
+    font-size: 11px;
+    font-weight: 600;
+    margin: 4px 0;
+  }
+  .ud-note {
+    font-size: 9px;
+    color: #888;
+    margin-top: 6px;
+    text-align: center;
+    font-style: italic;
+  }
+
+  @media print {
+    body { margin: 0; }
+    .label, .cover { border: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- COVER PAGE: Summary of all stops -->
+<div class="cover">
+  <div class="cover-logo">🍫 The Sweet Tooth</div>
+  <div class="cover-date">${dateLabel}</div>
+  <div class="cover-total">${orderedStops.length}</div>
+  <div class="cover-total-label">Deliveries Today</div>
+  <div class="cover-stops" style="width:100%;margin-top:24px">
+    ${orderedStops.map((o, i) => {
+      const n = o.giftReceiverName || o.customer?.name || '—';
+      const c = o.address?.city || '';
+      const num = (o.orderNumber || o.id).replace(/^#+/, '');
+      return `<div class="cover-stop-row"><span class="cover-stop-num">${i+1}</span> #${num} — ${n} &nbsp;·&nbsp; ${c}</div>`;
+    }).join('')}
+  </div>
+</div>
+
+<!-- LABELS: One per stop -->
+${labelsHtml}
+
+<script>window.onload = () => { window.print(); }</script>
+</body>
+</html>`;
+
+    const win = window.open('', '_blank');
+    if (win) {
+      win.document.write(html);
+      win.document.close();
+    }
+  };
+
   const startNavigation = (app: 'waze' | 'google') => {
     // Build ordered stops from routeStops (already in customOrder sequence)
     const stops = routeStops.filter((s: any) => s.lat !== 0 && s.lng !== 0);
@@ -3314,6 +3571,15 @@ const ScheduleView: React.FC<{
             ) : (
               <><MapIcon size={16} /> Optimize Route ({optimizableStops.length} stops)</>
             )}
+          </button>
+
+          {/* Print Route Sheet — always visible when there are stops */}
+          <button
+            onClick={printRouteSheet}
+            className="w-full py-3 rounded-xl font-black text-sm flex items-center justify-center gap-2 active:scale-95 transition-all"
+            style={{ background: '#000', color: '#fff' }}
+          >
+            🖨 Print Route Sheet ({optimizableStops.length} labels)
           </button>
 
           {/* Navigate + Reset row — only show after route is set */}
