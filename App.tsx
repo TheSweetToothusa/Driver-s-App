@@ -3239,17 +3239,19 @@ const ScheduleView: React.FC<{
   };
 
   const printRouteSheet = () => {
-    // Build ordered list of today's active stops
-    const todayActive = grouped.flatMap(([, orders]) => orders).filter(o => !DONE_STATUSES.includes(o.status));
+    // Use all optimizable stops in their current order (respects drag reorder)
     const orderedStops = customOrder.length > 0
-      ? [...todayActive].sort((a, b) => {
+      ? [...optimizableStops].sort((a, b) => {
           const ai = customOrder.indexOf(a.id);
           const bi = customOrder.indexOf(b.id);
           return (ai === -1 ? 9999 : ai) - (bi === -1 ? 9999 : bi);
         })
-      : todayActive;
+      : optimizableStops;
 
-    const dateLabel = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+    const now = new Date();
+    const dateLabel = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+    const timeLabel = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    const driverLabel = orderedStops[0]?.driverName || 'Driver';
 
     const labelsHtml = orderedStops.map((order, idx) => {
       const stopNum = idx + 1;
@@ -3259,42 +3261,52 @@ const ScheduleView: React.FC<{
       const city = order.address?.city || '';
       const zip = order.address?.zip || '';
       const orderNum = (order.orderNumber || order.id).replace(/^#+/, '');
-      const sender = order.giftSenderName || order.customer?.name || '';
+      const sender = order.giftSenderName || '';
       const instructions = order.deliveryInstructions || '';
       const phone = order.customer?.phone || '';
       const items = (order.items || []).map((it: any) => it.name || '').filter(Boolean).join(', ');
+      const driver = order.driverName || driverLabel;
+      const delivDate = order.deliveryDate
+        ? new Date(order.deliveryDate + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+        : dateLabel;
+      const itemCount = (order.items || []).reduce((s: number, it: any) => s + (it.quantity || 1), 0);
 
       return `
         <div class="label">
-          <!-- TOP: Big stop number circle -->
           <div class="stop-circle">${stopNum}</div>
-          <div class="stop-of">${stopNum} of ${orderedStops.length}</div>
+          <div class="stop-of">Stop ${stopNum} of ${orderedStops.length}</div>
 
-          <!-- ORDER INFO -->
           <div class="order-num">#${orderNum}</div>
           <div class="recipient">${name}</div>
           <div class="address">${street}${unit ? `, ${unit}` : ''}</div>
           <div class="address">${city}, FL ${zip}</div>
-          ${phone ? `<div class="phone">${phone}</div>` : ''}
-          ${sender ? `<div class="sender">From: ${sender}</div>` : ''}
-          ${items ? `<div class="items">${items}</div>` : ''}
-          ${instructions ? `<div class="instructions">⚠ ${instructions}</div>` : ''}
+          ${phone ? `<div class="phone">📞 ${phone}</div>` : ''}
+          ${sender ? `<div class="sender">🎁 From: ${sender}</div>` : ''}
+          ${items ? `<div class="items">📦 ${itemCount > 1 ? itemCount + ' items: ' : ''}${items}</div>` : ''}
+          ${instructions ? `<div class="instructions">⚠️ ${instructions}</div>` : ''}
 
-          <!-- TEAR LINE -->
           <div class="tear-line">
-            <span class="tear-text">✂ &nbsp; TEAR HERE — LEAVE WITH RECIPIENT IF UNDELIVERABLE &nbsp; ✂</span>
+            <span class="tear-text">✂ &nbsp; TEAR HERE — LEAVE IF UNDELIVERABLE &nbsp; ✂</span>
           </div>
 
-          <!-- BOTTOM: Undeliverable slip -->
           <div class="undeliverable">
-            <div class="ud-title">UNDELIVERABLE NOTICE</div>
-            <div class="ud-row"><span class="ud-label">Order:</span> #${orderNum}</div>
-            <div class="ud-row"><span class="ud-label">For:</span> ${name}</div>
-            <div class="ud-row"><span class="ud-label">Address:</span> ${street}${unit ? ` ${unit}` : ''}, ${city} ${zip}</div>
-            <div class="ud-row ud-attempt">□ &nbsp;1st Attempt &nbsp;&nbsp;&nbsp; □ &nbsp;2nd Attempt</div>
-            <div class="ud-row"><span class="ud-label">Date:</span> _____________ &nbsp; <span class="ud-label">Time:</span> _____________</div>
-            <div class="ud-row"><span class="ud-label">Driver:</span> _______________________________</div>
-            <div class="ud-note">We will attempt redelivery. Questions? Call (305) 682-1400</div>
+            <div class="ud-header">
+              <span class="ud-icon">⚠️</span>
+              <span class="ud-title">UNDELIVERABLE NOTICE</span>
+              <span class="ud-icon">⚠️</span>
+            </div>
+            <div class="ud-row"><span class="ud-label">Order:</span> <span>#${orderNum}</span></div>
+            <div class="ud-row"><span class="ud-label">Recipient:</span> <span>${name}</span></div>
+            <div class="ud-row"><span class="ud-label">Address:</span> <span>${street}${unit ? ` ${unit}` : ''}, ${city} ${zip}</span></div>
+            ${phone ? `<div class="ud-row"><span class="ud-label">Phone:</span> <span>${phone}</span></div>` : ''}
+            <div class="ud-row"><span class="ud-label">Driver:</span> <span>${driver}</span></div>
+            <div class="ud-row"><span class="ud-label">Date:</span> <span>${delivDate}</span></div>
+            <div class="ud-row"><span class="ud-label">Printed:</span> <span>${dateLabel} ${timeLabel}</span></div>
+            <div class="ud-attempt-row">
+              <span class="ud-attempt-box" id="att1_${orderNum}">☐ 1st Attempt</span>
+              <span class="ud-attempt-box" id="att2_${orderNum}">☐ 2nd Attempt</span>
+            </div>
+            <div class="ud-note">⚠️ We will reattempt delivery. Questions? (305) 682-1400</div>
           </div>
         </div>
       `;
@@ -3410,49 +3422,64 @@ const ScheduleView: React.FC<{
   /* Tear line */
   .tear-line {
     margin-top: auto;
-    padding: 10px 0 6px;
-    border-top: 2px dashed #999;
+    padding: 7px 0 5px;
+    border-top: 2px dashed #aaa;
   }
   .tear-text {
-    font-size: 8px;
-    color: #999;
-    letter-spacing: 0.5px;
+    font-size: 7px;
+    color: #aaa;
+    letter-spacing: 0.3px;
     display: block;
     text-align: center;
   }
 
-  /* Undeliverable slip */
+  /* Undeliverable slip — compact */
   .undeliverable {
-    padding-top: 8px;
-    border-top: 1px solid #ddd;
+    padding-top: 6px;
   }
-  .ud-title {
-    font-size: 11px;
-    font-weight: 900;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    text-align: center;
-    color: #000;
-    margin-bottom: 8px;
-    border-bottom: 1px solid #000;
+  .ud-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    margin-bottom: 5px;
+    border-bottom: 1.5px solid #000;
     padding-bottom: 4px;
   }
-  .ud-row {
+  .ud-icon { font-size: 11px; }
+  .ud-title {
     font-size: 10px;
-    color: #333;
-    padding: 2px 0;
-    line-height: 1.6;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: #000;
   }
-  .ud-label { font-weight: 700; }
-  .ud-attempt {
-    font-size: 11px;
-    font-weight: 600;
-    margin: 4px 0;
+  .ud-row {
+    font-size: 9px;
+    color: #222;
+    padding: 1.5px 0;
+    line-height: 1.5;
+    display: flex;
+    gap: 4px;
+  }
+  .ud-label { font-weight: 800; min-width: 52px; }
+  .ud-attempt-row {
+    display: flex;
+    gap: 12px;
+    margin: 5px 0 3px;
+    font-size: 9px;
+    font-weight: 700;
+  }
+  .ud-attempt-box {
+    background: #f5f5f5;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    padding: 2px 6px;
   }
   .ud-note {
-    font-size: 9px;
-    color: #888;
-    margin-top: 6px;
+    font-size: 8px;
+    color: #666;
+    margin-top: 4px;
     text-align: center;
     font-style: italic;
   }
@@ -3468,15 +3495,16 @@ const ScheduleView: React.FC<{
 <!-- COVER PAGE: Summary of all stops -->
 <div class="cover">
   <div class="cover-logo">🍫 The Sweet Tooth</div>
-  <div class="cover-date">${dateLabel}</div>
+  <div class="cover-date">${dateLabel} &nbsp;·&nbsp; Printed ${timeLabel}</div>
   <div class="cover-total">${orderedStops.length}</div>
-  <div class="cover-total-label">Deliveries Today</div>
+  <div class="cover-total-label">Deliveries</div>
   <div class="cover-stops" style="width:100%;margin-top:24px">
     ${orderedStops.map((o, i) => {
       const n = o.giftReceiverName || o.customer?.name || '—';
       const c = o.address?.city || '';
       const num = (o.orderNumber || o.id).replace(/^#+/, '');
-      return `<div class="cover-stop-row"><span class="cover-stop-num">${i+1}</span> #${num} — ${n} &nbsp;·&nbsp; ${c}</div>`;
+      const drv = o.driverName || '';
+      return `<div class="cover-stop-row"><span class="cover-stop-num">${i+1}</span> #${num} — ${n} &nbsp;·&nbsp; ${c}${drv ? ' &nbsp;·&nbsp; ' + drv : ''}</div>`;
     }).join('')}
   </div>
 </div>
@@ -3488,11 +3516,17 @@ ${labelsHtml}
 </body>
 </html>`;
 
-    const win = window.open('', '_blank');
-    if (win) {
-      win.document.write(html);
-      win.document.close();
-    }
+    // Use data URI to avoid popup blocking on iOS Safari
+    const blob = new Blob([html], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
   };
 
   const startNavigation = (app: 'waze' | 'google') => {
