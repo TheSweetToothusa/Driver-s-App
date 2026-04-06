@@ -4543,7 +4543,7 @@ const PendingRescheduleQueue: React.FC<{ allUsers: UserAccount[] }> = ({ allUser
 const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: UserAccount[]; setAllUsers: React.Dispatch<React.SetStateAction<UserAccount[]>>; }> = ({ role, deliveries, allUsers, setAllUsers }) => {
   // Modal/accordion states
   const [feesModalOpen, setFeesModalOpen] = useState(false);
-  const [feesTab, setFeesTab] = useState<'LOOKUP' | 'PAY_CALC' | 'HISTORY'>('PAY_CALC');
+  const [feesTab, setFeesTab] = useState<'LOOKUP' | 'PAY_CALC' | 'ZIP'>('LOOKUP');
   const [activeNav, setActiveNav] = useState<'RESCHEDULE' | 'MESSAGES' | null>(null);
   const [addDriverExpanded, setAddDriverExpanded] = useState(false);
   const [smsTemplatesExpanded, setSmsTemplatesExpanded] = useState(false);
@@ -4980,302 +4980,314 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
       )}
 
       {/* ═══════════════════════════════════════════════════════════════════
-          FEES MODAL — Tabbed: Pay Calculator + ZIP Lookup
+          FEES MODAL — Simplified: Total Fees + Driver Earnings + ZIP Lookup
           ═══════════════════════════════════════════════════════════════════ */}
       {feesModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center">
-          <div className="absolute inset-0 bg-black/50" onClick={() => setFeesModalOpen(false)} />
-          <div className="relative bg-white w-full max-w-md max-h-[90vh] rounded-t-3xl overflow-hidden shadow-2xl" onClick={e => e.stopPropagation()}>
-            {/* Header */}
-            <div className="sticky top-0 bg-gradient-to-r from-emerald-500 to-emerald-600 px-4 py-3">
-              <div className="flex items-center justify-between mb-3">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60" onClick={() => setFeesModalOpen(false)} />
+          <div className="relative bg-white w-full max-w-md max-h-[85vh] rounded-3xl overflow-hidden shadow-2xl flex flex-col" onClick={e => e.stopPropagation()}>
+            
+            {/* Header - Fixed at top */}
+            <div className="bg-gradient-to-r from-emerald-500 to-emerald-600 px-5 py-4 flex-shrink-0">
+              <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
-                  <DollarSign size={20} className="text-white" />
-                  <span className="font-black text-white text-lg">Driver Pay</span>
+                  <DollarSign size={22} className="text-white" />
+                  <span className="font-black text-white text-xl">Fees & Earnings</span>
                 </div>
                 <button onClick={() => setFeesModalOpen(false)}
-                  className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
-                  <X size={18} className="text-white" />
+                  className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center active:bg-white/30">
+                  <X size={20} className="text-white" />
                 </button>
               </div>
               {/* Tabs */}
-              <div className="flex gap-1">
-                <button onClick={() => setFeesTab('PAY_CALC')}
-                  className={`flex-1 py-2 rounded-xl font-bold text-xs transition-all ${feesTab === 'PAY_CALC' ? 'bg-white text-emerald-700' : 'bg-white/20 text-white'}`}>
-                  Calculator
-                </button>
-                <button onClick={() => setFeesTab('HISTORY')}
-                  className={`flex-1 py-2 rounded-xl font-bold text-xs transition-all ${feesTab === 'HISTORY' ? 'bg-white text-emerald-700' : 'bg-white/20 text-white'}`}>
-                  History
-                </button>
+              <div className="flex gap-1.5">
                 <button onClick={() => setFeesTab('LOOKUP')}
-                  className={`flex-1 py-2 rounded-xl font-bold text-xs transition-all ${feesTab === 'LOOKUP' ? 'bg-white text-emerald-700' : 'bg-white/20 text-white'}`}>
-                  ZIP Lookup
+                  className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-all ${feesTab === 'LOOKUP' ? 'bg-white text-emerald-700 shadow-md' : 'bg-white/20 text-white'}`}>
+                  💰 Total Fees
+                </button>
+                <button onClick={() => setFeesTab('PAY_CALC')}
+                  className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-all ${feesTab === 'PAY_CALC' ? 'bg-white text-emerald-700 shadow-md' : 'bg-white/20 text-white'}`}>
+                  👤 Driver Earnings
+                </button>
+                <button onClick={() => setFeesTab('ZIP')}
+                  className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-all ${feesTab === 'ZIP' ? 'bg-white text-emerald-700 shadow-md' : 'bg-white/20 text-white'}`}>
+                  📍 ZIP
                 </button>
               </div>
             </div>
             
-            <div className="overflow-y-auto p-4 space-y-4" style={{ maxHeight: 'calc(90vh - 120px)' }}>
+            {/* Content - Scrollable */}
+            <div className="flex-1 overflow-y-auto p-5 space-y-4">
               
-              {/* ══════════ PAY CALCULATOR TAB ══════════ */}
-              {feesTab === 'PAY_CALC' && (
+              {/* ══════════ TOTAL FEES TAB (Primary Feature) ══════════ */}
+              {feesTab === 'LOOKUP' && (
                 <>
-                  {/* Driver Selection */}
-                  <div className="bg-stone-50 rounded-2xl p-4">
-                    <p className="text-[10px] font-black uppercase text-stone-400 mb-3">Select Driver</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      {allUsers.filter(u => (u.role === 'DRIVER' || u.role === 'MANAGER') && u.isActive).map(u => (
-                        <button key={u.id} onClick={() => { setPayDriverId(u.id); setPayCalculated(false); setPayAllDrivers(false); if (driverRates[u.id]) setPayRatePerDelivery(driverRates[u.id].toString()); else setPayRatePerDelivery(''); }}
-                          className={`p-3 rounded-xl font-bold text-sm transition-all ${payDriverId === u.id && !payAllDrivers ? 'bg-emerald-500 text-white shadow-lg' : 'bg-white border border-stone-200 text-stone-700'}`}>
-                          {u.name}
-                        </button>
-                      ))}
-                    </div>
-                    <button onClick={() => { setPayAllDrivers(true); setPayDriverId(''); setPayCalculated(false); }}
-                      className={`w-full mt-2 p-3 rounded-xl font-bold text-sm transition-all ${payAllDrivers ? 'bg-emerald-500 text-white shadow-lg' : 'bg-white border border-stone-200 text-stone-700'}`}>
-                      📊 Calculate All Drivers
-                    </button>
+                  <div className="text-center mb-2">
+                    <p className="text-stone-500 text-sm">Total delivery fees collected</p>
                   </div>
                   
-                  {/* Date Range */}
+                  {/* Date Range - Big friendly buttons */}
                   <div className="bg-stone-50 rounded-2xl p-4">
-                    <p className="text-[10px] font-black uppercase text-stone-400 mb-3">Date Range</p>
-                    <div className="flex gap-2 mb-3">
+                    <p className="text-xs font-bold uppercase text-stone-400 mb-3 text-center">Select Time Period</p>
+                    <div className="grid grid-cols-3 gap-2">
                       {(['THIS_WEEK', 'LAST_WEEK', 'CUSTOM'] as const).map(range => (
                         <button key={range} onClick={() => setPayDateRange(range)}
-                          className={`flex-1 py-2 rounded-xl font-bold text-xs transition-all ${payDateRange === range ? 'bg-emerald-500 text-white' : 'bg-white border border-stone-200 text-stone-600'}`}>
-                          {range === 'THIS_WEEK' ? 'This Week' : range === 'LAST_WEEK' ? 'Last Week' : 'Custom'}
+                          className={`py-4 rounded-xl font-bold text-sm transition-all ${payDateRange === range ? 'bg-emerald-500 text-white shadow-lg scale-105' : 'bg-white border-2 border-stone-200 text-stone-600'}`}>
+                          {range === 'THIS_WEEK' ? '📅 This Week' : range === 'LAST_WEEK' ? '📅 Last Week' : '📅 Custom'}
                         </button>
                       ))}
                     </div>
                     {payDateRange === 'CUSTOM' && (
-                      <div className="grid grid-cols-2 gap-2">
-                        <input type="date" value={payStartDate} onChange={e => setPayStartDate(e.target.value)}
-                          className="bg-white border border-stone-200 rounded-xl px-3 py-2 text-sm font-bold outline-none" />
-                        <input type="date" value={payEndDate} onChange={e => setPayEndDate(e.target.value)}
-                          className="bg-white border border-stone-200 rounded-xl px-3 py-2 text-sm font-bold outline-none" />
+                      <div className="grid grid-cols-2 gap-3 mt-4">
+                        <div>
+                          <label className="text-[10px] font-bold uppercase text-stone-400 block mb-1">From</label>
+                          <input type="date" value={payStartDate} onChange={e => setPayStartDate(e.target.value)}
+                            className="w-full bg-white border-2 border-stone-200 rounded-xl px-3 py-3 text-sm font-bold outline-none focus:border-emerald-500" />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold uppercase text-stone-400 block mb-1">To</label>
+                          <input type="date" value={payEndDate} onChange={e => setPayEndDate(e.target.value)}
+                            className="w-full bg-white border-2 border-stone-200 rounded-xl px-3 py-3 text-sm font-bold outline-none focus:border-emerald-500" />
+                        </div>
                       </div>
                     )}
                   </div>
                   
-                  {/* Fee Per Delivery (only for single driver) */}
-                  {!payAllDrivers && payDriverId && (
-                    <div className="bg-stone-50 rounded-2xl p-4">
-                      <p className="text-[10px] font-black uppercase text-stone-400 mb-3">Fee Per Delivery</p>
-                      <div className="flex items-center gap-2">
-                        <span className="text-2xl font-black text-stone-400">$</span>
-                        <input type="number" inputMode="decimal" placeholder="0.00" step="0.01"
-                          value={payRatePerDelivery} onChange={e => setPayRatePerDelivery(e.target.value)}
-                          className="flex-1 bg-white border border-stone-200 rounded-xl px-4 py-3 text-2xl font-black text-center outline-none" />
-                      </div>
-                      {payRatePerDelivery && parseFloat(payRatePerDelivery) !== driverRates[payDriverId] && (
-                        <button onClick={() => handleSaveDriverRate(payDriverId, parseFloat(payRatePerDelivery))}
-                          className="w-full mt-2 py-2 bg-blue-100 text-blue-700 rounded-xl text-xs font-bold">
-                          💾 Save as {allUsers.find(u => u.id === payDriverId)?.name}'s default rate
-                        </button>
-                      )}
-                      {driverRates[payDriverId] && (
-                        <p className="text-xs text-stone-400 mt-2 text-center">Saved rate: ${driverRates[payDriverId].toFixed(2)}</p>
-                      )}
-                    </div>
-                  )}
+                  {/* Filter by driver (optional) */}
+                  <div className="bg-stone-50 rounded-2xl p-4">
+                    <p className="text-xs font-bold uppercase text-stone-400 mb-2 text-center">Filter by Driver</p>
+                    <select value={feeDriverFilter} onChange={e => setFeeDriverFilter(e.target.value)}
+                      className="w-full bg-white border-2 border-stone-200 rounded-xl px-4 py-3 text-base font-bold outline-none focus:border-emerald-500">
+                      <option value="ALL">🚗 All Drivers</option>
+                      {allUsers.filter(u => (u.role === 'DRIVER' || u.role === 'MANAGER') && u.isActive).map(u => (
+                        <option key={u.id} value={u.id}>👤 {u.name}</option>
+                      ))}
+                    </select>
+                  </div>
                   
-                  {/* Deductions & Bonus (only for single driver) */}
-                  {!payAllDrivers && payDriverId && (
-                    <div className="bg-stone-50 rounded-2xl p-4 space-y-4">
-                      <div>
-                        <p className="text-[10px] font-black uppercase text-red-400 mb-2">Deductions</p>
-                        <div className="flex items-center gap-2">
-                          <span className="text-lg font-black text-red-400">−$</span>
-                          <input type="number" inputMode="decimal" placeholder="0.00" step="0.01"
-                            value={payDeduction} onChange={e => setPayDeduction(e.target.value)}
-                            className="w-24 bg-white border border-stone-200 rounded-xl px-3 py-2 text-lg font-black text-center outline-none" />
-                          <input type="text" placeholder="Reason (e.g. damaged package)"
-                            value={payDeductionNote} onChange={e => setPayDeductionNote(e.target.value)}
-                            className="flex-1 bg-white border border-stone-200 rounded-xl px-3 py-2 text-sm outline-none" />
-                        </div>
-                      </div>
-                      <div>
-                        <p className="text-[10px] font-black uppercase text-emerald-500 mb-2">Bonus</p>
-                        <div className="flex items-center gap-2">
-                          <span className="text-lg font-black text-emerald-500">+$</span>
-                          <input type="number" inputMode="decimal" placeholder="0.00" step="0.01"
-                            value={payBonus} onChange={e => setPayBonus(e.target.value)}
-                            className="w-24 bg-white border border-stone-200 rounded-xl px-3 py-2 text-lg font-black text-center outline-none" />
-                          <input type="text" placeholder="Reason (e.g. holiday weekend)"
-                            value={payBonusNote} onChange={e => setPayBonusNote(e.target.value)}
-                            className="flex-1 bg-white border border-stone-200 rounded-xl px-3 py-2 text-sm outline-none" />
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                  
-                  {/* Calculate Button */}
-                  <button onClick={() => setPayCalculated(true)} 
-                    disabled={!payAllDrivers && (!payDriverId || (!payRatePerDelivery && !driverRates[payDriverId]))}
-                    className={`w-full py-4 rounded-2xl font-black uppercase text-lg shadow-lg transition-all ${(!payAllDrivers && (!payDriverId || (!payRatePerDelivery && !driverRates[payDriverId]))) ? 'bg-stone-200 text-stone-400' : 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white'}`}>
-                    Calculate Pay
-                  </button>
-                  
-                  {/* Results — Single Driver */}
-                  {payCalculated && !payAllDrivers && payDriverId && (() => {
-                    const result = calculateDriverPay(payDriverId);
-                    const driverName = allUsers.find(u => u.id === payDriverId)?.name || 'Driver';
+                  {/* Results - Always shown */}
+                  {(() => {
                     const { start, end } = getDateRangeForPay();
-                    return (
-                      <div className="bg-gradient-to-br from-stone-900 to-stone-800 rounded-2xl p-5 space-y-4">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-emerald-400 font-black text-lg">{driverName}</p>
-                            <p className="text-stone-400 text-xs">{start} — {end}</p>
-                          </div>
-                          <div className="bg-emerald-500/20 px-3 py-1 rounded-full">
-                            <span className="text-emerald-400 font-bold text-sm">{result.count} deliveries</span>
-                          </div>
-                        </div>
-                        
-                        <div className="space-y-2 pt-2 border-t border-stone-700">
-                          <div className="flex justify-between text-stone-300">
-                            <span>{result.count} × ${result.rate.toFixed(2)}</span>
-                            <span className="font-bold">${result.subtotal.toFixed(2)}</span>
-                          </div>
-                          {result.deduction > 0 && (
-                            <div className="flex justify-between text-red-400">
-                              <span>Deduction {payDeductionNote && `(${payDeductionNote})`}</span>
-                              <span className="font-bold">−${result.deduction.toFixed(2)}</span>
-                            </div>
-                          )}
-                          {result.bonus > 0 && (
-                            <div className="flex justify-between text-emerald-400">
-                              <span>Bonus {payBonusNote && `(${payBonusNote})`}</span>
-                              <span className="font-bold">+${result.bonus.toFixed(2)}</span>
-                            </div>
-                          )}
-                        </div>
-                        
-                        <div className="pt-3 border-t border-stone-700 flex items-center justify-between">
-                          <span className="text-stone-400 font-bold uppercase text-sm">Total Pay</span>
-                          <span className="text-4xl font-black text-white">${result.total.toFixed(2)}</span>
-                        </div>
-                        
-                        <button onClick={saveFeeCalculation}
-                          className="w-full py-3 mt-2 bg-emerald-500 text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2">
-                          💾 Save to History
-                        </button>
-                      </div>
-                    );
-                  })()}
-                  
-                  {/* Results — All Drivers */}
-                  {payCalculated && payAllDrivers && (() => {
-                    const { start, end } = getDateRangeForPay();
-                    const activeDrivers = allUsers.filter(u => (u.role === 'DRIVER' || u.role === 'MANAGER') && u.isActive);
-                    const driverResults = activeDrivers.map(u => {
-                      const count = getDeliveredCountForDriver(u.id, start, end);
-                      const rate = driverRates[u.id] || 0;
-                      return { id: u.id, name: u.name, count, rate, total: count * rate };
-                    }).filter(r => r.count > 0 || r.rate > 0);
-                    const grandTotal = driverResults.reduce((s, r) => s + r.total, 0);
-                    const totalDeliveries = driverResults.reduce((s, r) => s + r.count, 0);
+                    const filtered = feeDriverFilter === 'ALL' 
+                      ? deliveries.filter(d => d.status === 'DELIVERED' && d.completedAt && d.completedAt.split('T')[0] >= start && d.completedAt.split('T')[0] <= end)
+                      : deliveries.filter(d => d.status === 'DELIVERED' && d.completedAt && d.completedAt.split('T')[0] >= start && d.completedAt.split('T')[0] <= end && d.driverId === feeDriverFilter);
+                    const totalFees = filtered.reduce((sum, d) => sum + (d.deliveryFee || 0), 0);
+                    const totalDeliveries = filtered.length;
                     
                     return (
-                      <div className="space-y-3">
-                        <div className="bg-gradient-to-br from-stone-900 to-stone-800 rounded-2xl p-4">
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-stone-400 text-xs uppercase font-bold">All Drivers Total</span>
-                            <span className="text-emerald-400 text-xs font-bold">{start} — {end}</span>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-stone-300">{totalDeliveries} deliveries</span>
-                            <span className="text-3xl font-black text-white">${grandTotal.toFixed(2)}</span>
-                          </div>
+                      <div className="bg-gradient-to-br from-emerald-600 to-emerald-700 rounded-2xl p-5 text-center shadow-xl">
+                        <p className="text-emerald-100 text-xs uppercase font-bold mb-1">
+                          {feeDriverFilter === 'ALL' ? 'All Drivers' : allUsers.find(u => u.id === feeDriverFilter)?.name}
+                        </p>
+                        <p className="text-emerald-200 text-xs mb-3">{start} → {end}</p>
+                        <div className="text-5xl font-black text-white mb-2">${totalFees.toFixed(2)}</div>
+                        <div className="inline-block bg-white/20 rounded-full px-4 py-1">
+                          <span className="text-emerald-100 font-bold text-sm">{totalDeliveries} deliveries</span>
                         </div>
-                        
-                        {driverResults.map(r => (
-                          <div key={r.id} className="bg-stone-100 rounded-xl p-4 flex items-center justify-between">
-                            <div>
-                              <p className="font-bold text-stone-800">{r.name}</p>
-                              <p className="text-xs text-stone-500">{r.count} deliveries × ${r.rate.toFixed(2)}</p>
-                            </div>
-                            <span className="text-xl font-black text-emerald-600">${r.total.toFixed(2)}</span>
-                          </div>
-                        ))}
-                        
-                        {driverResults.length === 0 && (
-                          <div className="text-center py-8 text-stone-400">
-                            <p>No deliveries found in this period</p>
-                            <p className="text-xs mt-1">Make sure driver rates are saved</p>
-                          </div>
-                        )}
                       </div>
                     );
                   })()}
                 </>
               )}
               
-              {/* ══════════ ZIP LOOKUP TAB ══════════ */}
-              {feesTab === 'LOOKUP' && (
+              {/* ══════════ DRIVER EARNINGS TAB ══════════ */}
+              {feesTab === 'PAY_CALC' && (
                 <>
-                  {/* Quick ZIP lookup */}
-                  <div className="bg-stone-50 rounded-2xl p-4">
-                    <p className="text-[10px] font-black uppercase text-stone-400 mb-3">Quick ZIP Lookup</p>
-                    <div className="flex gap-2">
-                      <input type="text" placeholder="ZIP" maxLength={5} inputMode="numeric"
-                        value={feeZip} onChange={e => { setFeeZip(e.target.value.replace(/\D/g, '').slice(0,5)); setFeeResult(null); }}
-                        className="flex-1 bg-white border border-stone-200 rounded-xl px-4 py-3 text-xl font-black text-center tracking-widest outline-none" />
-                      <button onClick={handleZipLookup} disabled={feeZip.length !== 5}
-                        className={`px-5 rounded-xl font-black uppercase text-sm ${feeZip.length === 5 ? 'bg-emerald-500 text-white' : 'bg-stone-200 text-stone-400'}`}>
-                        Check
-                      </button>
-                    </div>
-                    {feeResult !== null && (
-                      <div className={`mt-3 p-4 rounded-xl text-center font-black text-2xl ${feeResult === -1 ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-700'}`}>
-                        {feeResult === -1 ? 'ZIP Not Found' : `$${feeResult.toFixed(2)}`}
-                      </div>
-                    )}
+                  <div className="text-center mb-2">
+                    <p className="text-stone-500 text-sm">Calculate what a driver earned</p>
                   </div>
                   
-                  {/* Date range fee report */}
-                  <div className="bg-stone-50 rounded-2xl p-4 space-y-3">
-                    <p className="text-[10px] font-black uppercase text-stone-400">Fee Report</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      <input type="date" value={feeStart} onChange={e => { setFeeStart(e.target.value); setFeeCalculated(false); }}
-                        className="bg-white border border-stone-200 rounded-xl px-3 py-2 text-sm font-bold outline-none" />
-                      <input type="date" value={feeEnd} onChange={e => { setFeeEnd(e.target.value); setFeeCalculated(false); }}
-                        className="bg-white border border-stone-200 rounded-xl px-3 py-2 text-sm font-bold outline-none" />
-                    </div>
-                    <select value={feeDriverFilter} onChange={e => { setFeeDriverFilter(e.target.value); setFeeCalculated(false); }}
-                      className="w-full bg-white border border-stone-200 rounded-xl px-3 py-2.5 text-sm font-bold outline-none">
-                      <option value="ALL">All Drivers</option>
+                  {/* Step 1: Pick a driver */}
+                  <div className="bg-stone-50 rounded-2xl p-4">
+                    <p className="text-xs font-bold uppercase text-stone-400 mb-2 text-center">Step 1: Pick Driver</p>
+                    <select value={payDriverId} onChange={e => { 
+                      setPayDriverId(e.target.value); 
+                      setPayCalculated(false);
+                      if (e.target.value && driverRates[e.target.value]) {
+                        setPayRatePerDelivery(driverRates[e.target.value].toString());
+                      } else {
+                        setPayRatePerDelivery('');
+                      }
+                    }}
+                      className="w-full bg-white border-2 border-stone-200 rounded-xl px-4 py-4 text-lg font-bold outline-none focus:border-emerald-500">
+                      <option value="">-- Select a Driver --</option>
                       {allUsers.filter(u => (u.role === 'DRIVER' || u.role === 'MANAGER') && u.isActive).map(u => (
                         <option key={u.id} value={u.id}>{u.name}</option>
                       ))}
                     </select>
-                    <button onClick={() => { setCalcStart(feeStart); setCalcEnd(feeEnd); setFeeCalculated(true); }}
-                      className="w-full py-3 bg-emerald-500 text-white rounded-xl font-black uppercase text-sm">
-                      Calculate
-                    </button>
-                    {feeCalculated && (
-                      <div className="p-4 bg-stone-900 rounded-xl flex items-center justify-between">
-                        <div>
-                          <p className="text-[9px] font-bold uppercase text-white/50">{feeDriverFilter === 'ALL' ? 'All Drivers' : allUsers.find(u => u.id === feeDriverFilter)?.name}</p>
-                          <p className="text-xs text-white/60">{grandCount} deliveries</p>
+                  </div>
+                  
+                  {payDriverId && (
+                    <>
+                      {/* Step 2: Time period */}
+                      <div className="bg-stone-50 rounded-2xl p-4">
+                        <p className="text-xs font-bold uppercase text-stone-400 mb-3 text-center">Step 2: Time Period</p>
+                        <div className="grid grid-cols-3 gap-2">
+                          {(['THIS_WEEK', 'LAST_WEEK', 'CUSTOM'] as const).map(range => (
+                            <button key={range} onClick={() => { setPayDateRange(range); setPayCalculated(false); }}
+                              className={`py-3 rounded-xl font-bold text-xs transition-all ${payDateRange === range ? 'bg-emerald-500 text-white' : 'bg-white border border-stone-200 text-stone-600'}`}>
+                              {range === 'THIS_WEEK' ? 'This Week' : range === 'LAST_WEEK' ? 'Last Week' : 'Custom'}
+                            </button>
+                          ))}
                         </div>
-                        <span className="text-2xl font-black text-white">${grandTotal.toFixed(2)}</span>
+                        {payDateRange === 'CUSTOM' && (
+                          <div className="grid grid-cols-2 gap-2 mt-3">
+                            <input type="date" value={payStartDate} onChange={e => { setPayStartDate(e.target.value); setPayCalculated(false); }}
+                              className="bg-white border border-stone-200 rounded-xl px-3 py-2 text-sm font-bold outline-none" />
+                            <input type="date" value={payEndDate} onChange={e => { setPayEndDate(e.target.value); setPayCalculated(false); }}
+                              className="bg-white border border-stone-200 rounded-xl px-3 py-2 text-sm font-bold outline-none" />
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* Step 3: Rate per delivery */}
+                      <div className="bg-stone-50 rounded-2xl p-4">
+                        <p className="text-xs font-bold uppercase text-stone-400 mb-3 text-center">Step 3: $ Per Delivery</p>
+                        <div className="flex items-center justify-center gap-2">
+                          <span className="text-3xl font-black text-stone-400">$</span>
+                          <input type="number" inputMode="decimal" placeholder="10" step="0.01"
+                            value={payRatePerDelivery} onChange={e => { setPayRatePerDelivery(e.target.value); setPayCalculated(false); }}
+                            className="w-32 bg-white border-2 border-stone-200 rounded-xl px-4 py-3 text-3xl font-black text-center outline-none focus:border-emerald-500" />
+                        </div>
+                        {payRatePerDelivery && parseFloat(payRatePerDelivery) !== driverRates[payDriverId] && (
+                          <button onClick={() => handleSaveDriverRate(payDriverId, parseFloat(payRatePerDelivery))}
+                            className="w-full mt-3 py-2 bg-blue-100 text-blue-700 rounded-xl text-xs font-bold">
+                            💾 Save ${payRatePerDelivery} as {allUsers.find(u => u.id === payDriverId)?.name}'s rate
+                          </button>
+                        )}
+                        {driverRates[payDriverId] && (
+                          <p className="text-xs text-stone-400 mt-2 text-center">Saved rate: ${driverRates[payDriverId].toFixed(2)}</p>
+                        )}
+                      </div>
+                      
+                      {/* Bonus/Deduction (collapsible) */}
+                      <details className="bg-stone-50 rounded-2xl overflow-hidden">
+                        <summary className="p-4 cursor-pointer text-xs font-bold uppercase text-stone-400 text-center">
+                          ➕ Add Bonus or Deduction
+                        </summary>
+                        <div className="px-4 pb-4 space-y-3">
+                          <div className="flex items-center gap-2">
+                            <span className="text-emerald-500 font-bold">+$</span>
+                            <input type="number" inputMode="decimal" placeholder="0" step="0.01"
+                              value={payBonus} onChange={e => { setPayBonus(e.target.value); setPayCalculated(false); }}
+                              className="w-20 bg-white border border-stone-200 rounded-xl px-2 py-2 text-center font-bold outline-none" />
+                            <input type="text" placeholder="Bonus reason"
+                              value={payBonusNote} onChange={e => setPayBonusNote(e.target.value)}
+                              className="flex-1 bg-white border border-stone-200 rounded-xl px-3 py-2 text-sm outline-none" />
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-red-500 font-bold">−$</span>
+                            <input type="number" inputMode="decimal" placeholder="0" step="0.01"
+                              value={payDeduction} onChange={e => { setPayDeduction(e.target.value); setPayCalculated(false); }}
+                              className="w-20 bg-white border border-stone-200 rounded-xl px-2 py-2 text-center font-bold outline-none" />
+                            <input type="text" placeholder="Deduction reason"
+                              value={payDeductionNote} onChange={e => setPayDeductionNote(e.target.value)}
+                              className="flex-1 bg-white border border-stone-200 rounded-xl px-3 py-2 text-sm outline-none" />
+                          </div>
+                        </div>
+                      </details>
+                      
+                      {/* Calculate button */}
+                      <button onClick={() => setPayCalculated(true)} 
+                        disabled={!payRatePerDelivery && !driverRates[payDriverId]}
+                        className={`w-full py-4 rounded-2xl font-black uppercase text-lg transition-all ${(!payRatePerDelivery && !driverRates[payDriverId]) ? 'bg-stone-200 text-stone-400' : 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white shadow-lg active:scale-98'}`}>
+                        Calculate Earnings
+                      </button>
+                      
+                      {/* Results */}
+                      {payCalculated && (() => {
+                        const result = calculateDriverPay(payDriverId);
+                        const driverName = allUsers.find(u => u.id === payDriverId)?.name || 'Driver';
+                        const { start, end } = getDateRangeForPay();
+                        return (
+                          <div className="bg-gradient-to-br from-stone-900 to-stone-800 rounded-2xl p-5 space-y-3">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="text-emerald-400 font-black text-lg">{driverName}</p>
+                                <p className="text-stone-400 text-xs">{start} → {end}</p>
+                              </div>
+                              <div className="bg-emerald-500/20 px-3 py-1 rounded-full">
+                                <span className="text-emerald-400 font-bold text-sm">{result.count} deliveries</span>
+                              </div>
+                            </div>
+                            
+                            <div className="space-y-1.5 pt-2 border-t border-stone-700 text-sm">
+                              <div className="flex justify-between text-stone-300">
+                                <span>{result.count} × ${result.rate.toFixed(2)}</span>
+                                <span className="font-bold">${result.subtotal.toFixed(2)}</span>
+                              </div>
+                              {result.bonus > 0 && (
+                                <div className="flex justify-between text-emerald-400">
+                                  <span>+ Bonus {payBonusNote && `(${payBonusNote})`}</span>
+                                  <span className="font-bold">+${result.bonus.toFixed(2)}</span>
+                                </div>
+                              )}
+                              {result.deduction > 0 && (
+                                <div className="flex justify-between text-red-400">
+                                  <span>− Deduction {payDeductionNote && `(${payDeductionNote})`}</span>
+                                  <span className="font-bold">−${result.deduction.toFixed(2)}</span>
+                                </div>
+                              )}
+                            </div>
+                            
+                            <div className="pt-3 border-t border-stone-700 flex items-center justify-between">
+                              <span className="text-stone-400 font-bold uppercase text-sm">Total Earnings</span>
+                              <span className="text-4xl font-black text-white">${result.total.toFixed(2)}</span>
+                            </div>
+                            
+                            <button onClick={saveFeeCalculation}
+                              className="w-full py-3 bg-emerald-500 text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 active:bg-emerald-600">
+                              💾 Save to History
+                            </button>
+                          </div>
+                        );
+                      })()}
+                    </>
+                  )}
+                </>
+              )}
+              
+              {/* ══════════ ZIP LOOKUP TAB ══════════ */}
+              {feesTab === 'ZIP' && (
+                <>
+                  <div className="text-center mb-2">
+                    <p className="text-stone-500 text-sm">Look up delivery fee by ZIP code</p>
+                  </div>
+                  
+                  <div className="bg-stone-50 rounded-2xl p-5">
+                    <p className="text-xs font-bold uppercase text-stone-400 mb-3 text-center">Enter ZIP Code</p>
+                    <div className="flex gap-3">
+                      <input type="text" placeholder="33179" maxLength={5} inputMode="numeric"
+                        value={feeZip} onChange={e => { setFeeZip(e.target.value.replace(/\D/g, '').slice(0,5)); setFeeResult(null); }}
+                        className="flex-1 bg-white border-2 border-stone-200 rounded-xl px-4 py-4 text-2xl font-black text-center tracking-widest outline-none focus:border-emerald-500" />
+                      <button onClick={handleZipLookup} disabled={feeZip.length !== 5}
+                        className={`px-6 rounded-xl font-black uppercase text-sm transition-all ${feeZip.length === 5 ? 'bg-emerald-500 text-white active:bg-emerald-600' : 'bg-stone-200 text-stone-400'}`}>
+                        Check
+                      </button>
+                    </div>
+                    {feeResult !== null && (
+                      <div className={`mt-4 p-5 rounded-xl text-center ${feeResult === -1 ? 'bg-red-100' : 'bg-emerald-100'}`}>
+                        {feeResult === -1 ? (
+                          <span className="text-red-600 font-bold text-xl">❌ ZIP Not Found</span>
+                        ) : (
+                          <div>
+                            <p className="text-emerald-600 text-sm font-bold mb-1">Delivery Fee</p>
+                            <span className="text-emerald-700 font-black text-4xl">${feeResult.toFixed(2)}</span>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
-                  {feeCalculated && filteredRows.length > 0 && filteredRows.map(row => (
-                    <DriverPayCard key={row.id} row={row} />
-                  ))}
                 </>
               )}
+              
             </div>
           </div>
         </div>
       )}
 
       {/* Click outside to close driver menu */}
+      {driverMenuOpen && <div className="fixed inset-0 z-40" onClick={() => setDriverMenuOpen(null)} />}      {/* Click outside to close driver menu */}
       {driverMenuOpen && <div className="fixed inset-0 z-40" onClick={() => setDriverMenuOpen(null)} />}
     </div>
   );
