@@ -4578,7 +4578,7 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
       {feesModalOpen && (
         <div className="fixed inset-0 z-50 flex items-end justify-center">
           <div className="absolute inset-0 bg-black/50" onClick={() => setFeesModalOpen(false)} />
-          <div className="relative bg-white w-full max-w-md max-h-[90vh] rounded-t-3xl overflow-hidden shadow-2xl">
+          <div className="relative bg-white w-full max-w-md max-h-[90vh] rounded-t-3xl overflow-hidden shadow-2xl" onClick={e => e.stopPropagation()}>
             {/* Header */}
             <div className="sticky top-0 bg-gradient-to-r from-emerald-500 to-emerald-600 px-4 py-3">
               <div className="flex items-center justify-between mb-3">
@@ -4705,8 +4705,8 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
                   
                   {/* Calculate Button */}
                   <button onClick={() => setPayCalculated(true)} 
-                    disabled={!payAllDrivers && (!payDriverId || !payRatePerDelivery)}
-                    className={`w-full py-4 rounded-2xl font-black uppercase text-lg shadow-lg transition-all ${(!payAllDrivers && (!payDriverId || !payRatePerDelivery)) ? 'bg-stone-200 text-stone-400' : 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white'}`}>
+                    disabled={!payAllDrivers && (!payDriverId || (!payRatePerDelivery && !driverRates[payDriverId]))}
+                    className={`w-full py-4 rounded-2xl font-black uppercase text-lg shadow-lg transition-all ${(!payAllDrivers && (!payDriverId || (!payRatePerDelivery && !driverRates[payDriverId]))) ? 'bg-stone-200 text-stone-400' : 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white'}`}>
                     Calculate Pay
                   </button>
                   
