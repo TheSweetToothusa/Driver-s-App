@@ -759,9 +759,38 @@ const OrderDetail: React.FC<{
 
   const handlePhoto = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]; if (!f) return;
-    const r = new FileReader(); r.onloadend = () => { setPhotoData(r.result as string); setPhotoTimestamp(new Date().toISOString()); }; r.readAsDataURL(f);
+    const now = new Date();
+    const stamp = now.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) +
+      ' ' + now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const r = new FileReader();
+    r.onloadend = () => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d')!;
+        ctx.drawImage(img, 0, 0);
+        // Stamp bar at bottom
+        const barH = Math.max(48, img.height * 0.07);
+        ctx.fillStyle = 'rgba(0,0,0,0.62)';
+        ctx.fillRect(0, img.height - barH, img.width, barH);
+        // Timestamp text
+        const fontSize = Math.max(22, img.width * 0.038);
+        ctx.font = `bold ${fontSize}px Arial, sans-serif`;
+        ctx.fillStyle = '#ffffff';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('📍 The Sweet Tooth  ·  ' + stamp, img.width * 0.025, img.height - barH / 2);
+        const stamped = canvas.toDataURL('image/jpeg', 0.92);
+        setPhotoData(stamped);
+        setPhotoTimestamp(now.toISOString());
+      };
+      img.src = r.result as string;
+    };
+    r.readAsDataURL(f);
   };
 
+  const [lightboxPhoto, setLightboxPhoto] = useState<string | null>(null);
   const [showDeliveredConfirm, setShowDeliveredConfirm] = useState(false);
   const [showRevertConfirm, setShowRevertConfirm] = useState(false);
   const [showSendConfirm, setShowSendConfirm] = useState(false);
@@ -1605,11 +1634,15 @@ const OrderDetail: React.FC<{
 
             {/* Photo + Signature tiles */}
             <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
-              <div style={{ flex: 1, background: '#F9FAFB', borderRadius: 12, border: '1px solid #E5E7EB', minHeight: 100, overflow: 'hidden', position: 'relative' }}>
+              <div
+                onClick={() => podPhoto && setLightboxPhoto(podPhoto)}
+                style={{ flex: 1, background: '#F9FAFB', borderRadius: 12, border: '1px solid #E5E7EB', minHeight: 100, overflow: 'hidden', position: 'relative', cursor: podPhoto ? 'zoom-in' : 'default' }}
+              >
                 {podPhoto ? (
                   <>
                     <img src={podPhoto} style={{ width: '100%', height: '100%', objectFit: 'cover', minHeight: 100 }} alt="Photo" />
                     <div style={{ position: 'absolute', bottom: 6, left: 6, background: '#22C55E', color: 'white', fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 9999 }}>✓ Photo</div>
+                    <div style={{ position: 'absolute', top: 6, right: 6, background: 'rgba(0,0,0,0.45)', color: 'white', fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 9999 }}>🔍 Tap to zoom</div>
                   </>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 100 }}>
@@ -1915,6 +1948,41 @@ const OrderDetail: React.FC<{
           onAutoReschedule={handleAutoReschedule}
           onManualReschedule={handleManualReschedule}
         />
+      )}
+
+      {/* ── PHOTO LIGHTBOX ── */}
+      {lightboxPhoto && (
+        <div
+          onClick={() => setLightboxPhoto(null)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 9999,
+            background: 'rgba(0,0,0,0.95)',
+            display: 'flex', flexDirection: 'column',
+            alignItems: 'center', justifyContent: 'center',
+            touchAction: 'pinch-zoom',
+          }}
+        >
+          {/* Close hint */}
+          <div style={{ position: 'absolute', top: 16, right: 16, color: 'rgba(255,255,255,0.7)', fontSize: 13, fontWeight: 700 }}>
+            ✕ Tap anywhere to close
+          </div>
+          <div style={{ position: 'absolute', bottom: 16, color: 'rgba(255,255,255,0.5)', fontSize: 11, fontWeight: 600 }}>
+            Pinch to zoom
+          </div>
+          <img
+            src={lightboxPhoto}
+            onClick={e => e.stopPropagation()}
+            style={{
+              maxWidth: '100%',
+              maxHeight: '90vh',
+              objectFit: 'contain',
+              borderRadius: 8,
+              touchAction: 'pinch-zoom',
+              userSelect: 'none',
+            }}
+            alt="Proof of delivery"
+          />
+        </div>
       )}
     </div>
   );
