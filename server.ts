@@ -433,10 +433,37 @@ async function startServer() {
 
   app.patch("/api/orders/:id/assign", async (req, res) => {
     const { driverId, driverName } = req.body;
-    const existing = await readPodOrder(req.params.id);
+    const orderId = req.params.id;
+
+    // Save to DB
+    const existing = await readPodOrder(orderId);
     existing.driverId = driverId;
     existing.driverName = driverName;
-    await writePodOrder(req.params.id, existing);
+    await writePodOrder(orderId, existing);
+
+    // Persist to Shopify tags so assignment survives page refresh
+    if (SHOPIFY_STORE_URL && SHOPIFY_ACCESS_TOKEN) {
+      try {
+        const tagResp = await fetch(`https://${SHOPIFY_STORE_URL}/admin/api/2025-01/orders/${orderId}.json?fields=tags`, {
+          headers: { 'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN }
+        });
+        const tagData = await tagResp.json();
+        const currentTags = tagData.order?.tags || '';
+        const tagsList = currentTags.split(',').map((t: string) => t.trim())
+          .filter((t: string) => t && !t.startsWith('st_driver:') && !t.startsWith('st_drivername:'));
+        if (driverId) tagsList.push(`st_driver:${driverId}`);
+        if (driverName) tagsList.push(`st_drivername:${driverName.replace(/,/g, '')}`);
+        await fetch(`https://${SHOPIFY_STORE_URL}/admin/api/2025-01/orders/${orderId}.json`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN },
+          body: JSON.stringify({ order: { id: orderId, tags: tagsList.join(', ') } })
+        });
+        console.log(`Driver assignment saved to Shopify for order ${orderId}: ${driverName}`);
+      } catch (err) {
+        console.error('Failed to sync driver assignment to Shopify (non-fatal):', err);
+      }
+    }
+
     res.json({ success: true });
   });
 
