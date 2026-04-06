@@ -515,7 +515,8 @@ async function startServer() {
   // Edit contact/address info (admin: all except rate; super_admin: everything)
   app.patch("/api/orders/:id/edit", async (req, res) => {
     const { customer, address, giftReceiverName, giftSenderName, giftSenderPhone, deliveryFee, deliveryDate } = req.body;
-    const existing = await readPodOrder(req.params.id);
+    const orderId = req.params.id;
+    const existing = await readPodOrder(orderId);
     if (customer) existing.customer = customer;
     if (address) existing.address = address;
     if (giftReceiverName !== undefined) existing.giftReceiverName = giftReceiverName;
@@ -523,31 +524,62 @@ async function startServer() {
     if (giftSenderPhone !== undefined) existing.giftSenderPhone = giftSenderPhone;
     if (deliveryFee !== undefined) existing.deliveryFee = deliveryFee;
     if (deliveryDate !== undefined) existing.deliveryDate = deliveryDate;
-    await writePodOrder(req.params.id, existing);
+    await writePodOrder(orderId, existing);
 
-    // Sync delivery date back to Shopify as a tag
-    if (deliveryDate !== undefined && SHOPIFY_STORE_URL && SHOPIFY_ACCESS_TOKEN) {
+    if (SHOPIFY_STORE_URL && SHOPIFY_ACCESS_TOKEN) {
       try {
-        const orderId = req.params.id;
-        const existingResp = await fetch(`https://${SHOPIFY_STORE_URL}/admin/api/2025-01/orders/${orderId}.json?fields=tags`, {
+        // Fetch current tags
+        const tagResp = await fetch(`https://${SHOPIFY_STORE_URL}/admin/api/2025-01/orders/${orderId}.json?fields=tags`, {
           headers: { 'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN }
         });
-        const existingData = await existingResp.json();
-        const currentTags = existingData.order?.tags || '';
-        const tagsList = currentTags.split(',').map((t: string) => t.trim()).filter((t: string) => t && !t.startsWith('st_deliverydate:'));
-        if (deliveryDate) tagsList.push(`st_deliverydate:${deliveryDate}`);
+        const tagData = await tagResp.json();
+        const currentTags = tagData.order?.tags || '';
+        let tagsList = currentTags.split(',').map((t: string) => t.trim()).filter(Boolean);
+
+        // Sync delivery date tag
+        if (deliveryDate !== undefined) {
+          tagsList = tagsList.filter((t: string) => !t.startsWith('st_deliverydate:'));
+          if (deliveryDate) tagsList.push(`st_deliverydate:${deliveryDate}`);
+        }
+
+        // Sync delivery fee tag
+        if (deliveryFee !== undefined) {
+          tagsList = tagsList.filter((t: string) => !t.startsWith('st_fee:'));
+          tagsList.push(`st_fee:${deliveryFee}`);
+        }
+
+        const shopifyUpdate: any = { order: { id: orderId, tags: tagsList.join(', ') } };
+
+        // Sync shipping address to Shopify if address changed
+        if (address) {
+          const nameParts = (giftReceiverName || existing.giftReceiverName || customer?.name || '').split(' ');
+          shopifyUpdate.order.shipping_address = {
+            first_name: nameParts[0] || '',
+            last_name: nameParts.slice(1).join(' ') || '',
+            address1: address.street || '',
+            address2: address.unit || '',
+            city: address.city || '',
+            province: 'FL',
+            country: 'US',
+            zip: address.zip || '',
+            phone: customer?.phone || existing.customer?.phone || '',
+          };
+          console.log(`Syncing address to Shopify for order ${orderId}: ${address.street}, ${address.city} ${address.zip}`);
+        }
+
         await fetch(`https://${SHOPIFY_STORE_URL}/admin/api/2025-01/orders/${orderId}.json`, {
           method: 'PUT',
-          headers: { 'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ order: { id: orderId, tags: tagsList.join(', ') } })
+          headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN },
+          body: JSON.stringify(shopifyUpdate)
         });
-      } catch (tagErr) {
-        console.error('Failed to sync delivery date to Shopify (non-fatal):', tagErr);
+      } catch (err) {
+        console.error('Failed to sync order edit to Shopify (non-fatal):', err);
       }
     }
 
     res.json({ success: true });
   });
+
 
   // ── REVERT accidental delivery confirmation ─────────────────────────────────
   app.post("/api/orders/:id/revert", async (req, res) => {
@@ -562,11 +594,35 @@ async function startServer() {
       existing.status = 'ASSIGNED';
       existing.revertedAt = new Date().toISOString();
       await writePodOrder(id, existing);
+
+      // Sync reverted status back to Shopify tag
+      if (SHOPIFY_STORE_URL && SHOPIFY_ACCESS_TOKEN) {
+        try {
+          const tagResp = await fetch(`https://${SHOPIFY_STORE_URL}/admin/api/2025-01/orders/${id}.json?fields=tags`, {
+            headers: { 'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN }
+          });
+          const tagData = await tagResp.json();
+          const currentTags = tagData.order?.tags || '';
+          const tagsList = currentTags.split(',').map((t: string) => t.trim())
+            .filter((t: string) => t && !t.startsWith('st_status:') && !t.startsWith('st_completed:'));
+          tagsList.push('st_status:ASSIGNED');
+          await fetch(`https://${SHOPIFY_STORE_URL}/admin/api/2025-01/orders/${id}.json`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN },
+            body: JSON.stringify({ order: { id, tags: tagsList.join(', ') } })
+          });
+          console.log(`Reverted order ${id} — Shopify tag updated to ASSIGNED`);
+        } catch (tagErr) {
+          console.error('Failed to sync revert to Shopify (non-fatal):', tagErr);
+        }
+      }
+
       res.json({ success: true });
     } catch (e) {
       res.status(500).json({ error: String(e) });
     }
   });
+
 
   // ── DEBUG: see raw order statuses ──────────────────────────────────────────
   app.get('/api/debug/orders', async (req, res) => {
