@@ -2269,14 +2269,10 @@ const OrdersView: React.FC<OrdersViewProps> = ({
     return (<>
       <div className="flex flex-col h-full" style={{ background: '#FFFFFF' }}>
         {/* Stats bar - matching Deliveries */}
-        <div className="grid grid-cols-3 border-b border-stone-200" style={{ background: '#FFFFFF' }}>
+        <div className="grid grid-cols-2 border-b border-stone-200" style={{ background: '#FFFFFF' }}>
           <div className="py-3 text-center border-r border-stone-200">
             <p className="text-2xl font-black" style={{ color: '#374151' }}>{deliveries.filter(d => OPEN_STATUSES.includes(d.status)).length}</p>
             <p className="text-[8px] font-black uppercase text-stone-400 leading-tight">Open</p>
-          </div>
-          <div className="py-3 text-center border-r border-stone-200">
-            <p className="text-2xl font-black" style={{ color: '#D97706' }}>{inTransitCount}</p>
-            <p className="text-[8px] font-black uppercase text-stone-400 leading-tight">Out for Delivery</p>
           </div>
           <div className="py-3 text-center">
             <p className="text-2xl font-black" style={{ color: '#22C55E' }}>{deliveredTodayCount}</p>
@@ -3829,13 +3825,10 @@ ${labelsHtml}
                 />
               </div>
             </div>
-            {/* Quick presets — only what makes sense for delivery scheduling */}
+            {/* Quick presets — only what makes sense for history (past dates) */}
             <div className="flex gap-2 mt-2 flex-wrap">
+              <button onClick={() => { setDateFrom(''); setDateTo(''); showFilterToast('Showing All History'); }} className="px-3 py-1.5 bg-white border border-stone-200 rounded-lg text-[11px] font-bold active:scale-95 transition-transform">All</button>
               <button onClick={() => { setDateFrom(todayStr); setDateTo(todayStr); showFilterToast('Showing Today'); }} className="px-3 py-1.5 bg-white border border-stone-200 rounded-lg text-[11px] font-bold active:scale-95 transition-transform">Today</button>
-              <button onClick={() => { 
-                const tmrw = new Date(Date.now() + 86400000).toISOString().split('T')[0];
-                setDateFrom(tmrw); setDateTo(tmrw); showFilterToast('Showing Tomorrow');
-              }} className="px-3 py-1.5 bg-white border border-stone-200 rounded-lg text-[11px] font-bold active:scale-95 transition-transform">Tomorrow</button>
               <button onClick={() => { 
                 const y = new Date(Date.now() - 86400000).toISOString().split('T')[0];
                 setDateFrom(y); setDateTo(y); showFilterToast('Showing Yesterday');
@@ -6963,10 +6956,9 @@ export default function App() {
         {tab === 'ADMIN' && isAdmin && (
           <div className="pb-24" style={{ background: '#F8F9FA' }}>
             {/* Stats Bar */}
-            <div className="grid grid-cols-3" style={{ background: '#FFFFFF', borderBottom: '1px solid #E5E7EB' }}>
+            <div className="grid grid-cols-2" style={{ background: '#FFFFFF', borderBottom: '1px solid #E5E7EB' }}>
               {[
                 { label: 'Open', val: activeOrders.length, color: '#374151' },
-                { label: 'Out for Delivery', val: inTransitCount, color: '#D97706' },
                 { label: 'Done Today', val: deliveredTodayCount, color: '#22C55E' },
               ].map(s => (
                 <div key={s.label} className="py-3 text-center border-r border-stone-100 last:border-0">
