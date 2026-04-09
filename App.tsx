@@ -1169,13 +1169,35 @@ const OrderDetail: React.FC<{
 </body>
 </html>`;
 
-    const printWindow = window.open('', '_blank', 'width=400,height=600');
-    if (printWindow) {
-      printWindow.document.write(labelHtml);
-      printWindow.document.close();
-      printWindow.onload = () => {
-        printWindow.print();
-      };
+    // Create hidden iframe for printing without navigating away
+    const existingFrame = document.getElementById('print-frame');
+    if (existingFrame) existingFrame.remove();
+    
+    const iframe = document.createElement('iframe');
+    iframe.id = 'print-frame';
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = 'none';
+    document.body.appendChild(iframe);
+    
+    const doc = iframe.contentDocument || iframe.contentWindow?.document;
+    if (doc) {
+      doc.open();
+      doc.write(labelHtml);
+      doc.close();
+      
+      // Wait for content to load then print
+      setTimeout(() => {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+        // Remove iframe after print dialog closes
+        setTimeout(() => {
+          iframe.remove();
+        }, 1000);
+      }, 250);
     }
   };
 
@@ -3646,17 +3668,34 @@ ${labelsHtml}
 </body>
 </html>`;
 
-    // Use data URI to avoid popup blocking on iOS Safari
-    const blob = new Blob([html], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.target = '_blank';
-    a.rel = 'noopener noreferrer';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    // Use hidden iframe for printing without navigating away
+    const existingFrame = document.getElementById('route-print-frame');
+    if (existingFrame) existingFrame.remove();
+    
+    const iframe = document.createElement('iframe');
+    iframe.id = 'route-print-frame';
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = 'none';
+    document.body.appendChild(iframe);
+    
+    const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+    if (iframeDoc) {
+      iframeDoc.open();
+      iframeDoc.write(html);
+      iframeDoc.close();
+      
+      setTimeout(() => {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+        setTimeout(() => {
+          iframe.remove();
+        }, 1000);
+      }, 300);
+    }
   };
 
   const startNavigation = (app: 'waze' | 'google') => {
