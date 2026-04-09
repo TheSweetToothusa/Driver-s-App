@@ -1862,7 +1862,16 @@ const OrderDetail: React.FC<{
                 <input
                   type="date"
                   value={pendingDeliveryDate}
-                  onChange={(e) => setPendingDeliveryDate(e.target.value)}
+                  onChange={(e) => {
+                    const selectedDate = new Date(e.target.value + 'T12:00:00');
+                    const dayOfWeek = selectedDate.getDay();
+                    // Block Saturday (6) and Sunday (0)
+                    if (dayOfWeek === 6 || dayOfWeek === 0) {
+                      alert('We are closed on weekends. Please select a weekday (Monday-Friday).');
+                      return;
+                    }
+                    setPendingDeliveryDate(e.target.value);
+                  }}
                   className={`w-full border rounded-lg px-3 py-2 text-sm font-bold outline-none focus:border-black ${pendingDeliveryDate !== (order.deliveryDate || '').split('T')[0] ? 'bg-amber-50 border-amber-300' : 'bg-stone-50 border-stone-200'}`}
                 />
               </div>
@@ -1913,7 +1922,11 @@ const OrderDetail: React.FC<{
                     
                     // Save date if changed
                     if (pendingDeliveryDate !== (order.deliveryDate || '').split('T')[0]) {
-                      const resp = await fetch(`/api/orders/${order.id}/reschedule`, {
+                      const isManual = (order as any).isManual;
+                      const endpoint = isManual 
+                        ? `/api/manual-orders/${order.id}`
+                        : `/api/orders/${order.id}/edit`;
+                      const resp = await fetch(endpoint, {
                         method: 'PATCH',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ deliveryDate: pendingDeliveryDate })
