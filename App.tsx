@@ -3931,7 +3931,7 @@ ${labelsHtml}
 
               {/* Cards for this date */}
               <div style={{ padding: '12px 16px' }}>
-              {orders.length === 0 && hdr.isToday && (
+              {orders.length === 0 && hdr.isToday && !isLoading && (
                 <div className="text-center py-8">
                   <p className="text-stone-400 font-medium">No deliveries scheduled for today</p>
                 </div>
@@ -6973,6 +6973,24 @@ export default function App() {
       </div>
 
       <main className="flex-1 overflow-y-auto pb-20">
+
+        {/* ── LOADING OVERLAY — shown while server wakes up ── */}
+        {isLoading && deliveries.length === 0 && (
+          <div style={{
+            position: 'fixed', inset: 0, background: '#fff', zIndex: 9000,
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 20,
+          }}>
+            <div style={{
+              width: 52, height: 52, border: '4px solid #F3F4F6', borderTop: '4px solid #D97706',
+              borderRadius: '50%', animation: 'spin 0.9s linear infinite',
+            }} />
+            <div style={{ textAlign: 'center' }}>
+              <p style={{ fontSize: 16, fontWeight: 800, color: '#111827', marginBottom: 4 }}>Loading orders...</p>
+              <p style={{ fontSize: 12, color: '#9CA3AF' }}>This may take a few seconds</p>
+            </div>
+            <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+          </div>
+        )}
 
         {/* ── HOME TAB — dashboard for all users ── */}
         {tab === 'HOME' && (
