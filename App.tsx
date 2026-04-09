@@ -1865,9 +1865,9 @@ const OrderDetail: React.FC<{
                   onChange={(e) => {
                     const selectedDate = new Date(e.target.value + 'T12:00:00');
                     const dayOfWeek = selectedDate.getDay();
-                    // Block Saturday (6) and Sunday (0)
-                    if (dayOfWeek === 6 || dayOfWeek === 0) {
-                      alert('We are closed on weekends. Please select a weekday (Monday-Friday).');
+                    // Block Saturday (6) only
+                    if (dayOfWeek === 6) {
+                      alert('We are closed on Saturdays. Please select a different day.');
                       return;
                     }
                     setPendingDeliveryDate(e.target.value);
