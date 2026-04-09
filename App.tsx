@@ -4061,7 +4061,19 @@ ${labelsHtml}
               className="px-4 py-2 rounded-xl font-black text-xs active:scale-95 transition-all"
               style={{ background: '#374151', color: '#fff' }}
             >
-              Print
+              Print Labels
+            </button>
+          </div>
+
+          {/* Sort buttons */}
+          <div className="px-4 py-3 bg-white border-b border-stone-200 flex gap-2">
+            <button
+              onClick={sortByDistance}
+              disabled={routeLoading}
+              className="flex-1 py-3 rounded-xl font-black text-sm flex items-center justify-center gap-2 active:scale-95 transition-all border-2 border-stone-300"
+              style={{ background: '#fff', color: '#374151' }}
+            >
+              {routeLoading ? routeStatus : '📍 Sort by Distance'}
             </button>
           </div>
 
@@ -4081,6 +4093,9 @@ ${labelsHtml}
                 const city = order.address?.city || '';
                 const street = order.address?.street || '';
                 const zip = order.address?.zip || '';
+                const fullAddr = `${street}, ${city}, FL ${zip}`.trim();
+                const wazeUrl = `https://waze.com/ul?q=${encodeURIComponent(fullAddr)}`;
+                const googleUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fullAddr)}`;
                 return (
                   <div
                     key={order.id}
@@ -4095,34 +4110,62 @@ ${labelsHtml}
                       setDragOverId(null);
                     }}
                     onDragEnd={() => { setDragOrderId(null); setDragOverId(null); }}
-                    className={`flex items-center gap-3 p-3 rounded-xl border transition-all bg-white ${
+                    className={`p-3 rounded-xl border transition-all bg-white ${
                       dragOverId === order.id ? 'border-blue-400 scale-[1.02] bg-blue-50' : 'border-stone-200'
                     }`}
                   >
-                    {/* Drag handle */}
-                    <div className="flex flex-col items-center shrink-0 cursor-grab active:cursor-grabbing text-stone-300">
-                      <span style={{ fontSize: 22, lineHeight: 1 }}>{'\u2261'}</span>
+                    <div className="flex items-center gap-3">
+                      {/* Drag handle */}
+                      <div className="flex flex-col items-center shrink-0 cursor-grab active:cursor-grabbing text-stone-300">
+                        <span style={{ fontSize: 22, lineHeight: 1 }}>{'\u2261'}</span>
+                      </div>
+
+                      {/* Number input */}
+                      <input
+                        type="tel"
+                        inputMode="numeric"
+                        value={stopNumbers[order.id] || ''}
+                        onChange={e => setStopNumbers(prev => ({ ...prev, [order.id]: e.target.value.replace(/[^0-9]/g, '') }))}
+                        placeholder={String(idx + 1)}
+                        className="w-12 h-12 rounded-full text-center font-black text-lg border-2 focus:border-black focus:outline-none shrink-0"
+                        style={{ 
+                          background: stopNumbers[order.id] ? '#374151' : '#fff', 
+                          color: stopNumbers[order.id] ? '#fff' : '#374151',
+                          borderColor: stopNumbers[order.id] ? '#374151' : '#d1d5db'
+                        }}
+                      />
+
+                      {/* Order info */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-stone-400">#{cleanNum}</span>
+                          <span className="text-xs font-black uppercase" style={{ color: '#374151' }}>{city}</span>
+                        </div>
+                        <p className="font-bold text-sm truncate" style={{ color: '#374151' }}>{name}</p>
+                        <p className="text-xs text-stone-400 truncate">{street}{zip ? `, ${zip}` : ''}</p>
+                      </div>
                     </div>
 
-                    {/* Number input */}
-                    <input
-                      type="tel"
-                      inputMode="numeric"
-                      value={stopNumbers[order.id] || ''}
-                      onChange={e => setStopNumbers(prev => ({ ...prev, [order.id]: e.target.value.replace(/[^0-9]/g, '') }))}
-                      placeholder={String(idx + 1)}
-                      className="w-10 h-10 rounded-full text-center font-black text-sm border-2 border-stone-300 focus:border-black focus:outline-none shrink-0"
-                      style={{ background: stopNumbers[order.id] ? '#374151' : '#fff', color: stopNumbers[order.id] ? '#fff' : '#374151' }}
-                    />
-
-                    {/* Order info */}
-                    <div className="flex-1 min-w-0" onClick={() => onSelectOrder(order)}>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-stone-400">#{cleanNum}</span>
-                        <span className="text-xs font-black uppercase" style={{ color: '#374151' }}>{city}</span>
-                      </div>
-                      <p className="font-bold text-sm truncate" style={{ color: '#374151' }}>{name}</p>
-                      <p className="text-xs text-stone-400 truncate">{street}{zip ? `, ${zip}` : ''}</p>
+                    {/* Navigation buttons */}
+                    <div className="flex gap-2 mt-3 ml-14">
+                      <a
+                        href={wazeUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex-1 py-2 rounded-lg font-bold text-xs text-center active:scale-95 transition-all"
+                        style={{ background: '#33ccff', color: '#000' }}
+                      >
+                        🚗 Waze
+                      </a>
+                      <a
+                        href={googleUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex-1 py-2 rounded-lg font-bold text-xs text-center active:scale-95 transition-all"
+                        style={{ background: '#4285f4', color: '#fff' }}
+                      >
+                        📍 Google Maps
+                      </a>
                     </div>
                   </div>
                 );
@@ -4133,7 +4176,7 @@ ${labelsHtml}
           {/* Bottom hint */}
           <div className="px-4 py-3 bg-white border-t border-stone-200">
             <p className="text-[10px] text-stone-400 font-bold text-center">
-              Drag to reorder stops or type a number for each stop
+              Drag to reorder stops or type a number • Tap Print Labels when ready
             </p>
           </div>
         </div>
