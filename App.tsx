@@ -4748,7 +4748,7 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
   // Modal/accordion states
   const [feesModalOpen, setFeesModalOpen] = useState(false);
   const [feesTab, setFeesTab] = useState<'LOOKUP' | 'PAY_CALC'>('LOOKUP');
-  const [activeNav, setActiveNav] = useState<'RESCHEDULE' | 'MESSAGES' | null>(null);
+  const [activeNav, setActiveNav] = useState<'MESSAGES' | null>(null);
   const [addDriverExpanded, setAddDriverExpanded] = useState(false);
   const [smsTemplatesExpanded, setSmsTemplatesExpanded] = useState(false);
   const [driverMenuOpen, setDriverMenuOpen] = useState<string | null>(null);
@@ -4793,22 +4793,10 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
   const [defaultDriverSaved, setDefaultDriverSaved] = useState(false);
 
 
-  // ── Audit / Shopify history state ─────────────────────────────────────
-  const [auditEntries, setAuditEntries] = useState<any[]>([]);
-  const [auditLoading, setAuditLoading] = useState(false);
-
-
-  const fetchAuditLog = async () => {
-    setAuditLoading(true);
-    try { const r = await fetch('/api/audit-log'); const d = await r.json(); setAuditEntries(d.entries || []); }
-    catch {} finally { setAuditLoading(false); }
-  };
-
   useEffect(() => {
     fetch('/api/config/default-driver').then(r => r.json()).then(d => { if (d.driverId) setDefaultDriverId(d.driverId); });
     fetch('/api/templates').then(r => r.json()).then(d => setTemplates(d.templates || []));
     fetch('/api/config/driver-rates').then(r => r.json()).then(d => { if (d.rates) setDriverRates(d.rates); }).catch(() => {});
-    fetchAuditLog();
   }, []);
   
   // Driver Pay Calculator helpers
@@ -4925,7 +4913,7 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
     await fetch('/api/config/fee-history', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ history: newHistory }) });
   };
 
-  const drivers = allUsers.filter(u => u.role === 'DRIVER');
+  const drivers = allUsers.filter(u => u.role === 'DRIVER' || u.role === 'MANAGER');
   const currentDefaultDriver = allUsers.find(u => u.id === defaultDriverId) || allUsers.find(u => u.name === 'Katie');
 
   // Handlers
@@ -5012,11 +5000,6 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
           <Users size={20} />
           <span className="text-[9px] font-black uppercase mt-1">Drivers</span>
         </button>
-        <button onClick={() => setActiveNav('RESCHEDULE')}
-          className={`flex flex-col items-center justify-center py-3 rounded-2xl transition-all active:scale-95 ${activeNav === 'RESCHEDULE' ? 'bg-black text-white' : 'bg-white border border-stone-200 text-stone-600'}`}>
-          <Calendar size={20} />
-          <span className="text-[9px] font-black uppercase mt-1">Reschedule</span>
-        </button>
         <button onClick={() => setActiveNav('MESSAGES')}
           className={`flex flex-col items-center justify-center py-3 rounded-2xl transition-all active:scale-95 ${activeNav === 'MESSAGES' ? 'bg-black text-white' : 'bg-white border border-stone-200 text-stone-600'}`}>
           <MessageSquare size={20} />
@@ -5046,15 +5029,6 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
           {defaultDriverSaved ? '✓' : 'Save'}
         </button>
       </div>
-
-      {/* ═══════════════════════════════════════════════════════════════════
-          RESCHEDULE TAB CONTENT
-          ═══════════════════════════════════════════════════════════════════ */}
-      {activeNav === 'RESCHEDULE' && (
-        <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-          <PendingRescheduleQueue allUsers={allUsers} />
-        </div>
-      )}
 
       {/* ═══════════════════════════════════════════════════════════════════
           MESSAGES TAB CONTENT
@@ -5173,59 +5147,6 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
               </div>
             )}
           </div>
-
-          {/* ── ACTIVITY LOG ── */}
-          {(role === 'SUPER_ADMIN' || role === 'MANAGER') && (
-            <div style={{ background: '#fff', borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', marginBottom: 12 }}>
-              <div style={{ padding: '14px 16px', borderBottom: '1px solid #F3F4F6', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 14, fontWeight: 800, color: '#111827' }}>Activity Log</span>
-                  {auditEntries.length > 0 && <span style={{ background: '#F3F4F6', color: '#374151', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 9999 }}>{auditEntries.length}</span>}
-                </div>
-                <button onClick={fetchAuditLog} style={{ background: '#F3F4F6', border: 'none', borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 700, color: '#374151', cursor: 'pointer' }}>
-                  {auditLoading ? 'Loading...' : 'Refresh'}
-                </button>
-              </div>
-              <div style={{ maxHeight: 400, overflowY: 'auto' }}>
-                {auditLoading && <div style={{ padding: 24, textAlign: 'center', color: '#9CA3AF', fontSize: 13 }}>Loading...</div>}
-                {!auditLoading && auditEntries.length === 0 && (
-                  <div style={{ padding: 24, textAlign: 'center', color: '#9CA3AF', fontSize: 13 }}>No changes recorded yet.</div>
-                )}
-                {!auditLoading && auditEntries.map((entry: any) => {
-                  const cfgMap: Record<string, { label: string; color: string; bg: string }> = {
-                    STATUS_CHANGE:   { label: 'Status',  color: '#1D4ED8', bg: '#EFF6FF' },
-                    DATE_CHANGE:     { label: 'Date',    color: '#92400E', bg: '#FFFBEB' },
-                    DRIVER_REASSIGN: { label: 'Driver',  color: '#6D28D9', bg: '#F5F3FF' },
-                    CONTACT_EDIT:    { label: 'Contact', color: '#065F46', bg: '#ECFDF5' },
-                    NOTE_ADDED:      { label: 'Note',    color: '#374151', bg: '#F9FAFB' },
-                  };
-                  const c = cfgMap[entry.action] || { label: entry.action, color: '#374151', bg: '#F9FAFB' };
-                  const ts = new Date(entry.timestamp);
-                  const timeStr = ts.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' + ts.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-                  return (
-                    <div key={entry.id} style={{ padding: '10px 16px', borderBottom: '1px solid #F9FAFB', display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                      <span style={{ background: c.bg, color: c.color, fontSize: 10, fontWeight: 800, padding: '3px 8px', borderRadius: 6, whiteSpace: 'nowrap', marginTop: 2 }}>{c.label}</span>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                          <span style={{ fontSize: 13, fontWeight: 800, color: '#111827' }}>{entry.actorName}</span>
-                          <span style={{ fontSize: 11, color: '#9CA3AF' }}>#{(entry.orderNumber || '').replace(/^#+/, '')}</span>
-                        </div>
-                        {entry.action === 'NOTE_ADDED'
-                          ? <p style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>&#34;{entry.newValue}&#34;</p>
-                          : <p style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>
-                              <span style={{ textDecoration: 'line-through', color: '#EF4444' }}>{entry.oldValue || '—'}</span>
-                              <span style={{ margin: '0 4px' }}>&#8594;</span>
-                              <span style={{ color: '#16A34A', fontWeight: 700 }}>{entry.newValue || '—'}</span>
-                            </p>
-                        }
-                      </div>
-                      <span style={{ fontSize: 10, color: '#9CA3AF', whiteSpace: 'nowrap', marginTop: 2 }}>{timeStr}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
 
           {/* 💬 Driver SMS Templates */}
           <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
