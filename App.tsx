@@ -919,9 +919,16 @@ const OrderDetail: React.FC<{
 
   const handleAddNote = async () => {
     if (!adminNote.trim()) return;
-    await fetch(`/api/orders/${order.id}/note`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ note: adminNote }) });
-    const ts = `[${new Date().toLocaleString()}] ${adminNote}`;
-    onUpdate(order.id, { adminNotes: order.adminNotes ? `${order.adminNotes}\n${ts}` : ts });
+    try {
+      const r = await fetch(`/api/orders/${order.id}/note`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ note: adminNote }) });
+      const ts = `[${new Date().toLocaleString()}] ${adminNote}`;
+      onUpdate(order.id, { adminNotes: order.adminNotes ? `${order.adminNotes}\n${ts}` : ts });
+      if (r.ok) {
+        logAudit('NOTE_ADDED', 'adminNotes', '', adminNote);
+        setStatusSaveToast('saved');
+        setTimeout(() => setStatusSaveToast(null), 2500);
+      } else { setStatusSaveToast('error'); setTimeout(() => setStatusSaveToast(null), 3500); }
+    } catch { setStatusSaveToast('error'); setTimeout(() => setStatusSaveToast(null), 3500); }
     setAdminNote('');
   };
 
@@ -929,13 +936,39 @@ const OrderDetail: React.FC<{
     if (!reassignTo) return;
     const driver = allUsers.find(u => u.id === reassignTo); if (!driver) return;
     const isManualOrder = (order as any).isManual;
-    await fetch(isManualOrder ? `/api/manual-orders/${order.id}` : `/api/orders/${order.id}/assign`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ driverId: driver.id, driverName: driver.name })
-    });
-    onUpdate(order.id, { driverId: driver.id, driverName: driver.name });
+    const prevDriver = order.driverName || '';
+    try {
+      const r = await fetch(isManualOrder ? `/api/manual-orders/${order.id}` : `/api/orders/${order.id}/assign`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ driverId: driver.id, driverName: driver.name })
+      });
+      onUpdate(order.id, { driverId: driver.id, driverName: driver.name });
+      if (r.ok) {
+        logAudit('DRIVER_REASSIGN', 'driver', prevDriver, driver.name);
+        setStatusSaveToast('saved');
+        setTimeout(() => setStatusSaveToast(null), 2500);
+      } else { setStatusSaveToast('error'); setTimeout(() => setStatusSaveToast(null), 3500); }
+    } catch { setStatusSaveToast('error'); setTimeout(() => setStatusSaveToast(null), 3500); }
     setReassignTo('');
+  };
+
+  // ── Audit log helper ──────────────────────────────────────────────────────
+  const logAudit = (action: string, field: string, oldVal: string, newVal: string) => {
+    fetch('/api/audit-log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        orderId: order.id,
+        orderNumber: order.orderNumber || order.id,
+        actorId: currentUser.id,
+        actorName: currentUser.name,
+        action,
+        field,
+        oldValue: oldVal,
+        newValue: newVal,
+      }),
+    }).catch(() => {});
   };
 
   const [showGiftMsg, setShowGiftMsg] = useState(false);
@@ -966,10 +999,17 @@ const OrderDetail: React.FC<{
       updates.deliveryFee = parseFloat(editFields.deliveryFee) || order.deliveryFee;
     }
     onUpdate(order.id, updates);
-    await fetch(`/api/orders/${order.id}/edit`, {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updates)
-    }).catch(() => {});
+    try {
+      const r = await fetch(`/api/orders/${order.id}/edit`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates)
+      });
+      if (r.ok) {
+        logAudit('CONTACT_EDIT', 'contact/address', order.giftReceiverName || '', editFields.recipientName);
+        setStatusSaveToast('saved');
+        setTimeout(() => setStatusSaveToast(null), 2500);
+      } else { setStatusSaveToast('error'); setTimeout(() => setStatusSaveToast(null), 3500); }
+    } catch { setStatusSaveToast('error'); setTimeout(() => setStatusSaveToast(null), 3500); }
     setEditingContact(false);
   };
 
@@ -1220,8 +1260,22 @@ const OrderDetail: React.FC<{
               </p>
             )}
             <button onClick={async () => {
+              const prevDate = order.deliveryDate || '';
               onUpdate(order.id, { deliveryDate: pendingDate });
-              await fetch(`/api/orders/${order.id}/edit`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ deliveryDate: pendingDate }) });
+              try {
+                const r = await fetch(`/api/orders/${order.id}/edit`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ deliveryDate: pendingDate }) });
+                if (r.ok) {
+                  logAudit('DATE_CHANGE', 'deliveryDate', prevDate, pendingDate);
+                  setStatusSaveToast('saved');
+                  setTimeout(() => setStatusSaveToast(null), 2500);
+                } else {
+                  setStatusSaveToast('error');
+                  setTimeout(() => setStatusSaveToast(null), 3500);
+                }
+              } catch {
+                setStatusSaveToast('error');
+                setTimeout(() => setStatusSaveToast(null), 3500);
+              }
               setShowDatePicker(false);
               setDateSavedToast(true);
               setTimeout(() => setDateSavedToast(false), 3000);
@@ -1272,6 +1326,7 @@ const OrderDetail: React.FC<{
             value={order.status}
             onChange={async e => {
               const s = e.target.value as DeliveryStatus;
+              const prevStatus = order.status;
               onUpdate(order.id, { status: s });
               const isManualOrd = (order as any).isManual;
               try {
@@ -1279,6 +1334,7 @@ const OrderDetail: React.FC<{
                   method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: s })
                 });
                 if (r.ok) {
+                  logAudit('STATUS_CHANGE', 'status', prevStatus, s);
                   setStatusSaveToast('saved');
                   setTimeout(() => setStatusSaveToast(null), 2500);
                 } else {
@@ -5027,6 +5083,106 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
               </div>
             )}
           </div>
+
+          {/* ── ACTIVITY LOG ─────────────────────────────────────────── */}
+          {(role === 'SUPER_ADMIN' || role === 'MANAGER') && (
+            <div style={{ background: '#fff', borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', marginBottom: 12 }}>
+              <div style={{ padding: '14px 16px', borderBottom: '1px solid #F3F4F6', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 16 }}>🕵️</span>
+                  <span style={{ fontSize: 14, fontWeight: 800, color: '#111827' }}>Activity Log</span>
+                  {auditEntries.length > 0 && (
+                    <span style={{ background: '#F3F4F6', color: '#374151', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 9999 }}>{auditEntries.length}</span>
+                  )}
+                </div>
+                <button onClick={fetchAuditLog} style={{ background: '#F3F4F6', border: 'none', borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 700, color: '#374151', cursor: 'pointer' }}>
+                  {auditLoading ? '...' : '↺ Refresh'}
+                </button>
+              </div>
+
+              {/* Filters */}
+              <div style={{ padding: '10px 16px', borderBottom: '1px solid #F3F4F6', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <input
+                  value={auditSearch}
+                  onChange={e => setAuditSearch(e.target.value)}
+                  placeholder="Search order # or name..."
+                  style={{ flex: 1, minWidth: 120, border: '1px solid #E5E7EB', borderRadius: 8, padding: '6px 10px', fontSize: 12, color: '#374151', outline: 'none' }}
+                />
+                <select value={auditDriverFilter} onChange={e => setAuditDriverFilter(e.target.value)}
+                  style={{ border: '1px solid #E5E7EB', borderRadius: 8, padding: '6px 8px', fontSize: 12, color: '#374151', background: '#fff' }}>
+                  <option value="ALL">All Users</option>
+                  {allUsers.map(u => <option key={u.id} value={u.name}>{u.name}</option>)}
+                </select>
+                <select value={auditActionFilter} onChange={e => setAuditActionFilter(e.target.value)}
+                  style={{ border: '1px solid #E5E7EB', borderRadius: 8, padding: '6px 8px', fontSize: 12, color: '#374151', background: '#fff' }}>
+                  <option value="ALL">All Actions</option>
+                  <option value="STATUS_CHANGE">Status Changes</option>
+                  <option value="DATE_CHANGE">Date Changes</option>
+                  <option value="DRIVER_REASSIGN">Driver Reassigns</option>
+                  <option value="CONTACT_EDIT">Contact Edits</option>
+                  <option value="NOTE_ADDED">Notes Added</option>
+                </select>
+              </div>
+
+              {/* Log entries */}
+              <div style={{ maxHeight: 420, overflowY: 'auto' }}>
+                {auditLoading && (
+                  <div style={{ padding: 24, textAlign: 'center', color: '#9CA3AF', fontSize: 13 }}>Loading...</div>
+                )}
+                {!auditLoading && auditEntries.length === 0 && (
+                  <div style={{ padding: 24, textAlign: 'center', color: '#9CA3AF', fontSize: 13 }}>
+                    No activity recorded yet. Changes made from now on will appear here.
+                  </div>
+                )}
+                {!auditLoading && (() => {
+                  const filtered = auditEntries
+                    .filter((e: any) => auditDriverFilter === 'ALL' || e.actorName === auditDriverFilter)
+                    .filter((e: any) => auditActionFilter === 'ALL' || e.action === auditActionFilter)
+                    .filter((e: any) => {
+                      if (!auditSearch.trim()) return true;
+                      const q = auditSearch.toLowerCase();
+                      return (e.orderNumber || '').toLowerCase().includes(q) || (e.actorName || '').toLowerCase().includes(q) || (e.newValue || '').toLowerCase().includes(q) || (e.oldValue || '').toLowerCase().includes(q);
+                    });
+                  if (filtered.length === 0 && auditEntries.length > 0) return (
+                    <div style={{ padding: 24, textAlign: 'center', color: '#9CA3AF', fontSize: 13 }}>No results match your filters.</div>
+                  );
+                  return filtered.map((entry: any) => {
+                    const actionLabels: Record<string, { label: string; color: string; bg: string }> = {
+                      STATUS_CHANGE:   { label: 'Status',  color: '#1D4ED8', bg: '#EFF6FF' },
+                      DATE_CHANGE:     { label: 'Date',    color: '#92400E', bg: '#FFFBEB' },
+                      DRIVER_REASSIGN: { label: 'Driver',  color: '#6D28D9', bg: '#F5F3FF' },
+                      CONTACT_EDIT:    { label: 'Contact', color: '#065F46', bg: '#ECFDF5' },
+                      NOTE_ADDED:      { label: 'Note',    color: '#374151', bg: '#F9FAFB' },
+                    };
+                    const cfg = actionLabels[entry.action] || { label: entry.action, color: '#374151', bg: '#F9FAFB' };
+                    const ts = new Date(entry.timestamp);
+                    const timeStr = ts.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' + ts.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+                    return (
+                      <div key={entry.id} style={{ padding: '10px 16px', borderBottom: '1px solid #F9FAFB', display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                        <span style={{ background: cfg.bg, color: cfg.color, fontSize: 10, fontWeight: 800, padding: '3px 8px', borderRadius: 6, whiteSpace: 'nowrap', marginTop: 2 }}>{cfg.label}</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: 13, fontWeight: 800, color: '#111827' }}>{entry.actorName}</span>
+                            <span style={{ fontSize: 11, color: '#9CA3AF' }}>#{(entry.orderNumber || entry.orderId || '').replace(/^#+/, '')}</span>
+                          </div>
+                          {entry.action === 'NOTE_ADDED' ? (
+                            <p style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>"{entry.newValue}"</p>
+                          ) : (
+                            <p style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>
+                              <span style={{ textDecoration: 'line-through', color: '#EF4444' }}>{entry.oldValue || '—'}</span>
+                              <span style={{ margin: '0 4px', color: '#9CA3AF' }}>→</span>
+                              <span style={{ color: '#16A34A', fontWeight: 700 }}>{entry.newValue || '—'}</span>
+                            </p>
+                          )}
+                        </div>
+                        <span style={{ fontSize: 10, color: '#9CA3AF', whiteSpace: 'nowrap', marginTop: 2 }}>{timeStr}</span>
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
+            </div>
+          )}
 
           {/* 💬 Driver SMS Templates */}
           <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
