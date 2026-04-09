@@ -1896,8 +1896,8 @@ const OrderDetail: React.FC<{
                     if (pendingDriver !== (order.driverId || '')) {
                       const newDriverUser = allUsers.find(u => u.id === pendingDriver);
                       if (pendingDriver && newDriverUser) {
-                        const resp = await fetch(`/api/deliveries/${order.id}/assign`, {
-                          method: 'POST',
+                        const resp = await fetch(`/api/orders/${order.id}/assign`, {
+                          method: 'PATCH',
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({ driverId: pendingDriver, driverName: newDriverUser.name })
                         });
