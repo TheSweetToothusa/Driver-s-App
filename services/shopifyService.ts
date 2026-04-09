@@ -51,10 +51,7 @@ export const getDeliveries = async (): Promise<Delivery[]> => {
 // Parse a delivery date string from Shopify note attributes into YYYY-MM-DD
 // Handles: "Mar 9", "March 9", "03/09/2026", "2026-03-09", "Today", etc.
 function parseDeliveryDate(raw: string | undefined): string {
-  const today = new Date().toISOString().split('T')[0];
-  if (!raw) return today;
-  const s = raw.trim().toLowerCase();
-  if (s === 'today' || s === '') return today;
+  if (!raw || raw.trim() === '') return ''; // No date = no fallback. Ever.
 
   // Already YYYY-MM-DD
   if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
@@ -77,11 +74,11 @@ function parseDeliveryDate(raw: string | undefined): string {
     }
   }
 
-  // Try native Date parse as last resort
+  // Try native Date parse
   const d = new Date(raw);
   if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
 
-  return today;
+  return ''; // Still no date — return empty, never fake it
 }
 
 const mapShopifyOrder = (order: any): Delivery => {
