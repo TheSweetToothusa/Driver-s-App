@@ -2318,31 +2318,17 @@ const OrdersView: React.FC<OrdersViewProps> = ({
                   />
                 </div>
               </div>
-              {/* Quick presets */}
+              {/* Quick presets — only what makes sense for delivery scheduling */}
               <div className="flex gap-2 mt-2 flex-wrap">
-                <button onClick={() => { setDateFrom(adminToday); setDateTo(adminToday); }} className="px-2 py-1 bg-white border border-stone-200 rounded-lg text-[10px] font-bold">Today</button>
+                <button onClick={() => { setDateFrom(adminToday); setDateTo(adminToday); }} className="px-3 py-1.5 bg-white border border-stone-200 rounded-lg text-[11px] font-bold">Today</button>
+                <button onClick={() => { 
+                  const tmrw = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+                  setDateFrom(tmrw); setDateTo(tmrw); 
+                }} className="px-3 py-1.5 bg-white border border-stone-200 rounded-lg text-[11px] font-bold">Tomorrow</button>
                 <button onClick={() => { 
                   const y = new Date(Date.now() - 86400000).toISOString().split('T')[0];
                   setDateFrom(y); setDateTo(y); 
-                }} className="px-2 py-1 bg-white border border-stone-200 rounded-lg text-[10px] font-bold">Yesterday</button>
-                <button onClick={() => { 
-                  const d = new Date(); 
-                  const day = d.getDay();
-                  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-                  const monday = new Date(d.setDate(diff)).toISOString().split('T')[0];
-                  setDateFrom(monday); setDateTo(adminToday); 
-                }} className="px-2 py-1 bg-white border border-stone-200 rounded-lg text-[10px] font-bold">This Week</button>
-                <button onClick={() => { 
-                  const d = new Date();
-                  const lastWeekStart = new Date(d.setDate(d.getDate() - d.getDay() - 6)).toISOString().split('T')[0];
-                  const lastWeekEnd = new Date(new Date().setDate(new Date().getDate() - new Date().getDay())).toISOString().split('T')[0];
-                  setDateFrom(lastWeekStart); setDateTo(lastWeekEnd); 
-                }} className="px-2 py-1 bg-white border border-stone-200 rounded-lg text-[10px] font-bold">Last Week</button>
-                <button onClick={() => { 
-                  const d = new Date();
-                  const firstDay = new Date(d.getFullYear(), d.getMonth(), 1).toISOString().split('T')[0];
-                  setDateFrom(firstDay); setDateTo(adminToday); 
-                }} className="px-2 py-1 bg-white border border-stone-200 rounded-lg text-[10px] font-bold">This Month</button>
+                }} className="px-3 py-1.5 bg-white border border-stone-200 rounded-lg text-[11px] font-bold">Yesterday</button>
               </div>
             </div>
           )}
@@ -3008,6 +2994,13 @@ const ScheduleView: React.FC<{
   const [dragOrderId, setDragOrderId] = useState<string | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
   const [routeSavedMsg, setRouteSavedMsg] = useState('');
+  const [filterToast, setFilterToast] = useState('');
+
+  // Helper to show filter feedback
+  const showFilterToast = (msg: string) => {
+    setFilterToast(msg);
+    setTimeout(() => setFilterToast(''), 1500);
+  };
 
   const activeDrivers = useMemo(() =>
     allUsers.filter(u => (u.role === 'DRIVER' || u.role === 'MANAGER') && u.isActive),
@@ -3756,7 +3749,7 @@ ${labelsHtml}
             <div className="flex items-center justify-between mb-2">
               <p className="text-[10px] font-black uppercase text-stone-500">Filter by Date Range</p>
               {(dateFrom || dateTo) && (
-                <button onClick={() => { setDateFrom(''); setDateTo(''); }} className="text-[10px] font-black text-red-500 uppercase">Clear</button>
+                <button onClick={() => { setDateFrom(''); setDateTo(''); showFilterToast('Showing All Dates'); }} className="text-[10px] font-black text-red-500 uppercase">Clear</button>
               )}
             </div>
             <div className="flex gap-2">
@@ -3779,32 +3772,25 @@ ${labelsHtml}
                 />
               </div>
             </div>
-            {/* Quick presets */}
+            {/* Quick presets — only what makes sense for delivery scheduling */}
             <div className="flex gap-2 mt-2 flex-wrap">
-              <button onClick={() => { setDateFrom(todayStr); setDateTo(todayStr); }} className="px-2 py-1 bg-white border border-stone-200 rounded-lg text-[10px] font-bold">Today</button>
+              <button onClick={() => { setDateFrom(todayStr); setDateTo(todayStr); showFilterToast('Showing Today'); }} className="px-3 py-1.5 bg-white border border-stone-200 rounded-lg text-[11px] font-bold active:scale-95 transition-transform">Today</button>
+              <button onClick={() => { 
+                const tmrw = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+                setDateFrom(tmrw); setDateTo(tmrw); showFilterToast('Showing Tomorrow');
+              }} className="px-3 py-1.5 bg-white border border-stone-200 rounded-lg text-[11px] font-bold active:scale-95 transition-transform">Tomorrow</button>
               <button onClick={() => { 
                 const y = new Date(Date.now() - 86400000).toISOString().split('T')[0];
-                setDateFrom(y); setDateTo(y); 
-              }} className="px-2 py-1 bg-white border border-stone-200 rounded-lg text-[10px] font-bold">Yesterday</button>
-              <button onClick={() => { 
-                const d = new Date(); 
-                const day = d.getDay();
-                const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-                const monday = new Date(d.setDate(diff)).toISOString().split('T')[0];
-                setDateFrom(monday); setDateTo(todayStr); 
-              }} className="px-2 py-1 bg-white border border-stone-200 rounded-lg text-[10px] font-bold">This Week</button>
-              <button onClick={() => { 
-                const d = new Date();
-                const lastWeekStart = new Date(d.setDate(d.getDate() - d.getDay() - 6)).toISOString().split('T')[0];
-                const lastWeekEnd = new Date(new Date().setDate(new Date().getDate() - new Date().getDay())).toISOString().split('T')[0];
-                setDateFrom(lastWeekStart); setDateTo(lastWeekEnd); 
-              }} className="px-2 py-1 bg-white border border-stone-200 rounded-lg text-[10px] font-bold">Last Week</button>
-              <button onClick={() => { 
-                const d = new Date();
-                const firstDay = new Date(d.getFullYear(), d.getMonth(), 1).toISOString().split('T')[0];
-                setDateFrom(firstDay); setDateTo(todayStr); 
-              }} className="px-2 py-1 bg-white border border-stone-200 rounded-lg text-[10px] font-bold">This Month</button>
+                setDateFrom(y); setDateTo(y); showFilterToast('Showing Yesterday');
+              }} className="px-3 py-1.5 bg-white border border-stone-200 rounded-lg text-[11px] font-bold active:scale-95 transition-transform">Yesterday</button>
             </div>
+          </div>
+        )}
+
+        {/* Filter feedback toast */}
+        {filterToast && (
+          <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-stone-900 text-white px-4 py-2 rounded-full text-xs font-bold shadow-lg animate-pulse">
+            ✓ {filterToast}
           </div>
         )}
       </div>
