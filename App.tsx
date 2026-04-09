@@ -3152,9 +3152,14 @@ const ScheduleView: React.FC<{
   };
 
   // Get active (not delivered) stops for route optimization
+  // Only include TODAY's deliveries for route planning (drivers route one day at a time)
   const optimizableStops = useMemo(() =>
-    filtered.filter(d => !['DELIVERED','CLOSED'].includes(d.status)),
-    [filtered]
+    filtered.filter(d => {
+      if (['DELIVERED','CLOSED'].includes(d.status)) return false;
+      const orderDate = (d.deliveryDate || '').split('T')[0];
+      return orderDate === todayStr;
+    }),
+    [filtered, todayStr]
   );
 
   // Quick sort by distance from store (no map needed)
