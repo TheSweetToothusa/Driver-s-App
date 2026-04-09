@@ -4776,7 +4776,7 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
   // Driver Pay Calculator states
   const [payCalcOpen, setPayCalcOpen] = useState(false);
   const [payDriverId, setPayDriverId] = useState<string>('');
-  const [payDateRange, setPayDateRange] = useState<'TODAY' | 'YESTERDAY' | 'THIS_WEEK' | 'LAST_WEEK' | 'THIS_MONTH' | 'LAST_MONTH'>('THIS_WEEK');
+  const [payDateRange, setPayDateRange] = useState<'TODAY' | 'YESTERDAY' | 'THIS_WEEK' | 'LAST_WEEK' | 'THIS_MONTH' | 'LAST_MONTH' | 'CUSTOM'>('THIS_WEEK');
   const [payStartDate, setPayStartDate] = useState(() => { const d = new Date(); const day = d.getDay(); const diff = d.getDate() - day + (day === 0 ? -6 : 1); return new Date(d.setDate(diff)).toISOString().split('T')[0]; });
   const [payEndDate, setPayEndDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [payRatePerDelivery, setPayRatePerDelivery] = useState<string>('');
@@ -5321,7 +5321,25 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
                           {label}
                         </button>
                       ))}
+                      <button onClick={() => setPayDateRange('CUSTOM')}
+                        className={`col-span-2 py-3.5 rounded-xl font-bold text-sm transition-all ${payDateRange === 'CUSTOM' ? 'bg-emerald-500 text-white shadow-lg' : 'bg-white border-2 border-stone-200 text-stone-600 active:bg-stone-100'}`}>
+                        Custom Dates
+                      </button>
                     </div>
+                    {payDateRange === 'CUSTOM' && (
+                      <div className="grid grid-cols-2 gap-3 mt-4">
+                        <div>
+                          <p className="text-xs font-bold text-stone-500 mb-1">From</p>
+                          <input type="date" value={payStartDate} onChange={e => setPayStartDate(e.target.value)}
+                            className="w-full bg-white border border-stone-300 rounded-lg px-3 py-2.5 text-sm font-bold" />
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-stone-500 mb-1">To</p>
+                          <input type="date" value={payEndDate} onChange={e => setPayEndDate(e.target.value)}
+                            className="w-full bg-white border border-stone-300 rounded-lg px-3 py-2.5 text-sm font-bold" />
+                        </div>
+                      </div>
+                    )}
                   </div>
                   
                   {/* Filter by driver */}
@@ -5418,7 +5436,25 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
                               {label}
                             </button>
                           ))}
+                          <button onClick={() => { setPayDateRange('CUSTOM'); setPayCalculated(false); }}
+                            className={`col-span-2 py-2.5 rounded-xl font-bold text-xs transition-all ${payDateRange === 'CUSTOM' ? 'bg-emerald-500 text-white' : 'bg-white border border-stone-200 text-stone-600 active:bg-stone-100'}`}>
+                            Custom Dates
+                          </button>
                         </div>
+                        {payDateRange === 'CUSTOM' && (
+                          <div className="grid grid-cols-2 gap-3 mt-3">
+                            <div>
+                              <p className="text-xs font-bold text-stone-500 mb-1">From</p>
+                              <input type="date" value={payStartDate} onChange={e => { setPayStartDate(e.target.value); setPayCalculated(false); }}
+                                className="w-full bg-white border border-stone-300 rounded-lg px-3 py-2 text-sm font-bold" />
+                            </div>
+                            <div>
+                              <p className="text-xs font-bold text-stone-500 mb-1">To</p>
+                              <input type="date" value={payEndDate} onChange={e => { setPayEndDate(e.target.value); setPayCalculated(false); }}
+                                className="w-full bg-white border border-stone-300 rounded-lg px-3 py-2 text-sm font-bold" />
+                            </div>
+                          </div>
+                        )}
                       </div>
                       
                       {/* Step 3: Rate per delivery */}
