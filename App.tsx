@@ -3148,15 +3148,22 @@ const ScheduleView: React.FC<{
   };
 
   // Get active (not delivered) stops for route optimization
-  // Only include TODAY's deliveries for route planning (drivers route one day at a time)
-  const optimizableStops = useMemo(() =>
-    filtered.filter(d => {
+  // Get the first date group for route planning (drivers route one day at a time)
+  // This lets them prep tomorrow's route today when today has no deliveries
+  const routingDate = useMemo(() => {
+    if (grouped.length === 0) return null;
+    const firstDateKey = grouped[0][0];
+    return firstDateKey === 'unscheduled' ? null : firstDateKey;
+  }, [grouped]);
+
+  const optimizableStops = useMemo(() => {
+    if (!routingDate) return [];
+    return filtered.filter(d => {
       if (['DELIVERED','CLOSED'].includes(d.status)) return false;
       const orderDate = (d.deliveryDate || '').split('T')[0];
-      return orderDate === todayStr;
-    }),
-    [filtered, todayStr]
-  );
+      return orderDate === routingDate;
+    });
+  }, [filtered, routingDate]);
 
   // Quick sort by distance from store (no map needed)
   const sortByDistance = async () => {
@@ -3846,14 +3853,14 @@ ${labelsHtml}
       </div>
 
       {/* ── PLAN ROUTE BUTTON ── */}
-      {optimizableStops.length > 0 && (
+      {optimizableStops.length > 0 && routingDate && (
         <div className="px-4 py-3 bg-stone-50 border-b border-stone-200">
           <button
             onClick={() => setShowPlanRoute(true)}
             className="w-full py-4 rounded-2xl font-black text-sm flex items-center justify-center gap-2 active:scale-95 transition-all"
             style={{ background: '#374151', color: '#fff' }}
           >
-            <MapIcon size={16} /> Plan Route ({optimizableStops.length} stops)
+            <MapIcon size={16} /> Plan Route ({optimizableStops.length} stops) — {fmtDateHeader(routingDate)}
           </button>
         </div>
       )}
