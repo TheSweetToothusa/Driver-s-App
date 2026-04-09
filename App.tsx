@@ -1812,9 +1812,6 @@ const OrderDetail: React.FC<{
           <div className="mx-3 mt-3 bg-white rounded-xl border border-stone-200 overflow-hidden">
             <div className="px-4 py-2 bg-stone-50 border-b border-stone-100 flex items-center justify-between">
               <p className="text-[10px] font-black uppercase text-stone-500 tracking-widest">Admin Controls</p>
-              {hasAdminChanges && (
-                <span className="text-[9px] font-black text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">Unsaved changes</span>
-              )}
             </div>
 
             {/* Quick Controls Row: Status + Driver + Date */}
@@ -1826,7 +1823,7 @@ const OrderDetail: React.FC<{
                   <select
                     value={pendingStatus}
                     onChange={(e) => setPendingStatus(e.target.value as any)}
-                    className={`w-full border rounded-lg px-2 py-2 text-xs font-bold outline-none focus:border-black transition-all ${pendingStatus !== order.status ? 'bg-amber-50 border-amber-300' : 'bg-stone-50 border-stone-200'}`}
+                    className="w-full border rounded-lg px-2 py-2 text-xs font-bold outline-none focus:border-black transition-all bg-stone-50 border-stone-200"
                   >
                     {STATUSES_FOR_DROPDOWN.map(s => (
                       <option key={s.value} value={s.value}>{s.label}</option>
@@ -1839,7 +1836,7 @@ const OrderDetail: React.FC<{
                   <select
                     value={pendingDriver}
                     onChange={(e) => setPendingDriver(e.target.value)}
-                    className={`w-full border rounded-lg px-2 py-2 text-xs font-bold outline-none focus:border-black ${pendingDriver !== (order.driverId || '') ? 'bg-amber-50 border-amber-300' : 'bg-stone-50 border-stone-200'}`}
+                    className="w-full border rounded-lg px-2 py-2 text-xs font-bold outline-none focus:border-black bg-stone-50 border-stone-200"
                   >
                     <option value="">Select...</option>
                     {allUsers.filter(u => u.role === 'DRIVER' || u.role === 'ADMIN' || u.role === 'SUPER_ADMIN' || u.role === 'MANAGER').map(u => (
@@ -1864,13 +1861,13 @@ const OrderDetail: React.FC<{
                     }
                     setPendingDeliveryDate(e.target.value);
                   }}
-                  className={`w-full border rounded-lg px-3 py-2 text-sm font-bold outline-none focus:border-black ${pendingDeliveryDate !== (order.deliveryDate || '').split('T')[0] ? 'bg-amber-50 border-amber-300' : 'bg-stone-50 border-stone-200'}`}
+                  className="w-full border rounded-lg px-3 py-2 text-sm font-bold outline-none focus:border-black bg-stone-50 border-stone-200"
                 />
               </div>
               
               {/* SAVE BUTTON */}
               <button
-                disabled={!hasAdminChanges || adminSaving}
+                disabled={adminSaving}
                 onClick={async () => {
                   setAdminSaving(true);
                   setAdminSaveResult(null);
@@ -1950,8 +1947,6 @@ const OrderDetail: React.FC<{
                     ? 'bg-green-600 text-white' 
                     : adminSaveResult === 'error'
                     ? 'bg-red-500 text-white'
-                    : !hasAdminChanges 
-                    ? 'bg-stone-100 text-stone-400 cursor-not-allowed' 
                     : 'bg-black text-white active:scale-[0.98]'
                 }`}
               >
