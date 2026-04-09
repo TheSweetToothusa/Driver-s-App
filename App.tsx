@@ -1313,9 +1313,8 @@ const OrderDetail: React.FC<{
               <span className="text-[10px] bg-white/20 rounded px-1 py-0.5 text-white/80 font-bold">Change</span>
             </button>
           ) : (
-            <p className="text-xs text-amber-300 font-bold">{order.deliveryDate ? new Date(order.deliveryDate + 'T12:00:00').toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric', year:'numeric' }) : 'Today'}</p>
+            <p className="text-xs text-white font-bold">{order.deliveryDate ? new Date(order.deliveryDate + 'T12:00:00').toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric', year:'numeric' }) : 'Today'}</p>
           )}
-          <p className="text-xs text-white/60 font-medium mt-0.5">{order.driverName || 'Unassigned'}</p>
         </div>
         {!isAdmin && (
           <span className={`text-xs font-black px-3 py-1.5 rounded-full border ${order.status === DeliveryStatus.DELIVERED ? 'bg-green-500 border-green-400 text-white' : 'bg-white/10 border-white/20 text-white'}`}>
@@ -3932,7 +3931,7 @@ ${labelsHtml}
 
               {/* Cards for this date */}
               <div style={{ padding: '12px 16px' }}>
-              {orders.length === 0 && hdr.isToday && !isLoading && (
+              {orders.length === 0 && hdr.isToday && (
                 <div className="text-center py-8">
                   <p className="text-stone-400 font-medium">No deliveries scheduled for today</p>
                 </div>
@@ -6974,24 +6973,6 @@ export default function App() {
       </div>
 
       <main className="flex-1 overflow-y-auto pb-20">
-
-        {/* ── LOADING OVERLAY — shown while server wakes up ── */}
-        {isLoading && deliveries.length === 0 && (
-          <div style={{
-            position: 'fixed', inset: 0, background: '#fff', zIndex: 9000,
-            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 20,
-          }}>
-            <div style={{
-              width: 52, height: 52, border: '4px solid #F3F4F6', borderTop: '4px solid #D97706',
-              borderRadius: '50%', animation: 'spin 0.9s linear infinite',
-            }} />
-            <div style={{ textAlign: 'center' }}>
-              <p style={{ fontSize: 16, fontWeight: 800, color: '#111827', marginBottom: 4 }}>Loading orders...</p>
-              <p style={{ fontSize: 12, color: '#9CA3AF' }}>This may take a few seconds</p>
-            </div>
-            <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-          </div>
-        )}
 
         {/* ── HOME TAB — dashboard for all users ── */}
         {tab === 'HOME' && (
