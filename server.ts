@@ -1354,6 +1354,54 @@ async function startServer() {
   });
 
   // ── DEBUG: raw order attributes ──────────────────────────────────────────────
+  // Raw Shopify order lookup — original date, tags, full timeline
+  app.get('/api/order-raw/:orderNum', async (req, res) => {
+    if (!SHOPIFY_STORE_URL || !SHOPIFY_ACCESS_TOKEN) return res.json({ error: 'Shopify not configured' });
+    try {
+      const num = req.params.orderNum.replace(/^#+/, '');
+      const resp = await fetch(`https://${SHOPIFY_STORE_URL}/admin/api/2025-01/orders.json?name=%23${num}&status=any&limit=5`, {
+        headers: { 'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN }
+      });
+      const data = await resp.json();
+      const order = data.orders?.[0];
+      if (!order) return res.json({ error: 'Order not found' });
+
+      // Pull order events (timeline)
+      const evResp = await fetch(`https://${SHOPIFY_STORE_URL}/admin/api/2025-01/orders/${order.id}/events.json?limit=50`, {
+        headers: { 'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN }
+      });
+      const evData = await evResp.json();
+
+      // Extract all line item properties (where delivery date lives)
+      const allProps: any[] = [];
+      for (const item of (order.line_items || [])) {
+        for (const prop of (item.properties || [])) {
+          allProps.push({ item: item.name, key: prop.name, value: prop.value });
+        }
+      }
+
+      // Extract st_ tags
+      const tags = (order.tags || '').split(',').map((t: string) => t.trim()).filter((t: string) => t.startsWith('st_'));
+
+      res.json({
+        orderNumber: order.name,
+        id: order.id,
+        createdAt: order.created_at,
+        updatedAt: order.updated_at,
+        lineItemProperties: allProps,
+        stTags: tags,
+        allTags: order.tags,
+        timeline: (evData.events || []).map((e: any) => ({
+          timestamp: e.created_at,
+          author: e.author,
+          message: (e.message || '').replace(/<[^>]+>/g, '').trim(),
+        }))
+      });
+    } catch (err) {
+      res.json({ error: String(err) });
+    }
+  });
+
   app.get('/api/debug/order-attrs/:orderNum', async (req, res) => {
     try {
       const num = req.params.orderNum;

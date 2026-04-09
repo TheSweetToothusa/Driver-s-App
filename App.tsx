@@ -3888,22 +3888,25 @@ ${labelsHtml}
           </div>
         ) : grouped.map(([dateKey, orders]) => {
           const hdr = fmtDateHeader(dateKey);
+          const isUnscheduled = dateKey === 'unscheduled';
           return (
             <div key={dateKey}>
-              {/* Date group header - very light beige bar */}
-              <div style={{ 
-                background: '#F5F5F0', 
+              {/* Date group header */}
+              <div style={{
+                background: isUnscheduled ? '#FEF2F2' : '#F5F5F0',
                 padding: '10px 16px',
-                marginBottom: 0
+                marginBottom: 0,
+                borderLeft: isUnscheduled ? '4px solid #EF4444' : 'none',
               }}>
-                <p style={{ 
-                  color: '#374151', 
-                  fontSize: 13, 
-                  fontWeight: 500,
+                <p style={{
+                  color: isUnscheduled ? '#DC2626' : '#374151',
+                  fontSize: 13,
+                  fontWeight: isUnscheduled ? 800 : 500,
                   letterSpacing: '0.3px'
                 }}>
-                  {hdr.isToday ? `TODAY — ${new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).toUpperCase()}` : hdr.label}
+                  {isUnscheduled ? '⚠️ NO DATE — NEEDS ATTENTION' : hdr.isToday ? `TODAY — ${new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).toUpperCase()}` : hdr.label}
                 </p>
+                {isUnscheduled && <p style={{ fontSize: 11, color: '#EF4444', fontWeight: 600, marginTop: 2 }}>These orders are missing a delivery date. Do not deliver until date is confirmed.</p>}
               </div>
 
               {/* Cards for this date */}
