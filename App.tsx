@@ -3860,7 +3860,7 @@ ${labelsHtml}
             className="w-full py-4 rounded-2xl font-black text-sm flex items-center justify-center gap-2 active:scale-95 transition-all"
             style={{ background: '#374151', color: '#fff' }}
           >
-            <MapIcon size={16} /> Plan Route ({optimizableStops.length} stops) — {fmtDateHeader(routingDate!).label}
+            <MapIcon size={16} /> Plan Today's Route
           </button>
         </div>
       )}
@@ -4114,26 +4114,48 @@ ${labelsHtml}
                       dragOverId === order.id ? 'border-blue-400 scale-[1.02] bg-blue-50' : 'border-stone-200'
                     }`}
                   >
-                    <div className="flex items-center gap-3">
-                      {/* Drag handle */}
-                      <div className="flex flex-col items-center shrink-0 cursor-grab active:cursor-grabbing text-stone-300">
-                        <span style={{ fontSize: 22, lineHeight: 1 }}>{'\u2261'}</span>
+                    <div className="flex items-center gap-2">
+                      {/* Move up/down buttons - work on iOS */}
+                      <div className="flex flex-col gap-1 shrink-0">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (idx === 0) return;
+                            const newOrder = [...(customOrder.length > 0 ? customOrder : orderedStops.map(o => o.id))];
+                            const currentIdx = newOrder.indexOf(order.id);
+                            if (currentIdx > 0) {
+                              [newOrder[currentIdx - 1], newOrder[currentIdx]] = [newOrder[currentIdx], newOrder[currentIdx - 1]];
+                              setCustomOrder(newOrder);
+                            }
+                          }}
+                          className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black ${idx === 0 ? 'bg-stone-100 text-stone-300' : 'bg-stone-200 text-stone-600 active:bg-stone-300'}`}
+                        >
+                          ▲
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (idx === orderedStops.length - 1) return;
+                            const newOrder = [...(customOrder.length > 0 ? customOrder : orderedStops.map(o => o.id))];
+                            const currentIdx = newOrder.indexOf(order.id);
+                            if (currentIdx < newOrder.length - 1) {
+                              [newOrder[currentIdx], newOrder[currentIdx + 1]] = [newOrder[currentIdx + 1], newOrder[currentIdx]];
+                              setCustomOrder(newOrder);
+                            }
+                          }}
+                          className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black ${idx === orderedStops.length - 1 ? 'bg-stone-100 text-stone-300' : 'bg-stone-200 text-stone-600 active:bg-stone-300'}`}
+                        >
+                          ▼
+                        </button>
                       </div>
 
-                      {/* Number input */}
-                      <input
-                        type="tel"
-                        inputMode="numeric"
-                        value={stopNumbers[order.id] || ''}
-                        onChange={e => setStopNumbers(prev => ({ ...prev, [order.id]: e.target.value.replace(/[^0-9]/g, '') }))}
-                        placeholder={String(idx + 1)}
-                        className="w-12 h-12 rounded-full text-center font-black text-lg border-2 focus:border-black focus:outline-none shrink-0"
-                        style={{ 
-                          background: stopNumbers[order.id] ? '#374151' : '#fff', 
-                          color: stopNumbers[order.id] ? '#fff' : '#374151',
-                          borderColor: stopNumbers[order.id] ? '#374151' : '#d1d5db'
-                        }}
-                      />
+                      {/* Number circle */}
+                      <div 
+                        className="w-12 h-12 rounded-full flex items-center justify-center font-black text-lg border-2 shrink-0"
+                        style={{ background: '#fff', color: '#374151', borderColor: '#d1d5db' }}
+                      >
+                        {idx + 1}
+                      </div>
 
                       {/* Order info */}
                       <div className="flex-1 min-w-0">
@@ -4142,30 +4164,13 @@ ${labelsHtml}
                           <span className="text-xs font-black uppercase" style={{ color: '#374151' }}>{city}</span>
                         </div>
                         <p className="font-bold text-sm truncate" style={{ color: '#374151' }}>{name}</p>
-                        <p className="text-xs text-stone-400 truncate">{street}{zip ? `, ${zip}` : ''}</p>
+                        <a 
+                          href={wazeUrl}
+                          className="text-xs text-blue-600 truncate block"
+                        >
+                          {street}{zip ? `, ${zip}` : ''}
+                        </a>
                       </div>
-                    </div>
-
-                    {/* Navigation buttons - small, inline */}
-                    <div className="flex gap-2 mt-2 ml-14">
-                      <a
-                        href={wazeUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="px-3 py-1.5 rounded-lg font-bold text-[10px] text-center active:scale-95 transition-all"
-                        style={{ background: '#33ccff', color: '#000' }}
-                      >
-                        🚗 Waze
-                      </a>
-                      <a
-                        href={googleUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="px-3 py-1.5 rounded-lg font-bold text-[10px] text-center active:scale-95 transition-all"
-                        style={{ background: '#4285f4', color: '#fff' }}
-                      >
-                        📍 Maps
-                      </a>
                     </div>
                   </div>
                 );
@@ -4176,7 +4181,7 @@ ${labelsHtml}
           {/* Bottom hint */}
           <div className="px-4 py-3 bg-white border-t border-stone-200">
             <p className="text-[10px] text-stone-400 font-bold text-center">
-              Drag to reorder stops or type a number • Tap Print Labels when ready
+              Tap ▲▼ to reorder • Tap address to navigate • Print Labels when ready
             </p>
           </div>
         </div>
