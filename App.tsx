@@ -801,6 +801,18 @@ const OrderDetail: React.FC<{
   const [pendingDate, setPendingDate] = useState(order.deliveryDate || '');
   const [dateSavedToast, setDateSavedToast] = useState(false);
   const [navAddress, setNavAddress] = useState('');
+  
+  // Admin controls pending state
+  const [pendingStatus, setPendingStatus] = useState(order.status);
+  const [pendingDriver, setPendingDriver] = useState(order.driverId || '');
+  const [pendingDeliveryDate, setPendingDeliveryDate] = useState((order.deliveryDate || '').split('T')[0]);
+  const [adminSaving, setAdminSaving] = useState(false);
+  const [adminSaveResult, setAdminSaveResult] = useState<'saved' | 'error' | null>(null);
+  
+  // Track if any pending changes exist
+  const hasAdminChanges = pendingStatus !== order.status || 
+    pendingDriver !== (order.driverId || '') || 
+    pendingDeliveryDate !== (order.deliveryDate || '').split('T')[0];
 
   const handleComplete = async () => {
     const now = new Date().toISOString();
@@ -1305,54 +1317,13 @@ const OrderDetail: React.FC<{
         </button>
         <div className="flex-1 min-w-0">
           <p className="text-xl font-black tracking-tight">#{cleanOrderNum}</p>
-          {isAdmin ? (
-            <button onClick={() => { setPendingDate(order.deliveryDate || ''); setShowDatePicker(true); }} className="flex items-center gap-1.5 active:opacity-70">
-              <span className="text-xs text-amber-300 font-bold">
-                {order.deliveryDate ? new Date(order.deliveryDate + 'T12:00:00').toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric', year:'numeric' }) : '⚠ No date'}
-              </span>
-              <span className="text-[10px] bg-white/20 rounded px-1 py-0.5 text-white/80 font-bold">Change</span>
-            </button>
-          ) : (
-            <p className="text-xs text-white font-bold">{order.deliveryDate ? new Date(order.deliveryDate + 'T12:00:00').toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric', year:'numeric' }) : '⚠ No date'}</p>
-          )}
+          <p className={`text-xs font-bold ${order.deliveryDate ? 'text-white' : 'text-amber-300'}`}>
+            {order.deliveryDate ? new Date(order.deliveryDate + 'T12:00:00').toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric', year:'numeric' }) : '⚠ No date'}
+          </p>
         </div>
-        {!isAdmin && (
-          <span className={`text-xs font-black px-3 py-1.5 rounded-full border ${order.status === DeliveryStatus.DELIVERED ? 'bg-green-500 border-green-400 text-white' : 'bg-white/10 border-white/20 text-white'}`}>
-            {STATUS_CONFIG[order.status]?.label || order.status}
-          </span>
-        )}
-        {isAdmin && (
-          <select
-            value={order.status}
-            onChange={async e => {
-              const s = e.target.value as DeliveryStatus;
-              const prevStatus = order.status;
-              onUpdate(order.id, { status: s });
-              const isManualOrd = (order as any).isManual;
-              try {
-                const r = await fetch(isManualOrd ? `/api/manual-orders/${order.id}` : `/api/orders/${order.id}/status`, {
-                  method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: s })
-                });
-                if (r.ok) {
-                  logAudit('STATUS_CHANGE', 'status', prevStatus, s);
-                  setStatusSaveToast('saved');
-                  setTimeout(() => setStatusSaveToast(null), 2500);
-                } else {
-                  setStatusSaveToast('error');
-                  setTimeout(() => setStatusSaveToast(null), 3500);
-                }
-              } catch {
-                setStatusSaveToast('error');
-                setTimeout(() => setStatusSaveToast(null), 3500);
-              }
-            }}
-            className="bg-white/10 text-white text-[11px] font-black border border-white/20 rounded-lg px-2 py-1.5 outline-none max-w-[130px]"
-          >
-            {STATUSES_FOR_DROPDOWN.map(s => (
-              <option key={s.value} value={s.value} style={{ background: '#111', color: '#fff' }}>{s.label}</option>
-            ))}
-          </select>
-        )}
+        <span className={`text-xs font-black px-3 py-1.5 rounded-full border ${order.status === DeliveryStatus.DELIVERED ? 'bg-green-500 border-green-400 text-white' : 'bg-white/10 border-white/20 text-white'}`}>
+          {STATUS_CONFIG[order.status]?.label || order.status}
+        </span>
         {isAdmin && (order as any).isManual && (
           <button
             onClick={async () => {
@@ -1822,11 +1793,14 @@ const OrderDetail: React.FC<{
           </div>
         )}
 
-        {/* ── ADMIN SECTION — always visible, all controls in one place ── */}
+        {/* ── ADMIN SECTION — all controls with explicit SAVE ── */}
         {isAdmin && (
           <div className="mx-3 mt-3 bg-white rounded-xl border border-stone-200 overflow-hidden">
-            <div className="px-4 py-2 bg-stone-50 border-b border-stone-100">
+            <div className="px-4 py-2 bg-stone-50 border-b border-stone-100 flex items-center justify-between">
               <p className="text-[10px] font-black uppercase text-stone-500 tracking-widest">Admin Controls</p>
+              {hasAdminChanges && (
+                <span className="text-[9px] font-black text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">Unsaved changes</span>
+              )}
             </div>
 
             {/* Quick Controls Row: Status + Driver + Date */}
@@ -1836,43 +1810,9 @@ const OrderDetail: React.FC<{
                 <div>
                   <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest mb-1">Status</p>
                   <select
-                    value={order.status}
-                    onChange={async (e) => {
-                      const newStatus = e.target.value;
-                      const select = e.target;
-                      select.style.opacity = '0.5';
-                      const isManualOrder = (order as any).isManual;
-                      try {
-                        const endpoint = isManualOrder 
-                          ? `/api/manual-orders/${order.id}`
-                          : `/api/orders/${order.id}/status`;
-                        const resp = await fetch(endpoint, {
-                          method: 'PATCH',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ status: newStatus })
-                        });
-                        if (resp.ok) {
-                          select.style.opacity = '1';
-                          select.style.background = '#dcfce7'; // green flash
-                          setTimeout(() => { select.style.background = '#fafaf9'; }, 800);
-                          onUpdate(order.id, { status: newStatus as any });
-                          // If closed/cancelled, go back to list after brief delay
-                          if (newStatus === 'CLOSED' || newStatus === 'CANCELLED') {
-                            setTimeout(() => onBack(), 500);
-                          }
-                        } else {
-                          select.style.opacity = '1';
-                          select.style.background = '#fee2e2'; // red flash
-                          setTimeout(() => { select.style.background = '#fafaf9'; }, 800);
-                        }
-                      } catch (err) { 
-                        console.error('Failed to update status:', err);
-                        select.style.opacity = '1';
-                        select.style.background = '#fee2e2';
-                        setTimeout(() => { select.style.background = '#fafaf9'; }, 800);
-                      }
-                    }}
-                    className="w-full bg-stone-50 border border-stone-200 rounded-lg px-2 py-2 text-xs font-bold outline-none focus:border-black transition-all"
+                    value={pendingStatus}
+                    onChange={(e) => setPendingStatus(e.target.value as any)}
+                    className={`w-full border rounded-lg px-2 py-2 text-xs font-bold outline-none focus:border-black transition-all ${pendingStatus !== order.status ? 'bg-amber-50 border-amber-300' : 'bg-stone-50 border-stone-200'}`}
                   >
                     {STATUSES_FOR_DROPDOWN.map(s => (
                       <option key={s.value} value={s.value}>{s.label}</option>
@@ -1883,21 +1823,9 @@ const OrderDetail: React.FC<{
                 <div>
                   <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest mb-1">Driver</p>
                   <select
-                    value={order.driverId || ''}
-                    onChange={async (e) => {
-                      const newDriverId = e.target.value;
-                      const newDriver = allUsers.find(u => u.id === newDriverId);
-                      if (!newDriverId || !newDriver) return;
-                      try {
-                        await fetch(`/api/deliveries/${order.id}/assign`, {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ driverId: newDriverId, driverName: newDriver.name })
-                        });
-                        onUpdate(order.id, { driverId: newDriverId, driverName: newDriver.name });
-                      } catch (err) { console.error('Failed to reassign:', err); }
-                    }}
-                    className="w-full bg-stone-50 border border-stone-200 rounded-lg px-2 py-2 text-xs font-bold outline-none focus:border-black"
+                    value={pendingDriver}
+                    onChange={(e) => setPendingDriver(e.target.value)}
+                    className={`w-full border rounded-lg px-2 py-2 text-xs font-bold outline-none focus:border-black ${pendingDriver !== (order.driverId || '') ? 'bg-amber-50 border-amber-300' : 'bg-stone-50 border-stone-200'}`}
                   >
                     <option value="">Select...</option>
                     {allUsers.filter(u => u.role === 'DRIVER' || u.role === 'ADMIN' || u.role === 'SUPER_ADMIN').map(u => (
@@ -1911,22 +1839,109 @@ const OrderDetail: React.FC<{
                 <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest mb-1">Delivery Date</p>
                 <input
                   type="date"
-                  value={(order.deliveryDate || '').split('T')[0]}
-                  onChange={async (e) => {
-                    const newDate = e.target.value;
-                    if (!newDate) return;
-                    try {
-                      await fetch(`/api/orders/${order.id}/reschedule`, {
-                        method: 'PATCH',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ deliveryDate: newDate })
-                      });
-                      onUpdate(order.id, { deliveryDate: newDate });
-                    } catch (err) { console.error('Failed to reschedule:', err); }
-                  }}
-                  className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm font-bold outline-none focus:border-black"
+                  value={pendingDeliveryDate}
+                  onChange={(e) => setPendingDeliveryDate(e.target.value)}
+                  className={`w-full border rounded-lg px-3 py-2 text-sm font-bold outline-none focus:border-black ${pendingDeliveryDate !== (order.deliveryDate || '').split('T')[0] ? 'bg-amber-50 border-amber-300' : 'bg-stone-50 border-stone-200'}`}
                 />
               </div>
+              
+              {/* SAVE BUTTON */}
+              <button
+                disabled={!hasAdminChanges || adminSaving}
+                onClick={async () => {
+                  setAdminSaving(true);
+                  setAdminSaveResult(null);
+                  const isManualOrder = (order as any).isManual;
+                  let allSuccess = true;
+                  
+                  try {
+                    // Save status if changed
+                    if (pendingStatus !== order.status) {
+                      const endpoint = isManualOrder 
+                        ? `/api/manual-orders/${order.id}`
+                        : `/api/orders/${order.id}/status`;
+                      const resp = await fetch(endpoint, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ status: pendingStatus })
+                      });
+                      if (resp.ok) {
+                        onUpdate(order.id, { status: pendingStatus as any });
+                      } else {
+                        allSuccess = false;
+                      }
+                    }
+                    
+                    // Save driver if changed
+                    if (pendingDriver !== (order.driverId || '')) {
+                      const newDriverUser = allUsers.find(u => u.id === pendingDriver);
+                      if (pendingDriver && newDriverUser) {
+                        const resp = await fetch(`/api/deliveries/${order.id}/assign`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ driverId: pendingDriver, driverName: newDriverUser.name })
+                        });
+                        if (resp.ok) {
+                          onUpdate(order.id, { driverId: pendingDriver, driverName: newDriverUser.name });
+                        } else {
+                          allSuccess = false;
+                        }
+                      }
+                    }
+                    
+                    // Save date if changed
+                    if (pendingDeliveryDate !== (order.deliveryDate || '').split('T')[0]) {
+                      const resp = await fetch(`/api/orders/${order.id}/reschedule`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ deliveryDate: pendingDeliveryDate })
+                      });
+                      if (resp.ok) {
+                        onUpdate(order.id, { deliveryDate: pendingDeliveryDate });
+                      } else {
+                        allSuccess = false;
+                      }
+                    }
+                    
+                    setAdminSaveResult(allSuccess ? 'saved' : 'error');
+                    setTimeout(() => setAdminSaveResult(null), 3000);
+                    
+                    // If closed/cancelled, go back to list after brief delay
+                    if (allSuccess && (pendingStatus === 'CLOSED' || pendingStatus === 'CANCELLED')) {
+                      setTimeout(() => onBack(), 500);
+                    }
+                  } catch (err) {
+                    console.error('Failed to save admin changes:', err);
+                    setAdminSaveResult('error');
+                    setTimeout(() => setAdminSaveResult(null), 3000);
+                  } finally {
+                    setAdminSaving(false);
+                  }
+                }}
+                className={`w-full py-3 rounded-xl font-black text-sm uppercase tracking-wider transition-all ${
+                  adminSaveResult === 'saved' 
+                    ? 'bg-green-600 text-white' 
+                    : adminSaveResult === 'error'
+                    ? 'bg-red-500 text-white'
+                    : !hasAdminChanges 
+                    ? 'bg-stone-100 text-stone-400 cursor-not-allowed' 
+                    : 'bg-black text-white active:scale-[0.98]'
+                }`}
+              >
+                {adminSaving ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Saving...
+                  </span>
+                ) : adminSaveResult === 'saved' ? (
+                  '✓ SAVED'
+                ) : adminSaveResult === 'error' ? (
+                  '⚠ FAILED — TRY AGAIN'
+                ) : (
+                  'SAVE CHANGES'
+                )}
+              </button>
+              
               {(role === 'SUPER_ADMIN' || role === 'MANAGER') && (
                 <div>
                   <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest mb-1">Delivery Fee</p>
