@@ -796,6 +796,7 @@ const OrderDetail: React.FC<{
   const [showSendConfirm, setShowSendConfirm] = useState(false);
   const [showAdminOverrideConfirm, setShowAdminOverrideConfirm] = useState(false);
   const [showNavChoice, setShowNavChoice] = useState(false);
+  const [statusSaveToast, setStatusSaveToast] = useState<'saved' | 'error' | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [pendingDate, setPendingDate] = useState(order.deliveryDate || '');
   const [dateSavedToast, setDateSavedToast] = useState(false);
@@ -1273,9 +1274,21 @@ const OrderDetail: React.FC<{
               const s = e.target.value as DeliveryStatus;
               onUpdate(order.id, { status: s });
               const isManualOrd = (order as any).isManual;
-              fetch(isManualOrd ? `/api/manual-orders/${order.id}` : `/api/orders/${order.id}/status`, {
-                method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: s })
-              }).catch(() => {});
+              try {
+                const r = await fetch(isManualOrd ? `/api/manual-orders/${order.id}` : `/api/orders/${order.id}/status`, {
+                  method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: s })
+                });
+                if (r.ok) {
+                  setStatusSaveToast('saved');
+                  setTimeout(() => setStatusSaveToast(null), 2500);
+                } else {
+                  setStatusSaveToast('error');
+                  setTimeout(() => setStatusSaveToast(null), 3500);
+                }
+              } catch {
+                setStatusSaveToast('error');
+                setTimeout(() => setStatusSaveToast(null), 3500);
+              }
             }}
             className="bg-white/10 text-white text-[11px] font-black border border-white/20 rounded-lg px-2 py-1.5 outline-none max-w-[130px]"
           >
@@ -1307,8 +1320,46 @@ const OrderDetail: React.FC<{
         </button>
       </div>
 
+      {/* ── STATUS SAVE TOAST ── */}
+      {statusSaveToast && (
+        <div style={{
+          position: 'fixed', top: 64, left: '50%', transform: 'translateX(-50%)',
+          background: statusSaveToast === 'saved' ? '#16A34A' : '#DC2626',
+          color: '#fff', borderRadius: 12, padding: '10px 20px',
+          fontSize: 14, fontWeight: 800, zIndex: 9999,
+          boxShadow: '0 4px 16px rgba(0,0,0,0.18)',
+          display: 'flex', alignItems: 'center', gap: 8,
+          whiteSpace: 'nowrap',
+        }}>
+          {statusSaveToast === 'saved' ? '✓ Status saved' : '⚠ Save failed — try again'}
+        </div>
+      )}
+
       {/* ── SCROLLABLE CONTENT ── */}
       <div className="flex-1 overflow-y-auto pb-6" style={{ background: '#FFFFFF' }}>
+
+        {/* ── DELIVERY DATE — prominent on white ── */}
+        <div style={{ background: '#FFFBEB', borderBottom: '1px solid #FDE68A', padding: '10px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 18 }}>📅</span>
+            <div>
+              <p style={{ fontSize: 10, fontWeight: 700, color: '#92400E', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 1 }}>Delivery Date</p>
+              <p style={{ fontSize: 17, fontWeight: 900, color: '#78350F' }}>
+                {order.deliveryDate
+                  ? new Date(order.deliveryDate + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+                  : 'Today'}
+              </p>
+            </div>
+          </div>
+          {isAdmin && (
+            <button
+              onClick={() => { setPendingDate(order.deliveryDate || ''); setShowDatePicker(true); }}
+              style={{ background: '#F59E0B', color: '#fff', border: 'none', borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 800, cursor: 'pointer' }}
+            >
+              Change
+            </button>
+          )}
+        </div>
 
         {/* ── DELIVERY INSTRUCTIONS — Subtle but visible ── */}
         {order.deliveryInstructions && (
@@ -6439,7 +6490,7 @@ export default function App() {
           allUsers={allUsers}
           onUpdate={handleUpdateOrder}
           onAddDelivery={handleAddDelivery}
-          onBack={() => setSelectedOrder(null)}
+          onBack={() => { setSelectedOrder(null); fetchOrders(); }}
         />
       </div>
     );

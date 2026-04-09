@@ -501,6 +501,43 @@ async function startServer() {
     res.json({ success: true, status });
   });
 
+  // ── AUDIT LOG ─────────────────────────────────────────────────────────────
+  // GET all audit entries (admin view)
+  app.get("/api/audit-log", async (_req, res) => {
+    try {
+      const val = await getKV('audit_log');
+      res.json(val ? JSON.parse(val) : { entries: [] });
+    } catch { res.json({ entries: [] }); }
+  });
+
+  // POST a new audit entry
+  app.post("/api/audit-log", async (req, res) => {
+    try {
+      const { orderId, orderNumber, actorId, actorName, action, field, oldValue, newValue } = req.body;
+      const val = await getKV('audit_log');
+      const data = val ? JSON.parse(val) : { entries: [] };
+      const entry = {
+        id: Date.now().toString(),
+        timestamp: new Date().toISOString(),
+        orderId,
+        orderNumber: orderNumber || orderId,
+        actorId,
+        actorName,
+        action,
+        field,
+        oldValue,
+        newValue,
+      };
+      data.entries.unshift(entry); // newest first
+      if (data.entries.length > 2000) data.entries = data.entries.slice(0, 2000);
+      await setKV('audit_log', JSON.stringify(data));
+      res.json({ success: true, entry });
+    } catch (err) {
+      console.error('Audit log error:', err);
+      res.json({ success: false });
+    }
+  });
+
   app.post("/api/orders/:id/note", async (req, res) => {
     const { note } = req.body;
     const existing = await readPodOrder(req.params.id);
