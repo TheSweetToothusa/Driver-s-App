@@ -1394,29 +1394,6 @@ const OrderDetail: React.FC<{
       {/* ── SCROLLABLE CONTENT ── */}
       <div className="flex-1 overflow-y-auto pb-6" style={{ background: '#FFFFFF' }}>
 
-        {/* ── DELIVERY DATE — prominent on white ── */}
-        <div style={{ background: '#FFFBEB', borderBottom: '1px solid #FDE68A', padding: '10px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 18 }}>📅</span>
-            <div>
-              <p style={{ fontSize: 10, fontWeight: 700, color: '#92400E', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 1 }}>Delivery Date</p>
-              <p style={{ fontSize: 17, fontWeight: 900, color: '#78350F' }}>
-                {order.deliveryDate
-                  ? new Date(order.deliveryDate + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
-                  : 'Today'}
-              </p>
-            </div>
-          </div>
-          {isAdmin && (
-            <button
-              onClick={() => { setPendingDate(order.deliveryDate || ''); setShowDatePicker(true); }}
-              style={{ background: '#F59E0B', color: '#fff', border: 'none', borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 800, cursor: 'pointer' }}
-            >
-              Change
-            </button>
-          )}
-        </div>
-
         {/* ── DELIVERY INSTRUCTIONS — Subtle but visible ── */}
         {order.deliveryInstructions && (
           <div style={{ background: '#FEF3C7', padding: '12px 16px', borderLeft: '3px solid #F59E0B' }}>
