@@ -4771,7 +4771,7 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
   // Driver Pay Calculator states
   const [payCalcOpen, setPayCalcOpen] = useState(false);
   const [payDriverId, setPayDriverId] = useState<string>('');
-  const [payDateRange, setPayDateRange] = useState<'THIS_WEEK' | 'LAST_WEEK' | 'CUSTOM'>('THIS_WEEK');
+  const [payDateRange, setPayDateRange] = useState<'TODAY' | 'YESTERDAY' | 'THIS_WEEK' | 'LAST_WEEK' | 'THIS_MONTH' | 'LAST_MONTH'>('THIS_WEEK');
   const [payStartDate, setPayStartDate] = useState(() => { const d = new Date(); const day = d.getDay(); const diff = d.getDate() - day + (day === 0 ? -6 : 1); return new Date(d.setDate(diff)).toISOString().split('T')[0]; });
   const [payEndDate, setPayEndDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [payRatePerDelivery, setPayRatePerDelivery] = useState<string>('');
@@ -4809,11 +4809,20 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
   // Driver Pay Calculator helpers
   const getDateRangeForPay = () => {
     const today = new Date();
-    if (payDateRange === 'THIS_WEEK') {
+    const todayStr = today.toISOString().split('T')[0];
+    
+    if (payDateRange === 'TODAY') {
+      return { start: todayStr, end: todayStr };
+    } else if (payDateRange === 'YESTERDAY') {
+      const yesterday = new Date(today);
+      yesterday.setDate(today.getDate() - 1);
+      const yStr = yesterday.toISOString().split('T')[0];
+      return { start: yStr, end: yStr };
+    } else if (payDateRange === 'THIS_WEEK') {
       const day = today.getDay();
       const monday = new Date(today);
       monday.setDate(today.getDate() - day + (day === 0 ? -6 : 1));
-      return { start: monday.toISOString().split('T')[0], end: today.toISOString().split('T')[0] };
+      return { start: monday.toISOString().split('T')[0], end: todayStr };
     } else if (payDateRange === 'LAST_WEEK') {
       const day = today.getDay();
       const lastMonday = new Date(today);
@@ -4821,6 +4830,13 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
       const lastSunday = new Date(lastMonday);
       lastSunday.setDate(lastMonday.getDate() + 6);
       return { start: lastMonday.toISOString().split('T')[0], end: lastSunday.toISOString().split('T')[0] };
+    } else if (payDateRange === 'THIS_MONTH') {
+      const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+      return { start: firstOfMonth.toISOString().split('T')[0], end: todayStr };
+    } else if (payDateRange === 'LAST_MONTH') {
+      const firstOfLastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+      const lastOfLastMonth = new Date(today.getFullYear(), today.getMonth(), 0);
+      return { start: firstOfLastMonth.toISOString().split('T')[0], end: lastOfLastMonth.toISOString().split('T')[0] };
     }
     return { start: payStartDate, end: payEndDate };
   };
@@ -5283,38 +5299,27 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
               {/* ══════════ TOTAL FEES TAB (Primary Feature) ══════════ */}
               {feesTab === 'LOOKUP' && (
                 <>
-                  <div className="text-center mb-2">
-                    <p className="text-stone-500 text-sm">Total delivery fees collected</p>
-                  </div>
-                  
-                  {/* Date Range - Big friendly buttons */}
+                  {/* Quick Date Presets - Tap to select */}
                   <div className="bg-stone-50 rounded-2xl p-4">
                     <p className="text-xs font-bold uppercase text-stone-400 mb-3 text-center">Select Time Period</p>
-                    <div className="grid grid-cols-3 gap-2">
-                      {(['THIS_WEEK', 'LAST_WEEK', 'CUSTOM'] as const).map(range => (
-                        <button key={range} onClick={() => setPayDateRange(range)}
-                          className={`py-4 rounded-xl font-bold text-sm transition-all ${payDateRange === range ? 'bg-emerald-500 text-white shadow-lg scale-105' : 'bg-white border-2 border-stone-200 text-stone-600'}`}>
-                          {range === 'THIS_WEEK' ? '📅 This Week' : range === 'LAST_WEEK' ? '📅 Last Week' : '📅 Custom'}
+                    <div className="grid grid-cols-2 gap-2">
+                      {([
+                        { key: 'TODAY', label: 'Today' },
+                        { key: 'YESTERDAY', label: 'Yesterday' },
+                        { key: 'THIS_WEEK', label: 'This Week' },
+                        { key: 'LAST_WEEK', label: 'Last Week' },
+                        { key: 'THIS_MONTH', label: 'This Month' },
+                        { key: 'LAST_MONTH', label: 'Last Month' },
+                      ] as const).map(({ key, label }) => (
+                        <button key={key} onClick={() => setPayDateRange(key as typeof payDateRange)}
+                          className={`py-3.5 rounded-xl font-bold text-sm transition-all ${payDateRange === key ? 'bg-emerald-500 text-white shadow-lg' : 'bg-white border-2 border-stone-200 text-stone-600 active:bg-stone-100'}`}>
+                          {label}
                         </button>
                       ))}
                     </div>
-                    {payDateRange === 'CUSTOM' && (
-                      <div className="grid grid-cols-2 gap-3 mt-4">
-                        <div>
-                          <label className="text-[10px] font-bold uppercase text-stone-400 block mb-1">From</label>
-                          <input type="date" value={payStartDate} onChange={e => setPayStartDate(e.target.value)}
-                            className="w-full bg-white border-2 border-stone-200 rounded-xl px-3 py-3 text-sm font-bold outline-none focus:border-emerald-500" />
-                        </div>
-                        <div>
-                          <label className="text-[10px] font-bold uppercase text-stone-400 block mb-1">To</label>
-                          <input type="date" value={payEndDate} onChange={e => setPayEndDate(e.target.value)}
-                            className="w-full bg-white border-2 border-stone-200 rounded-xl px-3 py-3 text-sm font-bold outline-none focus:border-emerald-500" />
-                        </div>
-                      </div>
-                    )}
                   </div>
                   
-                  {/* Filter by driver (optional) */}
+                  {/* Filter by driver */}
                   <div className="bg-stone-50 rounded-2xl p-4">
                     <p className="text-xs font-bold uppercase text-stone-400 mb-2 text-center">Filter by Driver</p>
                     <select value={feeDriverFilter} onChange={e => setFeeDriverFilter(e.target.value)}
@@ -5326,7 +5331,7 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
                     </select>
                   </div>
                   
-                  {/* Results - Always shown */}
+                  {/* Results */}
                   {(() => {
                     const { start, end } = getDateRangeForPay();
                     const filtered = feeDriverFilter === 'ALL' 
@@ -5335,12 +5340,23 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
                     const totalFees = filtered.reduce((sum, d) => sum + (d.deliveryFee || 0), 0);
                     const totalDeliveries = filtered.length;
                     
+                    // Format dates nicely: Mar 1 - Apr 9, 2026
+                    const formatDate = (d: string) => {
+                      const [y, m, day] = d.split('-');
+                      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                      return `${months[parseInt(m) - 1]} ${parseInt(day)}`;
+                    };
+                    const year = end.split('-')[0];
+                    const dateDisplay = start === end 
+                      ? `${formatDate(start)}, ${year}`
+                      : `${formatDate(start)} – ${formatDate(end)}, ${year}`;
+                    
                     return (
                       <div className="bg-gradient-to-br from-emerald-600 to-emerald-700 rounded-2xl p-5 text-center shadow-xl">
                         <p className="text-emerald-100 text-xs uppercase font-bold mb-1">
                           {feeDriverFilter === 'ALL' ? 'All Drivers' : allUsers.find(u => u.id === feeDriverFilter)?.name}
                         </p>
-                        <p className="text-emerald-200 text-xs mb-3">{start} → {end}</p>
+                        <p className="text-emerald-200 text-sm mb-3">{dateDisplay}</p>
                         <div className="text-5xl font-black text-white mb-2">${totalFees.toFixed(2)}</div>
                         <div className="inline-block bg-white/20 rounded-full px-4 py-1">
                           <span className="text-emerald-100 font-bold text-sm">{totalDeliveries} deliveries</span>
@@ -5383,22 +5399,21 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
                       {/* Step 2: Time period */}
                       <div className="bg-stone-50 rounded-2xl p-4">
                         <p className="text-xs font-bold uppercase text-stone-400 mb-3 text-center">Step 2: Time Period</p>
-                        <div className="grid grid-cols-3 gap-2">
-                          {(['THIS_WEEK', 'LAST_WEEK', 'CUSTOM'] as const).map(range => (
-                            <button key={range} onClick={() => { setPayDateRange(range); setPayCalculated(false); }}
-                              className={`py-3 rounded-xl font-bold text-xs transition-all ${payDateRange === range ? 'bg-emerald-500 text-white' : 'bg-white border border-stone-200 text-stone-600'}`}>
-                              {range === 'THIS_WEEK' ? 'This Week' : range === 'LAST_WEEK' ? 'Last Week' : 'Custom'}
+                        <div className="grid grid-cols-2 gap-2">
+                          {([
+                            { key: 'TODAY', label: 'Today' },
+                            { key: 'YESTERDAY', label: 'Yesterday' },
+                            { key: 'THIS_WEEK', label: 'This Week' },
+                            { key: 'LAST_WEEK', label: 'Last Week' },
+                            { key: 'THIS_MONTH', label: 'This Month' },
+                            { key: 'LAST_MONTH', label: 'Last Month' },
+                          ] as const).map(({ key, label }) => (
+                            <button key={key} onClick={() => { setPayDateRange(key as typeof payDateRange); setPayCalculated(false); }}
+                              className={`py-2.5 rounded-xl font-bold text-xs transition-all ${payDateRange === key ? 'bg-emerald-500 text-white' : 'bg-white border border-stone-200 text-stone-600 active:bg-stone-100'}`}>
+                              {label}
                             </button>
                           ))}
                         </div>
-                        {payDateRange === 'CUSTOM' && (
-                          <div className="grid grid-cols-2 gap-2 mt-3">
-                            <input type="date" value={payStartDate} onChange={e => { setPayStartDate(e.target.value); setPayCalculated(false); }}
-                              className="bg-white border border-stone-200 rounded-xl px-3 py-2 text-sm font-bold outline-none" />
-                            <input type="date" value={payEndDate} onChange={e => { setPayEndDate(e.target.value); setPayCalculated(false); }}
-                              className="bg-white border border-stone-200 rounded-xl px-3 py-2 text-sm font-bold outline-none" />
-                          </div>
-                        )}
                       </div>
                       
                       {/* Step 3: Rate per delivery */}
