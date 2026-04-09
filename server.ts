@@ -877,6 +877,24 @@ async function startServer() {
         } catch (tagErr) {
           console.error('Failed to write tags to Shopify (non-fatal):', tagErr);
         }
+
+        // Add POD note to Shopify order (visible in order timeline)
+        try {
+          const deliveryTime = new Date(completedAt || Date.now()).toLocaleString('en-US', { 
+            weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
+            hour: 'numeric', minute: '2-digit', hour12: true 
+          });
+          const noteText = `✓ DELIVERED — ${deliveryTime}\nDriver: ${driverName || 'Unknown'}${notes ? `\nNote: ${notes}` : ''}${photo ? '\n📷 POD photo attached (timestamped)' : ''}${signature ? '\n✍️ Signature captured' : ''}`;
+          
+          await fetch(`https://${SHOPIFY_STORE_URL}/admin/api/2025-01/orders/${orderId}.json`, {
+            method: 'PUT',
+            headers: { 'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ order: { id: orderId, note: noteText } })
+          });
+          console.log(`POD note added to Shopify order ${orderId}`);
+        } catch (noteErr) {
+          console.error('Failed to add POD note to Shopify (non-fatal):', noteErr);
+        }
       }
 
       res.json({ success: true });
