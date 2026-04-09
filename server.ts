@@ -395,77 +395,9 @@ async function startServer() {
 
       console.log(`Shopify: ${allOrders.length} total, ${(filtered.length > 0 ? filtered : allOrders).length} local delivery`);
 
-      // OPTIMIZATION: Cache fulfillment instructions in PostgreSQL
-      // Only fetch from Shopify for orders we haven't cached yet
-      const finalOrders = filtered.length > 0 ? filtered : allOrders;
-      const ordersToProcess = ordersWithTags.length > 0 ? ordersWithTags : finalOrders;
-      
-      // Load cached instructions from DB
-      const cachedInstructions: Record<string, string> = await getKV('fulfillment_instructions_cache') || {};
-      const uncachedOrders = ordersToProcess.filter((o: any) => !cachedInstructions[o.id]);
-      
-      console.log(`Instructions cache: ${Object.keys(cachedInstructions).length} cached, ${uncachedOrders.length} need fetch`);
-      
-      // Apply cached instructions immediately
-      ordersToProcess.forEach((o: any) => {
-        if (cachedInstructions[o.id]) {
-          o._delivery_instructions = cachedInstructions[o.id];
-        }
-      });
-      
-      // Fetch ONLY uncached orders (in batches of 10 to avoid rate limits)
-      if (uncachedOrders.length > 0) {
-        const BATCH_SIZE = 10;
-        let newCache: Record<string, string> = {};
-        
-        for (let i = 0; i < uncachedOrders.length; i += BATCH_SIZE) {
-          const batch = uncachedOrders.slice(i, i + BATCH_SIZE);
-          try {
-            const foResults = await Promise.allSettled(
-              batch.map((o: any) =>
-                fetch(`https://${SHOPIFY_STORE_URL}/admin/api/2025-01/orders/${o.id}/fulfillment_orders.json`, {
-                  headers: { 'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN, 'Content-Type': 'application/json' }
-                }).then(r => r.json())
-              )
-            );
-            foResults.forEach((result, j) => {
-              const order = batch[j];
-              if (result.status === 'fulfilled' && result.value.fulfillment_orders) {
-                const fo = result.value.fulfillment_orders[0];
-                const instructions = fo?.delivery_method?.additional_information?.instructions;
-                if (instructions) {
-                  const lower = instructions.toLowerCase();
-                  const isRealInstruction = ['gate', 'call', 'buzz', 'code', 'floor', 'unit', 'leave', 'ring', 'door', 'security', 'guard', 'lobby', 'buzzer', 'bell', 'phone', 'arrival', 'gated', 'access', 'building', 'apt', 'suite', 'knock', 'back', 'front', 'side', 'enter', 'key', 'intercom'].some(kw => lower.includes(kw));
-                  if (isRealInstruction) {
-                    order._delivery_instructions = instructions;
-                    newCache[order.id] = instructions;
-                  } else {
-                    // Cache empty string so we don't re-fetch
-                    newCache[order.id] = '';
-                  }
-                } else {
-                  newCache[order.id] = '';
-                }
-              } else {
-                newCache[order.id] = '';
-              }
-            });
-          } catch (e) {
-            console.error(`Fulfillment batch ${i}-${i + BATCH_SIZE} error:`, e);
-          }
-        }
-        
-        // Merge new cache entries and save (keep cache from growing unbounded - only last 500 orders)
-        const mergedCache = { ...cachedInstructions, ...newCache };
-        const cacheEntries = Object.entries(mergedCache);
-        const trimmedCache = cacheEntries.length > 500 
-          ? Object.fromEntries(cacheEntries.slice(-500)) 
-          : mergedCache;
-        await setKV('fulfillment_instructions_cache', trimmedCache);
-        console.log(`Instructions cache updated: ${Object.keys(newCache).length} new entries`);
-      }
+      const ordersToProcess = ordersWithTags.length > 0 ? ordersWithTags : (filtered.length > 0 ? filtered : allOrders);
 
-      res.json({ orders: ordersWithTags, podData });
+      res.json({ orders: ordersToProcess, podData });
     } catch (e) {
       console.error('Orders fetch error:', e);
       res.status(500).json({ error: String(e) });
