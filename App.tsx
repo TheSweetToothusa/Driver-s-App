@@ -6528,7 +6528,8 @@ export default function App() {
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
   const [allUsers, setAllUsers] = useState<UserAccount[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<Delivery | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true); // True until first data (cache or fetch)
+  const [isSyncing, setIsSyncing] = useState(false); // True during background refresh
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [dataSource, setDataSource] = useState<'LIVE' | 'MOCK' | 'ERROR'>('MOCK');
   const [tab, setTab] = useState<'HOME' | 'ORDERS' | 'SCHEDULE' | 'ADMIN' | 'DRIVERS' | 'PROJECTS'>('SCHEDULE');
@@ -6547,16 +6548,36 @@ export default function App() {
 
   useEffect(() => {
     if (currentUser) {
-      fetchOrders();
+      // INSTANT LOAD: Show cached orders immediately (< 50ms)
+      try {
+        const cached = localStorage.getItem('ordersCache');
+        if (cached) {
+          const { orders, timestamp } = JSON.parse(cached);
+          if (orders?.length > 0) {
+            setDeliveries(orders);
+            setIsLoading(false); // Show data instantly!
+            const cacheTime = new Date(timestamp);
+            setLastSync(cacheTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' (cached)');
+          }
+        }
+      } catch { /* cache miss or corrupt - no problem */ }
+      
+      // BACKGROUND REFRESH: Fetch fresh data behind the scenes
+      fetchOrders(true); // true = background sync
       fetch('/api/users').then(r => r.json()).then(d => setAllUsers(d.users || []));
       fetch('/api/config/default-driver').then(r => r.json()).then(d => setDefaultDriver(d));
-      const iv = setInterval(fetchOrders, 300000);
+      const iv = setInterval(() => fetchOrders(true), 300000);
       return () => clearInterval(iv);
     }
   }, [currentUser]);
 
-  const fetchOrders = async () => {
-    setIsLoading(true);
+  const fetchOrders = async (isBackgroundSync = false) => {
+    // If we have cached data showing, use syncing indicator instead of full loading
+    if (isBackgroundSync && deliveries.length > 0) {
+      setIsSyncing(true);
+    } else {
+      setIsLoading(true);
+    }
     try {
       const fetched = await getDeliveries();
       const isMock = fetched.some((d: Delivery) => d.id === '33989');
@@ -6584,6 +6605,14 @@ export default function App() {
       if (dd) setDefaultDriver(dd);
       setDataSource(isMock ? 'MOCK' : 'LIVE');
       setLastSync(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+      
+      // CACHE: Save orders for instant load next time
+      try {
+        localStorage.setItem('ordersCache', JSON.stringify({
+          orders: withDriver,
+          timestamp: new Date().toISOString()
+        }));
+      } catch { /* localStorage full or disabled - no problem */ }
     } catch (err) {
       console.error('fetchOrders failed:', err);
       const { getDeliveries: gd } = await import('./services/shopifyService');
@@ -6593,7 +6622,10 @@ export default function App() {
       } catch {}
       setDataSource('ERROR');
     }
-    finally { setIsLoading(false); }
+    finally { 
+      setIsLoading(false); 
+      setIsSyncing(false);
+    }
   };
 
   const handleUpdateOrder = useCallback((id: string, updates: Partial<Delivery>) => {
@@ -6616,6 +6648,7 @@ export default function App() {
   const logout = () => {
     if (!window.confirm(`Log out as ${currentUser?.name}?`)) return;
     localStorage.removeItem('currentUser');
+    localStorage.removeItem('ordersCache'); // Clear cached orders on logout
     setCurrentUser(null); setDeliveries([]); setSelectedOrder(null);
   };
 
@@ -6669,8 +6702,8 @@ export default function App() {
               <DollarSign size={11} /> ZIP Fee
             </button>
           )}
-          <span className={`w-2 h-2 rounded-full ${isLoading ? 'bg-amber-400 animate-pulse' : dataSource === 'LIVE' ? 'bg-green-500' : 'bg-red-400'}`} />
-          <button onClick={fetchOrders} className={`p-1.5 text-[#5F6368] ${isLoading ? 'animate-spin' : ''}`}><RefreshCw size={15} /></button>
+          <span className={`w-2 h-2 rounded-full ${isLoading ? 'bg-amber-400 animate-pulse' : isSyncing ? 'bg-blue-400 animate-pulse' : dataSource === 'LIVE' ? 'bg-green-500' : 'bg-red-400'}`} />
+          <button onClick={() => fetchOrders(false)} className={`p-1.5 text-[#5F6368] ${isLoading || isSyncing ? 'animate-spin' : ''}`}><RefreshCw size={15} /></button>
           <button onClick={logout} className="flex items-center gap-1 px-3 py-2 bg-red-50 text-red-500 rounded-xl font-bold uppercase text-[10px] active:scale-95 border border-red-100">
             <LogOut size={13} /> Out
           </button>
