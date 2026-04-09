@@ -339,6 +339,11 @@ async function startServer() {
     res.json({ success: true });
   });
 
+  // ── HEALTH CHECK (keeps server warm) ───────────────────────────────────────
+  app.get("/api/health", (_req, res) => {
+    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  });
+
   // ── ORDERS ──────────────────────────────────────────────────────────────────
 
   app.get("/api/orders", async (_req, res) => {

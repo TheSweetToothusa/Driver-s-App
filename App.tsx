@@ -6585,7 +6585,13 @@ export default function App() {
       fetch('/api/users').then(r => r.json()).then(d => setAllUsers(d.users || []));
       fetch('/api/config/default-driver').then(r => r.json()).then(d => setDefaultDriver(d));
       const iv = setInterval(() => fetchOrders(true), 300000);
-      return () => clearInterval(iv);
+      
+      // KEEP-ALIVE PING: Hit health endpoint every 4 minutes to prevent Render cold starts
+      const pingInterval = setInterval(() => {
+        fetch('/api/health').catch(() => {});
+      }, 240000); // 4 minutes
+      
+      return () => { clearInterval(iv); clearInterval(pingInterval); };
     }
   }, [currentUser]);
 
