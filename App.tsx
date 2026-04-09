@@ -4683,7 +4683,7 @@ const PendingRescheduleQueue: React.FC<{ allUsers: UserAccount[] }> = ({ allUser
   );
 };
 
-const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: UserAccount[]; setAllUsers: React.Dispatch<React.SetStateAction<UserAccount[]>>; }> = ({ role, deliveries, allUsers, setAllUsers }) => {
+const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: UserAccount[]; setAllUsers: React.Dispatch<React.SetStateAction<UserAccount[]>>; currentUser: UserAccount; }> = ({ role, deliveries, allUsers, setAllUsers, currentUser }) => {
   // Modal/accordion states
   const [feesModalOpen, setFeesModalOpen] = useState(false);
   const [feesTab, setFeesTab] = useState<'LOOKUP' | 'PAY_CALC' | 'ZIP'>('LOOKUP');
@@ -4731,10 +4731,35 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
   const [defaultDriverId, setDefaultDriverId] = useState<string>('');
   const [defaultDriverSaved, setDefaultDriverSaved] = useState(false);
 
+
+  // ── Audit / Shopify history state ─────────────────────────────────────
+  const [auditEntries, setAuditEntries] = useState<any[]>([]);
+  const [auditLoading, setAuditLoading] = useState(false);
+  const [shopifyEvents, setShopifyEvents] = useState<any[]>([]);
+  const [shopifyLoading, setShopifyLoading] = useState(false);
+  const [auditTab, setAuditTab] = useState<'APP' | 'SHOPIFY'>('SHOPIFY');
+  const [auditDriverFilter, setAuditDriverFilter] = useState('ALL');
+  const [auditActionFilter, setAuditActionFilter] = useState('ALL');
+  const [auditSearch, setAuditSearch] = useState('');
+
+  const fetchAuditLog = async () => {
+    setAuditLoading(true);
+    try { const r = await fetch('/api/audit-log'); const d = await r.json(); setAuditEntries(d.entries || []); }
+    catch {} finally { setAuditLoading(false); }
+  };
+
+  const fetchShopifyHistory = async () => {
+    setShopifyLoading(true);
+    try { const r = await fetch('/api/shopify-tag-history'); const d = await r.json(); setShopifyEvents(d.entries || []); }
+    catch {} finally { setShopifyLoading(false); }
+  };
+
   useEffect(() => {
     fetch('/api/config/default-driver').then(r => r.json()).then(d => { if (d.driverId) setDefaultDriverId(d.driverId); });
     fetch('/api/templates').then(r => r.json()).then(d => setTemplates(d.templates || []));
     fetch('/api/config/driver-rates').then(r => r.json()).then(d => { if (d.rates) setDriverRates(d.rates); }).catch(() => {});
+    fetchAuditLog();
+    fetchShopifyHistory();
   }, []);
   
   // Driver Pay Calculator helpers
@@ -5087,100 +5112,166 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
           {/* ── ACTIVITY LOG ─────────────────────────────────────────── */}
           {(role === 'SUPER_ADMIN' || role === 'MANAGER') && (
             <div style={{ background: '#fff', borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', marginBottom: 12 }}>
+
+              {/* Header */}
               <div style={{ padding: '14px 16px', borderBottom: '1px solid #F3F4F6', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 16 }}>🕵️</span>
+                  <span style={{ fontSize: 16 }}>&#128373;</span>
                   <span style={{ fontSize: 14, fontWeight: 800, color: '#111827' }}>Activity Log</span>
-                  {auditEntries.length > 0 && (
-                    <span style={{ background: '#F3F4F6', color: '#374151', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 9999 }}>{auditEntries.length}</span>
-                  )}
                 </div>
-                <button onClick={fetchAuditLog} style={{ background: '#F3F4F6', border: 'none', borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 700, color: '#374151', cursor: 'pointer' }}>
-                  {auditLoading ? '...' : '↺ Refresh'}
+                <button onClick={() => { fetchAuditLog(); fetchShopifyHistory(); }}
+                  style={{ background: '#F3F4F6', border: 'none', borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 700, color: '#374151', cursor: 'pointer' }}>
+                  {(auditLoading || shopifyLoading) ? 'Loading...' : 'Refresh'}
                 </button>
               </div>
 
-              {/* Filters */}
-              <div style={{ padding: '10px 16px', borderBottom: '1px solid #F3F4F6', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <input
-                  value={auditSearch}
-                  onChange={e => setAuditSearch(e.target.value)}
-                  placeholder="Search order # or name..."
-                  style={{ flex: 1, minWidth: 120, border: '1px solid #E5E7EB', borderRadius: 8, padding: '6px 10px', fontSize: 12, color: '#374151', outline: 'none' }}
-                />
-                <select value={auditDriverFilter} onChange={e => setAuditDriverFilter(e.target.value)}
-                  style={{ border: '1px solid #E5E7EB', borderRadius: 8, padding: '6px 8px', fontSize: 12, color: '#374151', background: '#fff' }}>
-                  <option value="ALL">All Users</option>
-                  {allUsers.map(u => <option key={u.id} value={u.name}>{u.name}</option>)}
-                </select>
-                <select value={auditActionFilter} onChange={e => setAuditActionFilter(e.target.value)}
-                  style={{ border: '1px solid #E5E7EB', borderRadius: 8, padding: '6px 8px', fontSize: 12, color: '#374151', background: '#fff' }}>
-                  <option value="ALL">All Actions</option>
-                  <option value="STATUS_CHANGE">Status Changes</option>
-                  <option value="DATE_CHANGE">Date Changes</option>
-                  <option value="DRIVER_REASSIGN">Driver Reassigns</option>
-                  <option value="CONTACT_EDIT">Contact Edits</option>
-                  <option value="NOTE_ADDED">Notes Added</option>
-                </select>
+              {/* Tabs */}
+              <div style={{ display: 'flex', borderBottom: '1px solid #F3F4F6' }}>
+                {(['SHOPIFY', 'APP'] as const).map(t => (
+                  <button key={t} onClick={() => setAuditTab(t)}
+                    style={{ flex: 1, padding: '10px 0', fontSize: 12, fontWeight: 800, border: 'none', cursor: 'pointer',
+                      background: auditTab === t ? '#fff' : '#F9FAFB',
+                      color: auditTab === t ? '#111827' : '#9CA3AF',
+                      borderBottom: auditTab === t ? '2px solid #111827' : '2px solid transparent' }}>
+                    {t === 'SHOPIFY' ? 'Shopify History' : 'App Log'}
+                  </button>
+                ))}
               </div>
 
-              {/* Log entries */}
-              <div style={{ maxHeight: 420, overflowY: 'auto' }}>
-                {auditLoading && (
-                  <div style={{ padding: 24, textAlign: 'center', color: '#9CA3AF', fontSize: 13 }}>Loading...</div>
+              {/* Search */}
+              <div style={{ padding: '10px 16px', borderBottom: '1px solid #F3F4F6', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <input value={auditSearch} onChange={e => setAuditSearch(e.target.value)}
+                  placeholder="Search order # or name..."
+                  style={{ flex: 1, minWidth: 120, border: '1px solid #E5E7EB', borderRadius: 8, padding: '6px 10px', fontSize: 12, color: '#374151', outline: 'none' }} />
+                {auditTab === 'APP' && (
+                  <select value={auditDriverFilter} onChange={e => setAuditDriverFilter(e.target.value)}
+                    style={{ border: '1px solid #E5E7EB', borderRadius: 8, padding: '6px 8px', fontSize: 12, color: '#374151', background: '#fff' }}>
+                    <option value="ALL">All Users</option>
+                    {allUsers.map(u => <option key={u.id} value={u.name}>{u.name}</option>)}
+                  </select>
                 )}
-                {!auditLoading && auditEntries.length === 0 && (
-                  <div style={{ padding: 24, textAlign: 'center', color: '#9CA3AF', fontSize: 13 }}>
-                    No activity recorded yet. Changes made from now on will appear here.
-                  </div>
+                {auditTab === 'APP' && (
+                  <select value={auditActionFilter} onChange={e => setAuditActionFilter(e.target.value)}
+                    style={{ border: '1px solid #E5E7EB', borderRadius: 8, padding: '6px 8px', fontSize: 12, color: '#374151', background: '#fff' }}>
+                    <option value="ALL">All Actions</option>
+                    <option value="STATUS_CHANGE">Status Changes</option>
+                    <option value="DATE_CHANGE">Date Changes</option>
+                    <option value="DRIVER_REASSIGN">Driver Reassigns</option>
+                    <option value="CONTACT_EDIT">Contact Edits</option>
+                    <option value="NOTE_ADDED">Notes Added</option>
+                  </select>
                 )}
-                {!auditLoading && (() => {
-                  const filtered = auditEntries
-                    .filter((e: any) => auditDriverFilter === 'ALL' || e.actorName === auditDriverFilter)
-                    .filter((e: any) => auditActionFilter === 'ALL' || e.action === auditActionFilter)
+              </div>
+
+              {/* SHOPIFY TAB */}
+              {auditTab === 'SHOPIFY' && (
+                <div style={{ maxHeight: 500, overflowY: 'auto' }}>
+                  {shopifyLoading && <div style={{ padding: 24, textAlign: 'center', color: '#9CA3AF', fontSize: 13 }}>Loading Shopify history...</div>}
+                  {!shopifyLoading && shopifyEvents.length === 0 && (
+                    <div style={{ padding: 24, textAlign: 'center', color: '#9CA3AF', fontSize: 13 }}>No Shopify events found.</div>
+                  )}
+                  {!shopifyLoading && shopifyEvents
                     .filter((e: any) => {
                       if (!auditSearch.trim()) return true;
                       const q = auditSearch.toLowerCase();
-                      return (e.orderNumber || '').toLowerCase().includes(q) || (e.actorName || '').toLowerCase().includes(q) || (e.newValue || '').toLowerCase().includes(q) || (e.oldValue || '').toLowerCase().includes(q);
-                    });
-                  if (filtered.length === 0 && auditEntries.length > 0) return (
-                    <div style={{ padding: 24, textAlign: 'center', color: '#9CA3AF', fontSize: 13 }}>No results match your filters.</div>
-                  );
-                  return filtered.map((entry: any) => {
-                    const actionLabels: Record<string, { label: string; color: string; bg: string }> = {
+                      return String(e.orderId).includes(q) || (e.message || '').toLowerCase().includes(q) || (e.author || '').toLowerCase().includes(q);
+                    })
+                    .map((ev: any) => {
+                      const ts = new Date(ev.timestamp);
+                      const timeStr = ts.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + ' ' + ts.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+                      const msg: string = ev.message || '';
+                      const tags = (msg.match(/st_[a-z]+:[^\s,<"]+/g) || []) as string[];
+                      return (
+                        <div key={ev.id} style={{ padding: '10px 16px', borderBottom: '1px solid #F9FAFB' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                                <span style={{ fontSize: 12, fontWeight: 800, color: '#111827' }}>Order #{ev.orderId}</span>
+                                <span style={{ fontSize: 11, color: '#6B7280' }}>by {ev.author}</span>
+                              </div>
+                              {tags.length > 0 ? (
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                                  {tags.map((tag: string, i: number) => {
+                                    const colonIdx = tag.indexOf(':');
+                                    const key = tag.slice(0, colonIdx);
+                                    const val = tag.slice(colonIdx + 1);
+                                    const isDate = key === 'st_deliverydate';
+                                    const isStatus = key === 'st_status';
+                                    const isDriver = key === 'st_driver' || key === 'st_drivername';
+                                    const bg = isDate ? '#FFFBEB' : isStatus ? '#EFF6FF' : isDriver ? '#F5F3FF' : '#F3F4F6';
+                                    const color = isDate ? '#92400E' : isStatus ? '#1D4ED8' : isDriver ? '#6D28D9' : '#374151';
+                                    const label = isDate ? ('Date: ' + val) : isStatus ? ('Status: ' + val) : isDriver ? ('Driver: ' + val) : tag;
+                                    return <span key={i} style={{ background: bg, color, fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 6 }}>{label}</span>;
+                                  })}
+                                </div>
+                              ) : (
+                                <p style={{ fontSize: 12, color: '#6B7280' }}>{msg.replace(/<[^>]+>/g, '').slice(0, 120)}</p>
+                              )}
+                            </div>
+                            <span style={{ fontSize: 10, color: '#9CA3AF', whiteSpace: 'nowrap' }}>{timeStr}</span>
+                          </div>
+                        </div>
+                      );
+                    })
+                  }
+                </div>
+              )}
+
+              {/* APP LOG TAB */}
+              {auditTab === 'APP' && (
+                <div style={{ maxHeight: 500, overflowY: 'auto' }}>
+                  {auditLoading && <div style={{ padding: 24, textAlign: 'center', color: '#9CA3AF', fontSize: 13 }}>Loading...</div>}
+                  {!auditLoading && auditEntries.length === 0 && (
+                    <div style={{ padding: 24, textAlign: 'center', color: '#9CA3AF', fontSize: 13 }}>No activity yet. Changes made from now on appear here.</div>
+                  )}
+                  {!auditLoading && (() => {
+                    const filtered = auditEntries
+                      .filter((e: any) => auditDriverFilter === 'ALL' || e.actorName === auditDriverFilter)
+                      .filter((e: any) => auditActionFilter === 'ALL' || e.action === auditActionFilter)
+                      .filter((e: any) => {
+                        if (!auditSearch.trim()) return true;
+                        const q = auditSearch.toLowerCase();
+                        return (e.orderNumber || '').toLowerCase().includes(q) || (e.actorName || '').toLowerCase().includes(q) || (e.newValue || '').toLowerCase().includes(q) || (e.oldValue || '').toLowerCase().includes(q);
+                      });
+                    if (filtered.length === 0 && auditEntries.length > 0) return (
+                      <div style={{ padding: 24, textAlign: 'center', color: '#9CA3AF', fontSize: 13 }}>No results match your filters.</div>
+                    );
+                    const cfgMap: Record<string, { label: string; color: string; bg: string }> = {
                       STATUS_CHANGE:   { label: 'Status',  color: '#1D4ED8', bg: '#EFF6FF' },
                       DATE_CHANGE:     { label: 'Date',    color: '#92400E', bg: '#FFFBEB' },
                       DRIVER_REASSIGN: { label: 'Driver',  color: '#6D28D9', bg: '#F5F3FF' },
                       CONTACT_EDIT:    { label: 'Contact', color: '#065F46', bg: '#ECFDF5' },
                       NOTE_ADDED:      { label: 'Note',    color: '#374151', bg: '#F9FAFB' },
                     };
-                    const cfg = actionLabels[entry.action] || { label: entry.action, color: '#374151', bg: '#F9FAFB' };
-                    const ts = new Date(entry.timestamp);
-                    const timeStr = ts.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' + ts.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-                    return (
-                      <div key={entry.id} style={{ padding: '10px 16px', borderBottom: '1px solid #F9FAFB', display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                        <span style={{ background: cfg.bg, color: cfg.color, fontSize: 10, fontWeight: 800, padding: '3px 8px', borderRadius: 6, whiteSpace: 'nowrap', marginTop: 2 }}>{cfg.label}</span>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                            <span style={{ fontSize: 13, fontWeight: 800, color: '#111827' }}>{entry.actorName}</span>
-                            <span style={{ fontSize: 11, color: '#9CA3AF' }}>#{(entry.orderNumber || entry.orderId || '').replace(/^#+/, '')}</span>
+                    return filtered.map((entry: any) => {
+                      const c = cfgMap[entry.action] || { label: entry.action, color: '#374151', bg: '#F9FAFB' };
+                      const ts = new Date(entry.timestamp);
+                      const timeStr = ts.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' + ts.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+                      return (
+                        <div key={entry.id} style={{ padding: '10px 16px', borderBottom: '1px solid #F9FAFB', display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                          <span style={{ background: c.bg, color: c.color, fontSize: 10, fontWeight: 800, padding: '3px 8px', borderRadius: 6, whiteSpace: 'nowrap', marginTop: 2 }}>{c.label}</span>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                              <span style={{ fontSize: 13, fontWeight: 800, color: '#111827' }}>{entry.actorName}</span>
+                              <span style={{ fontSize: 11, color: '#9CA3AF' }}>#{(entry.orderNumber || '').replace(/^#+/, '')}</span>
+                            </div>
+                            {entry.action === 'NOTE_ADDED'
+                              ? <p style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>&#34;{entry.newValue}&#34;</p>
+                              : <p style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>
+                                  <span style={{ textDecoration: 'line-through', color: '#EF4444' }}>{entry.oldValue || '&#8212;'}</span>
+                                  <span style={{ margin: '0 4px', color: '#9CA3AF' }}>&#8594;</span>
+                                  <span style={{ color: '#16A34A', fontWeight: 700 }}>{entry.newValue || '&#8212;'}</span>
+                                </p>
+                            }
                           </div>
-                          {entry.action === 'NOTE_ADDED' ? (
-                            <p style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>"{entry.newValue}"</p>
-                          ) : (
-                            <p style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>
-                              <span style={{ textDecoration: 'line-through', color: '#EF4444' }}>{entry.oldValue || '—'}</span>
-                              <span style={{ margin: '0 4px', color: '#9CA3AF' }}>→</span>
-                              <span style={{ color: '#16A34A', fontWeight: 700 }}>{entry.newValue || '—'}</span>
-                            </p>
-                          )}
+                          <span style={{ fontSize: 10, color: '#9CA3AF', whiteSpace: 'nowrap', marginTop: 2 }}>{timeStr}</span>
                         </div>
-                        <span style={{ fontSize: 10, color: '#9CA3AF', whiteSpace: 'nowrap', marginTop: 2 }}>{timeStr}</span>
-                      </div>
-                    );
-                  });
-                })()}
-              </div>
+                      );
+                    });
+                  })()}
+                </div>
+              )}
+
             </div>
           )}
 
@@ -6947,7 +7038,7 @@ export default function App() {
               </button>
             </div>
             {/* AdminPanel handles ALL admin features */}
-            <AdminPanel role={currentUser.role} deliveries={deliveries} allUsers={allUsers} setAllUsers={setAllUsers} />
+            <AdminPanel role={currentUser.role} deliveries={deliveries} allUsers={allUsers} setAllUsers={setAllUsers} currentUser={currentUser} />
           </div>
         )}
 

@@ -510,6 +510,82 @@ async function startServer() {
     } catch { res.json({ entries: [] }); }
   });
 
+  // ── SHOPIFY TAG HISTORY — pulls Events API for st_deliverydate / st_status changes ──
+  app.get("/api/shopify-tag-history", async (_req, res) => {
+    if (!SHOPIFY_STORE_URL || !SHOPIFY_ACCESS_TOKEN) {
+      return res.json({ entries: [], error: 'Shopify not configured' });
+    }
+    try {
+      // Pull last 250 order events of type "updated" — covers tag changes
+      const url = `https://${SHOPIFY_STORE_URL}/admin/api/2025-01/events.json?verb=updated&limit=250&filter=Order`;
+      const resp = await fetch(url, { headers: { 'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN } });
+      const data = await resp.json();
+      const events = data.events || [];
+
+      // For each event, pull the order's current tags so we can surface st_deliverydate / st_status
+      // Events don't include the diff, but the message field often contains it
+      const entries = events.map((ev: any) => {
+        const msg: string = ev.message || '';
+        // Extract any st_deliverydate or st_status tags mentioned
+        const dateMatch = msg.match(/st_deliverydate:([^\s,<"]+)/);
+        const statusMatch = msg.match(/st_status:([^\s,<"]+)/);
+        const driverMatch = msg.match(/st_driver:([^\s,<"]+)/);
+        return {
+          id: ev.id,
+          timestamp: ev.created_at,
+          orderId: ev.subject_id,
+          orderNumber: ev.subject_id,
+          author: ev.author || 'Shopify',
+          message: msg.replace(/<[^>]+>/g, '').trim(),
+          deliveryDate: dateMatch ? dateMatch[1] : null,
+          status: statusMatch ? statusMatch[1] : null,
+          driver: driverMatch ? driverMatch[1] : null,
+        };
+      }).filter((e: any) => e.deliveryDate || e.status || e.driver || e.message);
+
+      res.json({ entries });
+    } catch (err) {
+      console.error('Shopify tag history error:', err);
+      res.json({ entries: [], error: String(err) });
+    }
+  });
+
+  // Also fetch events for a specific order
+  app.get("/api/shopify-tag-history/:orderId", async (req, res) => {
+    if (!SHOPIFY_STORE_URL || !SHOPIFY_ACCESS_TOKEN) {
+      return res.json({ entries: [], error: 'Shopify not configured' });
+    }
+    try {
+      const orderId = req.params.orderId;
+      // Get all events for this specific order
+      const url = `https://${SHOPIFY_STORE_URL}/admin/api/2025-01/orders/${orderId}/events.json?limit=250`;
+      const resp = await fetch(url, { headers: { 'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN } });
+      const data = await resp.json();
+      const events = data.events || [];
+
+      const entries = events.map((ev: any) => {
+        const msg: string = ev.message || '';
+        const dateMatch = msg.match(/st_deliverydate:([^\s,<"]+)/g);
+        const statusMatch = msg.match(/st_status:([^\s,<"]+)/g);
+        const driverMatch = msg.match(/st_driver:([^\s,<"]+)/g);
+        return {
+          id: ev.id,
+          timestamp: ev.created_at,
+          orderId: ev.subject_id,
+          author: ev.author || 'Shopify',
+          rawMessage: msg.replace(/<[^>]+>/g, '').trim(),
+          deliveryDates: dateMatch || [],
+          statuses: statusMatch || [],
+          drivers: driverMatch || [],
+        };
+      });
+
+      res.json({ entries });
+    } catch (err) {
+      res.json({ entries: [], error: String(err) });
+    }
+  });
+
   // POST a new audit entry
   app.post("/api/audit-log", async (req, res) => {
     try {
