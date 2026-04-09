@@ -2990,6 +2990,8 @@ const ScheduleView: React.FC<{
 
   const [search, setSearch] = useState('');
   const [driverFilter, setDriverFilter] = useState('ALL');
+  const [showPlanRoute, setShowPlanRoute] = useState(false);
+  const [stopNumbers, setStopNumbers] = useState<Record<string, string>>({});
   const [statusFilter, setStatusFilter] = useState<'OPEN'|'DONE'|'ALL'>('OPEN');
   const [sortBy, setSortBy] = useState<'date'|'city'|'zip'|'name'|'driver'>('date');
   const [customOrder, setCustomOrder] = useState<string[]>([]); // manual sort by order ID
@@ -3680,7 +3682,7 @@ ${labelsHtml}
     const isToday = iso === todayStr;
     const isTomorrow = iso === tomorrowStr;
     return {
-      label: isToday ? 'TODAY' : isTomorrow ? 'TOMORROW' : d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }).toUpperCase(),
+      label: isToday ? 'TODAY' : isTomorrow ? `TOMORROW — ${d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).toUpperCase()}` : d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }).toUpperCase(),
       sub: d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
       isToday,
       isTomorrow,
@@ -3805,73 +3807,16 @@ ${labelsHtml}
         )}
       </div>
 
-      {/* ── ROUTE CONTROL BAR ── */}
+      {/* ── PLAN ROUTE BUTTON ── */}
       {optimizableStops.length > 0 && (
-        <div className="px-4 py-3 bg-stone-50 border-b border-stone-200 space-y-2">
-          {/* Saved confirmation banner */}
-          {routeSavedMsg ? (
-            <div className="w-full py-2 rounded-2xl bg-stone-900 text-white font-black text-xs flex items-center justify-center gap-2">
-              ✓ Route ready
-            </div>
-          ) : null}
-
-          {/* Optimize button */}
+        <div className="px-4 py-3 bg-stone-50 border-b border-stone-200">
           <button
-            onClick={optimizeRoute}
-            disabled={routeLoading}
-            className="w-full py-4 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 active:scale-95 disabled:opacity-60 transition-all"
-            style={{ 
-              background: routeLoading ? '#F3F4F6' : '#FFFFFF', 
-              color: '#374151',
-              border: '1px solid #374151'
-            }}
+            onClick={() => setShowPlanRoute(true)}
+            className="w-full py-4 rounded-2xl font-black text-sm flex items-center justify-center gap-2 active:scale-95 transition-all"
+            style={{ background: '#374151', color: '#fff' }}
           >
-            {routeLoading ? (
-              <><RefreshCw size={16} className="animate-spin" /> {routeStatus || 'Loading...'}</>
-            ) : (
-              <><MapIcon size={16} /> Optimize Route ({optimizableStops.length} stops)</>
-            )}
+            <MapIcon size={16} /> Plan Route ({optimizableStops.length} stops)
           </button>
-
-          {/* Print Route Sheet — always visible when there are stops */}
-          <button
-            onClick={printRouteSheet}
-            className="w-full py-3 rounded-xl font-black text-sm flex items-center justify-center gap-2 active:scale-95 transition-all"
-            style={{ background: '#000', color: '#fff' }}
-          >
-            🖨 Print Route Sheet ({optimizableStops.length} labels)
-          </button>
-
-          {/* Navigate + Reset row — only show after route is set */}
-          {routeSaved && (
-            <div className="flex gap-2">
-              <button
-                onClick={() => startNavigation('waze')}
-                className="flex-1 py-3 rounded-xl font-black text-xs uppercase flex items-center justify-center gap-1.5 active:scale-95 transition-all text-white"
-                style={{ background: '#33ccff' }}
-              >
-                <Navigation size={14} /> Waze
-              </button>
-              <button
-                onClick={() => startNavigation('google')}
-                className="flex-1 py-3 rounded-xl font-black text-xs uppercase flex items-center justify-center gap-1.5 active:scale-95 transition-all text-white"
-                style={{ background: '#4285F4' }}
-              >
-                <MapIcon size={14} /> Google Maps
-              </button>
-              <button
-                onClick={() => { setCustomOrder([]); setRouteSaved(false); setRouteStops([]); setRouteSavedMsg(''); }}
-                className="px-3 py-3 rounded-xl font-black text-xs uppercase flex items-center justify-center gap-1 active:scale-95 transition-all bg-stone-200 text-stone-600"
-              >
-                <RotateCcw size={14} />
-              </button>
-            </div>
-          )}
-
-          {/* Drag hint - always visible */}
-          <p className="text-[10px] text-stone-400 font-bold text-center">
-            Drag ≡ to reorder stops • Tap Optimize for best route
-          </p>
         </div>
       )}
 
@@ -4054,6 +3999,106 @@ ${labelsHtml}
           );
         })}
       </div>
+
+      {/* ── PLAN ROUTE OVERLAY ── */}
+      {showPlanRoute && (
+        <div className="fixed inset-0 z-50 flex flex-col" style={{ background: '#F9FAFB' }}>
+          {/* Header */}
+          <div className="flex items-center justify-between px-4 py-3 bg-white border-b border-stone-200">
+            <button onClick={() => setShowPlanRoute(false)} className="flex items-center gap-1 text-sm font-bold" style={{ color: '#374151' }}>
+              <ChevronLeft size={20} /> Back
+            </button>
+            <p className="font-black text-sm" style={{ color: '#374151' }}>Plan Route</p>
+            <button
+              onClick={() => {
+                const numbered = optimizableStops
+                  .map(o => ({ ...o, _num: parseInt(stopNumbers[o.id] || '0', 10) || 9999 }))
+                  .sort((a, b) => a._num - b._num);
+                const ids = numbered.map(o => o.id);
+                setCustomOrder(ids);
+                setTimeout(() => printRouteSheet(), 100);
+              }}
+              className="px-4 py-2 rounded-xl font-black text-xs active:scale-95 transition-all"
+              style={{ background: '#374151', color: '#fff' }}
+            >
+              Print
+            </button>
+          </div>
+
+          {/* Draggable order list */}
+          <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
+            {(() => {
+              const orderedStops = customOrder.length > 0
+                ? [...optimizableStops].sort((a, b) => {
+                    const ai = customOrder.indexOf(a.id);
+                    const bi = customOrder.indexOf(b.id);
+                    return (ai === -1 ? 9999 : ai) - (bi === -1 ? 9999 : bi);
+                  })
+                : optimizableStops;
+              return orderedStops.map((order, idx) => {
+                const name = order.giftReceiverName || order.customer?.name || '\u2014';
+                const cleanNum = (order.orderNumber || order.id).replace(/^#+/, '');
+                const city = order.address?.city || '';
+                const street = order.address?.street || '';
+                const zip = order.address?.zip || '';
+                return (
+                  <div
+                    key={order.id}
+                    draggable
+                    onDragStart={() => setDragOrderId(order.id)}
+                    onDragOver={e => { e.preventDefault(); setDragOverId(order.id); }}
+                    onDrop={() => {
+                      if (dragOrderId) {
+                        handleDropOnStop(optimizableStops, dragOrderId, order.id);
+                      }
+                      setDragOrderId(null);
+                      setDragOverId(null);
+                    }}
+                    onDragEnd={() => { setDragOrderId(null); setDragOverId(null); }}
+                    className={`flex items-center gap-3 p-3 rounded-xl border transition-all bg-white ${
+                      dragOverId === order.id ? 'border-blue-400 scale-[1.02] bg-blue-50' : 'border-stone-200'
+                    }`}
+                  >
+                    {/* Drag handle */}
+                    <div className="flex flex-col items-center shrink-0 cursor-grab active:cursor-grabbing text-stone-300">
+                      <span style={{ fontSize: 22, lineHeight: 1 }}>{'\u2261'}</span>
+                    </div>
+
+                    {/* Number input */}
+                    <input
+                      type="tel"
+                      inputMode="numeric"
+                      value={stopNumbers[order.id] || ''}
+                      onChange={e => setStopNumbers(prev => ({ ...prev, [order.id]: e.target.value.replace(/[^0-9]/g, '') }))}
+                      placeholder={String(idx + 1)}
+                      className="w-10 h-10 rounded-full text-center font-black text-sm border-2 border-stone-300 focus:border-black focus:outline-none shrink-0"
+                      style={{ background: stopNumbers[order.id] ? '#374151' : '#fff', color: stopNumbers[order.id] ? '#fff' : '#374151' }}
+                    />
+
+                    {/* Order info */}
+                    <div className="flex-1 min-w-0" onClick={() => onSelectOrder(order)}>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-stone-400">#{cleanNum}</span>
+                        <span className="text-xs font-black uppercase" style={{ color: '#374151' }}>{city}</span>
+                      </div>
+                      <p className="font-bold text-sm truncate" style={{ color: '#374151' }}>{name}</p>
+                      <p className="text-xs text-stone-400 truncate">{street}{zip ? `, ${zip}` : ''}</p>
+                    </div>
+                  </div>
+                );
+              });
+            })()}
+          </div>
+
+          {/* Bottom hint */}
+          <div className="px-4 py-3 bg-white border-t border-stone-200">
+            <p className="text-[10px] text-stone-400 font-bold text-center">
+              Drag to reorder stops or type a number for each stop
+            </p>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };
