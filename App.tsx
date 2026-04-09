@@ -3674,21 +3674,16 @@ ${labelsHtml}
 
   // Stats for the header
   const openCount = filtered.filter(d => OPEN_STATUSES.includes(d.status)).length;
-  const outForDeliveryCount = filtered.filter(d => d.status === 'IN_TRANSIT').length;
   const doneTodayCount = filtered.filter(d => d.status === 'DELIVERED' && (d.completedAt || '').startsWith(todayStr)).length;
 
   return (
     <div className="flex flex-col h-full" style={{ background: '#FFFFFF' }}>
 
       {/* ── STATS BAR ── */}
-      <div className="grid grid-cols-3 border-b border-stone-200" style={{ background: '#FFFFFF' }}>
+      <div className="grid grid-cols-2 border-b border-stone-200" style={{ background: '#FFFFFF' }}>
         <div className="py-3 text-center border-r border-stone-200">
           <p className="text-2xl font-black" style={{ color: '#374151' }}>{openCount}</p>
           <p className="text-[8px] font-black uppercase text-stone-400 leading-tight">Open</p>
-        </div>
-        <div className="py-3 text-center border-r border-stone-200">
-          <p className="text-2xl font-black" style={{ color: '#D97706' }}>{outForDeliveryCount}</p>
-          <p className="text-[8px] font-black uppercase text-stone-400 leading-tight">Out for Delivery</p>
         </div>
         <div className="py-3 text-center">
           <p className="text-2xl font-black" style={{ color: '#22C55E' }}>{doneTodayCount}</p>
