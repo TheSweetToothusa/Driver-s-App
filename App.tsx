@@ -3860,7 +3860,7 @@ ${labelsHtml}
             className="w-full py-4 rounded-2xl font-black text-sm flex items-center justify-center gap-2 active:scale-95 transition-all"
             style={{ background: '#374151', color: '#fff' }}
           >
-            <MapIcon size={16} /> Plan Route ({optimizableStops.length} stops) — {fmtDateHeader(routingDate)}
+            <MapIcon size={16} /> Plan Route ({optimizableStops.length} stops) — {fmtDateHeader(routingDate!).label}
           </button>
         </div>
       )}
