@@ -3132,7 +3132,8 @@ const ScheduleView: React.FC<{
       });
     });
     // Sort dates: today first (if not filtering), then chronological, unscheduled last
-    return Object.entries(map).sort(([a], [b]) => {
+    // Filter out empty date groups (e.g., TODAY with no orders)
+    return Object.entries(map).filter(([, orders]) => orders.length > 0).sort(([a], [b]) => {
       if (a === 'unscheduled') return 1;
       if (b === 'unscheduled') return -1;
       if (!isDateFiltered && a === todayStr) return -1;
@@ -3904,11 +3905,6 @@ ${labelsHtml}
 
               {/* Cards for this date */}
               <div style={{ padding: '12px 16px' }}>
-              {orders.length === 0 && hdr.isToday && (
-                <div className="text-center py-8">
-                  <p className="text-stone-400 font-medium">No deliveries scheduled for today</p>
-                </div>
-              )}
               {orders.map((order, idx) => {
                 const name = order.giftReceiverName || order.customer?.name || '—';
                 const cleanNum = (order.orderNumber || order.id).replace(/^#+/, '');
