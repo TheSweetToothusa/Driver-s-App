@@ -1305,10 +1305,6 @@ const OrderDetail: React.FC<{
         </button>
         <div className="flex-1 min-w-0">
           <p className="text-xl font-black tracking-tight">#{cleanOrderNum}</p>
-          {/* Driver name — bold, always visible */}
-          <p className="text-sm font-black text-white leading-tight truncate">
-            {order.driverName || 'Unassigned'}
-          </p>
           {isAdmin ? (
             <button onClick={() => { setPendingDate(order.deliveryDate || ''); setShowDatePicker(true); }} className="flex items-center gap-1.5 active:opacity-70">
               <span className="text-xs text-amber-300 font-bold">
@@ -1319,6 +1315,7 @@ const OrderDetail: React.FC<{
           ) : (
             <p className="text-xs text-amber-300 font-bold">{order.deliveryDate ? new Date(order.deliveryDate + 'T12:00:00').toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric', year:'numeric' }) : 'Today'}</p>
           )}
+          <p className="text-xs text-white/60 font-medium mt-0.5">{order.driverName || 'Unassigned'}</p>
         </div>
         {!isAdmin && (
           <span className={`text-xs font-black px-3 py-1.5 rounded-full border ${order.status === DeliveryStatus.DELIVERED ? 'bg-green-500 border-green-400 text-white' : 'bg-white/10 border-white/20 text-white'}`}>
