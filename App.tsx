@@ -4146,13 +4146,13 @@ ${labelsHtml}
                       </div>
                     </div>
 
-                    {/* Navigation buttons */}
-                    <div className="flex gap-2 mt-3 ml-14">
+                    {/* Navigation buttons - small, inline */}
+                    <div className="flex gap-2 mt-2 ml-14">
                       <a
                         href={wazeUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex-1 py-2 rounded-lg font-bold text-xs text-center active:scale-95 transition-all"
+                        className="px-3 py-1.5 rounded-lg font-bold text-[10px] text-center active:scale-95 transition-all"
                         style={{ background: '#33ccff', color: '#000' }}
                       >
                         🚗 Waze
@@ -4161,10 +4161,10 @@ ${labelsHtml}
                         href={googleUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex-1 py-2 rounded-lg font-bold text-xs text-center active:scale-95 transition-all"
+                        className="px-3 py-1.5 rounded-lg font-bold text-[10px] text-center active:scale-95 transition-all"
                         style={{ background: '#4285f4', color: '#fff' }}
                       >
-                        📍 Google Maps
+                        📍 Maps
                       </a>
                     </div>
                   </div>
