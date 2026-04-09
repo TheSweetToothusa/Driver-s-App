@@ -4742,7 +4742,7 @@ const PendingRescheduleQueue: React.FC<{ allUsers: UserAccount[] }> = ({ allUser
 const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: UserAccount[]; setAllUsers: React.Dispatch<React.SetStateAction<UserAccount[]>>; currentUser: UserAccount; }> = ({ role, deliveries, allUsers, setAllUsers, currentUser }) => {
   // Modal/accordion states
   const [feesModalOpen, setFeesModalOpen] = useState(false);
-  const [feesTab, setFeesTab] = useState<'LOOKUP' | 'PAY_CALC' | 'ZIP'>('LOOKUP');
+  const [feesTab, setFeesTab] = useState<'LOOKUP' | 'PAY_CALC'>('LOOKUP');
   const [activeNav, setActiveNav] = useState<'RESCHEDULE' | 'MESSAGES' | null>(null);
   const [addDriverExpanded, setAddDriverExpanded] = useState(false);
   const [smsTemplatesExpanded, setSmsTemplatesExpanded] = useState(false);
@@ -5274,10 +5274,6 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
                   className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-all ${feesTab === 'PAY_CALC' ? 'bg-white text-emerald-700 shadow-md' : 'bg-white/20 text-white'}`}>
                   👤 Driver Earnings
                 </button>
-                <button onClick={() => setFeesTab('ZIP')}
-                  className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-all ${feesTab === 'ZIP' ? 'bg-white text-emerald-700 shadow-md' : 'bg-white/20 text-white'}`}>
-                  📍 ZIP
-                </button>
               </div>
             </div>
             
@@ -5512,39 +5508,6 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
                 </>
               )}
               
-              {/* ══════════ ZIP LOOKUP TAB ══════════ */}
-              {feesTab === 'ZIP' && (
-                <>
-                  <div className="text-center mb-2">
-                    <p className="text-stone-500 text-sm">Look up delivery fee by ZIP code</p>
-                  </div>
-                  
-                  <div className="bg-stone-50 rounded-2xl p-5">
-                    <p className="text-xs font-bold uppercase text-stone-400 mb-3 text-center">Enter ZIP Code</p>
-                    <div className="flex gap-3">
-                      <input type="text" placeholder="33179" maxLength={5} inputMode="numeric"
-                        value={feeZip} onChange={e => { setFeeZip(e.target.value.replace(/\D/g, '').slice(0,5)); setFeeResult(null); }}
-                        className="flex-1 bg-white border-2 border-stone-200 rounded-xl px-4 py-4 text-2xl font-black text-center tracking-widest outline-none focus:border-emerald-500" />
-                      <button onClick={handleZipLookup} disabled={feeZip.length !== 5}
-                        className={`px-6 rounded-xl font-black uppercase text-sm transition-all ${feeZip.length === 5 ? 'bg-emerald-500 text-white active:bg-emerald-600' : 'bg-stone-200 text-stone-400'}`}>
-                        Check
-                      </button>
-                    </div>
-                    {feeResult !== null && (
-                      <div className={`mt-4 p-5 rounded-xl text-center ${feeResult === -1 ? 'bg-red-100' : 'bg-emerald-100'}`}>
-                        {feeResult === -1 ? (
-                          <span className="text-red-600 font-bold text-xl">❌ ZIP Not Found</span>
-                        ) : (
-                          <div>
-                            <p className="text-emerald-600 text-sm font-bold mb-1">Delivery Fee</p>
-                            <span className="text-emerald-700 font-black text-4xl">${feeResult.toFixed(2)}</span>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </>
-              )}
               
             </div>
           </div>
