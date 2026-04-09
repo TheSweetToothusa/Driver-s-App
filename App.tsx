@@ -809,10 +809,18 @@ const OrderDetail: React.FC<{
   const [adminSaving, setAdminSaving] = useState(false);
   const [adminSaveResult, setAdminSaveResult] = useState<'saved' | 'error' | null>(null);
   
+  // Sync pending states when order prop changes (e.g., after save or external update)
+  useEffect(() => {
+    setPendingStatus(order.status);
+    setPendingDriver(order.driverId || '');
+    setPendingDeliveryDate((order.deliveryDate || '').split('T')[0]);
+  }, [order.id, order.status, order.driverId, order.deliveryDate]);
+  
   // Track if any pending changes exist
   const hasAdminChanges = pendingStatus !== order.status || 
     pendingDriver !== (order.driverId || '') || 
     pendingDeliveryDate !== (order.deliveryDate || '').split('T')[0];
+
 
   const handleComplete = async () => {
     const now = new Date().toISOString();
@@ -1667,24 +1675,7 @@ const OrderDetail: React.FC<{
               <XCircle size={16} /> Couldn't Deliver
             </button>
 
-            {/* Admin override */}
-            {isAdmin && !photoData && (
-              <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #F3F4F6' }}>
-                {!showAdminOverrideConfirm ? (
-                  <button onClick={() => setShowAdminOverrideConfirm(true)} style={{ width: '100%', padding: 8, background: 'transparent', border: 'none', fontSize: 11, color: '#9CA3AF', cursor: 'pointer' }}>
-                    🔐 Admin: Mark without proof
-                  </button>
-                ) : (
-                  <div style={{ background: '#FEF3C7', borderRadius: 8, padding: 12 }}>
-                    <p style={{ fontSize: 12, fontWeight: 700, color: '#92400E', textAlign: 'center', marginBottom: 8 }}>Mark Delivered Without Proof?</p>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <button onClick={() => setShowAdminOverrideConfirm(false)} style={{ flex: 1, padding: 8, borderRadius: 8, background: '#F3F4F6', border: 'none', fontSize: 12, fontWeight: 600, color: '#374151', cursor: 'pointer' }}>Cancel</button>
-                      <button onClick={handleAdminOverride} style={{ flex: 1, padding: 8, borderRadius: 8, background: '#F59E0B', border: 'none', fontSize: 12, fontWeight: 600, color: 'white', cursor: 'pointer' }}>Yes</button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
+
           </div>
         )}
 
@@ -1850,7 +1841,7 @@ const OrderDetail: React.FC<{
                     className={`w-full border rounded-lg px-2 py-2 text-xs font-bold outline-none focus:border-black ${pendingDriver !== (order.driverId || '') ? 'bg-amber-50 border-amber-300' : 'bg-stone-50 border-stone-200'}`}
                   >
                     <option value="">Select...</option>
-                    {allUsers.filter(u => u.role === 'DRIVER' || u.role === 'ADMIN' || u.role === 'SUPER_ADMIN').map(u => (
+                    {allUsers.filter(u => u.role === 'DRIVER' || u.role === 'ADMIN' || u.role === 'SUPER_ADMIN' || u.role === 'MANAGER').map(u => (
                       <option key={u.id} value={u.id}>{u.name}</option>
                     ))}
                   </select>
