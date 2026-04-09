@@ -814,6 +814,7 @@ const OrderDetail: React.FC<{
     setPendingStatus(order.status);
     setPendingDriver(order.driverId || '');
     setPendingDeliveryDate((order.deliveryDate || '').split('T')[0]);
+    setPendingDate(order.deliveryDate || '');
   }, [order.id, order.status, order.driverId, order.deliveryDate]);
   
   // Track if any pending changes exist
