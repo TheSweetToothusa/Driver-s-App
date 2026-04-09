@@ -6713,8 +6713,10 @@ export default function App() {
 
   // Stats for orders tab header
   const todayStr = new Date().toISOString().split('T')[0];
-  const OPEN_STATUSES_MAIN = [DeliveryStatus.PENDING, DeliveryStatus.SCHEDULED, DeliveryStatus.ASSIGNED, DeliveryStatus.IN_TRANSIT, DeliveryStatus.SECOND_ATTEMPT, DeliveryStatus.FAILED, DeliveryStatus.PENDING_RESCHEDULE];
-  const activeOrders = visibleDeliveries.filter(d => OPEN_STATUSES_MAIN.includes(d.status));
+  const activeOrders = visibleDeliveries.filter(d =>
+    d.status !== DeliveryStatus.DELIVERED &&
+    d.status !== DeliveryStatus.CLOSED
+  );
   const pendingCount = visibleDeliveries.filter(d => d.status === DeliveryStatus.PENDING || d.status === DeliveryStatus.ASSIGNED).length;
   const inTransitCount = visibleDeliveries.filter(d => d.status === DeliveryStatus.IN_TRANSIT).length;
   const deliveredTodayCount = visibleDeliveries.filter(d => d.status === DeliveryStatus.DELIVERED && (d.completedAt || '').startsWith(todayStr)).length;
