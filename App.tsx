@@ -1679,8 +1679,8 @@ const OrderDetail: React.FC<{
 
             {/* Action buttons */}
             <button
-              onClick={photoData ? handleComplete : undefined}
-              disabled={!photoData}
+              onClick={(photoData && sigData) ? handleComplete : undefined}
+              disabled={!photoData || !sigData}
               style={{ 
                 width: '100%', 
                 padding: '16px', 
@@ -1692,13 +1692,13 @@ const OrderDetail: React.FC<{
                 alignItems: 'center', 
                 justifyContent: 'center', 
                 gap: 8,
-                cursor: photoData ? 'pointer' : 'not-allowed',
+                cursor: (photoData && sigData) ? 'pointer' : 'not-allowed',
                 marginBottom: 8,
-                background: photoData ? '#22C55E' : '#E5E7EB',
-                color: photoData ? 'white' : '#9CA3AF'
+                background: (photoData && sigData) ? '#22C55E' : '#E5E7EB',
+                color: (photoData && sigData) ? 'white' : '#9CA3AF'
               }}
             >
-              <CheckCircle2 size={20} /> Mark Delivered
+              <CheckCircle2 size={20} /> {(photoData && sigData) ? 'Mark Delivered' : !photoData && !sigData ? 'Photo + Signature Required' : !photoData ? 'Photo Required' : 'Signature Required'}
             </button>
 
             <button
@@ -6249,9 +6249,9 @@ const BulkProjectsView: React.FC<{
               </button>
             )}
           </div>
-          <button onClick={() => submitPOD(fresh.id, 'DELIVERED')} disabled={!podPhoto}
-            className={`w-full py-4 rounded-2xl font-black text-lg uppercase tracking-wide transition-all ${podPhoto ? 'bg-green-600 text-white active:scale-95' : 'bg-stone-200 text-stone-400 cursor-not-allowed'}`}>
-            {podPhoto ? '✓ CONFIRM DELIVERED' : 'Photo Required'}
+          <button onClick={() => submitPOD(fresh.id, 'DELIVERED')} disabled={!podPhoto || !podSignature}
+            className={`w-full py-4 rounded-2xl font-black text-lg uppercase tracking-wide transition-all ${(podPhoto && podSignature) ? 'bg-green-600 text-white active:scale-95' : 'bg-stone-200 text-stone-400 cursor-not-allowed'}`}>
+            {(podPhoto && podSignature) ? '✓ CONFIRM DELIVERED' : !podPhoto && !podSignature ? 'Photo + Signature Required' : !podPhoto ? 'Photo Required' : 'Signature Required'}
           </button>
         </div>
       );
