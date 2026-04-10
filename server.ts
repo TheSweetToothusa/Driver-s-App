@@ -916,8 +916,9 @@ async function startServer() {
         }
       }
 
-      // ── AUTO-SEND DELIVERY CONFIRMATION EMAIL ───────────────────────────────
-      if (status === 'DELIVERED' && customerEmail && SENDGRID_API_KEY) {
+      // ── AUTO-SEND DELIVERY CONFIRMATION EMAIL WITH PHOTO ───────────────────────────────
+      const SMTP_PASS = process.env.SMTP_PASS || '';
+      if (status === 'DELIVERED' && customerEmail && SMTP_PASS) {
         try {
           const deliveryTime = new Date(completedAt || Date.now()).toLocaleString('en-US', { 
             timeZone: 'America/New_York',
@@ -926,21 +927,19 @@ async function startServer() {
           });
           
           const receiverName = giftReceiverName || 'the recipient';
-          const senderName = giftSenderName || '';
-          const deliveryAddress = address || '';
           
           const subject = `Your Sweet Tooth gift has been delivered!`;
           const body = `Good news! Your gift to ${receiverName} has been delivered.
 
 Delivered: ${deliveryTime}
 
-Proof of delivery photo is available upon request.
+${photo ? 'Please see attached proof of delivery photo.' : 'Proof of delivery photo is available upon request.'}
 
 Thank you for choosing The Sweet Tooth!`;
 
-          const emailSent = await sendEmail(customerEmail, subject, body);
+          const emailSent = await sendEmail(customerEmail, subject, body, photo || undefined, photo ? `delivery-${orderId}.jpg` : undefined);
           if (emailSent) {
-            console.log(`✅ Auto-sent delivery confirmation to ${customerEmail} for order ${orderId}`);
+            console.log(`✅ Auto-sent delivery confirmation to ${customerEmail} for order ${orderId}${photo ? ' (with photo)' : ''}`);
           } else {
             console.log(`⚠️ Failed to auto-send confirmation to ${customerEmail} for order ${orderId}`);
           }
