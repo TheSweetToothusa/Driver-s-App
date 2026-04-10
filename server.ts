@@ -281,11 +281,27 @@ async function sendEmail(to: string, subject: string, body: string): Promise<boo
   } catch { return false; }
 }
 
+// Memory helper
+function getMemoryMB() {
+  const used = process.memoryUsage();
+  return {
+    heapUsed: Math.round(used.heapUsed / 1024 / 1024),
+    heapTotal: Math.round(used.heapTotal / 1024 / 1024),
+    rss: Math.round(used.rss / 1024 / 1024),
+  };
+}
+
 async function startServer() {
   await initDB();
   const app = express();
   const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000;
-  app.use(express.json({ limit: '50mb' }));
+  app.use(express.json({ limit: '10mb' })); // Reduced from 50mb to prevent memory spikes
+  
+  // Log memory usage every 5 minutes
+  setInterval(() => {
+    const mem = getMemoryMB();
+    console.log(`[MEM] heap=${mem.heapUsed}/${mem.heapTotal}MB rss=${mem.rss}MB`);
+  }, 300000);
 
   // ── AUTH ────────────────────────────────────────────────────────────────────
 
@@ -356,7 +372,8 @@ async function startServer() {
 
   // ── HEALTH CHECK (keeps server warm) ───────────────────────────────────────
   app.get("/api/health", (_req, res) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+    const mem = getMemoryMB();
+    res.json({ status: 'ok', timestamp: new Date().toISOString(), memory: mem });
   });
 
   // ── ORDERS ──────────────────────────────────────────────────────────────────
