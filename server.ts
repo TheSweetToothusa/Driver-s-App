@@ -266,7 +266,9 @@ function nextBusinessDay(from: Date): string {
 }
 
 async function sendEmail(to: string, subject: string, body: string, attachmentBase64?: string, attachmentFilename?: string): Promise<boolean> {
-  // Use SMTP with orders@thesweettooth.com
+  // Configurable SMTP - works with any provider
+  const SMTP_HOST = process.env.SMTP_HOST || 'smtp.gmail.com';
+  const SMTP_PORT = parseInt(process.env.SMTP_PORT || '587');
   const SMTP_USER = process.env.SMTP_USER || 'orders@thesweettooth.com';
   const SMTP_PASS = process.env.SMTP_PASS || '';
   
@@ -275,11 +277,13 @@ async function sendEmail(to: string, subject: string, body: string, attachmentBa
     return false;
   }
   
+  console.log(`📧 Attempting to send email via ${SMTP_HOST}:${SMTP_PORT} as ${SMTP_USER}`);
+  
   try {
     const transporter = nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 587,
-      secure: false,
+      host: SMTP_HOST,
+      port: SMTP_PORT,
+      secure: SMTP_PORT === 465,
       auth: {
         user: SMTP_USER,
         pass: SMTP_PASS
@@ -287,7 +291,7 @@ async function sendEmail(to: string, subject: string, body: string, attachmentBa
     });
     
     const mailOptions: any = {
-      from: '"The Sweet Tooth" <orders@thesweettooth.com>',
+      from: `"The Sweet Tooth" <${SMTP_USER}>`,
       to: to,
       bcc: 'orders@thesweettooth.com',
       subject: subject,
@@ -303,13 +307,14 @@ async function sendEmail(to: string, subject: string, body: string, attachmentBa
         content: base64Data,
         encoding: 'base64'
       }];
+      console.log(`📎 Attaching photo: ${attachmentFilename}`);
     }
     
     await transporter.sendMail(mailOptions);
     console.log(`✅ Email sent to ${to}`);
     return true;
-  } catch (err) {
-    console.log('❌ SMTP error:', err);
+  } catch (err: any) {
+    console.log(`❌ SMTP error: ${err.message || err}`);
     return false;
   }
 }
