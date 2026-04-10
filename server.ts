@@ -410,7 +410,27 @@ async function startServer() {
 
       const ordersToProcess = ordersWithTags.length > 0 ? ordersWithTags : (filtered.length > 0 ? filtered : allOrders);
 
-      res.json({ orders: ordersToProcess, podData });
+      // Strip large photo/signature data from podData to reduce response size
+      // Photos are fetched on-demand via /api/pod/:orderId when viewing order details
+      const podDataLight: Record<string, any> = {};
+      for (const [id, pod] of Object.entries(podData)) {
+        podDataLight[id] = {
+          status: (pod as any).status,
+          completedAt: (pod as any).completedAt,
+          submittedAt: (pod as any).submittedAt,
+          driverId: (pod as any).driverId,
+          driverName: (pod as any).driverName,
+          driverNotes: (pod as any).driverNotes,
+          failureReason: (pod as any).failureReason,
+          successNotificationSent: (pod as any).successNotificationSent,
+          failureNotificationSent: (pod as any).failureNotificationSent,
+          // Include a flag so frontend knows photo exists without sending the data
+          hasPhoto: !!(pod as any).photo || !!(pod as any).confirmationPhoto,
+          hasSignature: !!(pod as any).signature || !!(pod as any).confirmationSignature,
+        };
+      }
+
+      res.json({ orders: ordersToProcess, podData: podDataLight });
     } catch (e) {
       console.error('Orders fetch error:', e);
       res.status(500).json({ error: String(e) });
