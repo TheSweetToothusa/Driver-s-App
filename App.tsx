@@ -2782,6 +2782,13 @@ const RouteMapPanel: React.FC<{
 }> = ({ stops, driverLat, driverLng, onClose, onStartNav, totalDistance, onReorder }) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstance = useRef<any>(null);
+  
+  // Drag-and-drop state
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+  const touchStartY = useRef<number>(0);
+  const touchCurrentIdx = useRef<number | null>(null);
+  const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!mapRef.current || typeof L === 'undefined') return;
@@ -2846,13 +2853,84 @@ const RouteMapPanel: React.FC<{
       {/* Map */}
       <div ref={mapRef} className="flex-1" style={{ minHeight: 200 }} />
 
-      {/* Stop list */}
-      <div className="bg-white max-h-[35vh] overflow-y-auto border-t border-stone-200">
+      {/* Stop list - drag and drop */}
+      <div ref={listRef} className="bg-white max-h-[35vh] overflow-y-auto border-t border-stone-200">
         <div className="px-4 py-1.5 bg-stone-50 border-b border-stone-200">
-          <p className="text-[10px] font-black text-stone-400 uppercase tracking-wide">Tap ▲▼ to adjust stop order</p>
+          <p className="text-[10px] font-black text-stone-400 uppercase tracking-wide">Hold & drag to reorder stops</p>
         </div>
         {stops.map((s, idx) => (
-          <div key={s.id} className={`flex items-center gap-3 px-4 py-2.5 border-b border-stone-100 ${s.lat === 0 ? 'bg-amber-50' : ''}`}>
+          <div
+            key={s.id}
+            draggable
+            onDragStart={(e) => {
+              setDragIdx(idx);
+              e.dataTransfer.effectAllowed = 'move';
+              e.dataTransfer.setData('text/plain', String(idx));
+            }}
+            onDragEnd={() => {
+              setDragIdx(null);
+              setDragOverIdx(null);
+            }}
+            onDragOver={(e) => {
+              e.preventDefault();
+              if (dragIdx !== null && dragIdx !== idx) {
+                setDragOverIdx(idx);
+              }
+            }}
+            onDragLeave={() => setDragOverIdx(null)}
+            onDrop={(e) => {
+              e.preventDefault();
+              if (dragIdx !== null && dragIdx !== idx) {
+                const next = [...stops];
+                const [dragged] = next.splice(dragIdx, 1);
+                next.splice(idx, 0, dragged);
+                onReorder(next.map((stop, i) => ({ ...stop, stopNumber: i + 1 })));
+              }
+              setDragIdx(null);
+              setDragOverIdx(null);
+            }}
+            onTouchStart={(e) => {
+              touchStartY.current = e.touches[0].clientY;
+              touchCurrentIdx.current = idx;
+              setDragIdx(idx);
+            }}
+            onTouchMove={(e) => {
+              if (touchCurrentIdx.current === null || !listRef.current) return;
+              const touch = e.touches[0];
+              const elements = listRef.current.querySelectorAll('[data-stop-idx]');
+              elements.forEach((el, i) => {
+                const rect = el.getBoundingClientRect();
+                if (touch.clientY >= rect.top && touch.clientY <= rect.bottom && i !== touchCurrentIdx.current) {
+                  setDragOverIdx(i);
+                }
+              });
+            }}
+            onTouchEnd={() => {
+              if (touchCurrentIdx.current !== null && dragOverIdx !== null && touchCurrentIdx.current !== dragOverIdx) {
+                const next = [...stops];
+                const [dragged] = next.splice(touchCurrentIdx.current, 1);
+                next.splice(dragOverIdx, 0, dragged);
+                onReorder(next.map((stop, i) => ({ ...stop, stopNumber: i + 1 })));
+              }
+              setDragIdx(null);
+              setDragOverIdx(null);
+              touchCurrentIdx.current = null;
+            }}
+            data-stop-idx={idx}
+            className={`flex items-center gap-3 px-4 py-3 border-b border-stone-100 cursor-grab active:cursor-grabbing select-none transition-all ${
+              s.lat === 0 ? 'bg-amber-50' : ''
+            } ${
+              dragIdx === idx ? 'opacity-50 scale-95 bg-stone-100' : ''
+            } ${
+              dragOverIdx === idx ? 'border-t-4 border-t-blue-500' : ''
+            }`}
+          >
+            {/* Drag handle */}
+            <div className="flex flex-col gap-0.5 text-stone-300 mr-1">
+              <div className="w-4 h-0.5 bg-current rounded" />
+              <div className="w-4 h-0.5 bg-current rounded" />
+              <div className="w-4 h-0.5 bg-current rounded" />
+            </div>
             <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${s.lat === 0 ? 'bg-amber-500' : 'bg-black'}`}>
               <span className="text-white font-black text-xs">{s.lat === 0 ? '?' : s.stopNumber}</span>
             </div>
@@ -2860,27 +2938,7 @@ const RouteMapPanel: React.FC<{
               <p className="text-xs font-black text-stone-900 truncate">{s.name}</p>
               <p className={`text-[10px] truncate ${s.lat === 0 ? 'text-amber-600 font-bold' : 'text-stone-400'}`}>{s.address}</p>
             </div>
-            <p className="text-[10px] font-black text-stone-400 mr-1">#{s.orderNumber?.replace(/^#+/, '')}</p>
-            <div className="flex flex-col gap-0.5">
-              <button
-                disabled={idx === 0}
-                onClick={() => {
-                  const next = [...stops];
-                  [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
-                  onReorder(next.map((stop, i) => ({ ...stop, stopNumber: i + 1 })));
-                }}
-                className={`w-6 h-5 rounded flex items-center justify-center text-[10px] font-black leading-none ${idx === 0 ? 'text-stone-200 bg-stone-100' : 'text-stone-700 bg-stone-200 active:bg-stone-400'}`}
-              >▲</button>
-              <button
-                disabled={idx === stops.length - 1}
-                onClick={() => {
-                  const next = [...stops];
-                  [next[idx], next[idx + 1]] = [next[idx + 1], next[idx]];
-                  onReorder(next.map((stop, i) => ({ ...stop, stopNumber: i + 1 })));
-                }}
-                className={`w-6 h-5 rounded flex items-center justify-center text-[10px] font-black leading-none ${idx === stops.length - 1 ? 'text-stone-200 bg-stone-100' : 'text-stone-700 bg-stone-200 active:bg-stone-400'}`}
-              >▼</button>
-            </div>
+            <p className="text-[10px] font-black text-stone-400">#{s.orderNumber?.replace(/^#+/, '')}</p>
           </div>
         ))}
       </div>
