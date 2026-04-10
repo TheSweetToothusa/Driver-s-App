@@ -2420,7 +2420,9 @@ const OrdersView: React.FC<OrdersViewProps> = ({
                   <div style={{ display: 'flex', alignItems: 'center', padding: '5px 12px', background: '#F9FAFB', borderBottom: '1px solid #E5E7EB' }}>
                     <span style={{ width: 70, fontSize: 10, fontWeight: 700, color: '#9CA3AF', letterSpacing: '0.5px', textTransform: 'uppercase', flexShrink: 0 }}>Order #</span>
                     <span style={{ flex: 1, fontSize: 10, fontWeight: 700, color: '#9CA3AF', letterSpacing: '0.5px', textTransform: 'uppercase' }}>Recipient</span>
-                    <span style={{ width: 80, fontSize: 10, fontWeight: 700, color: '#9CA3AF', letterSpacing: '0.5px', textTransform: 'uppercase', textAlign: 'right', flexShrink: 0 }}>City</span>
+                    <span style={{ width: 55, fontSize: 10, fontWeight: 700, color: '#9CA3AF', letterSpacing: '0.5px', textTransform: 'uppercase', textAlign: 'center', flexShrink: 0 }}>Time</span>
+                    <span style={{ width: 50, fontSize: 10, fontWeight: 700, color: '#9CA3AF', letterSpacing: '0.5px', textTransform: 'uppercase', textAlign: 'center', flexShrink: 0 }}>Driver</span>
+                    <span style={{ width: 70, fontSize: 10, fontWeight: 700, color: '#9CA3AF', letterSpacing: '0.5px', textTransform: 'uppercase', textAlign: 'right', flexShrink: 0 }}>City</span>
                     <span style={{ width: 24, flexShrink: 0 }}></span>
                     <span style={{ width: 14, flexShrink: 0 }}></span>
                   </div>
@@ -2434,6 +2436,8 @@ const OrdersView: React.FC<OrdersViewProps> = ({
                       const isDone = order.status === 'DELIVERED' || order.status === 'CLOSED';
                       const isCancelled = order.status === 'CANCELLED';
                       const city = (order.address?.city || '').toUpperCase().slice(0, 12);
+                      const completedTime = order.completedAt ? new Date(order.completedAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '—';
+                      const driverInitial = order.driverName ? order.driverName.charAt(0).toUpperCase() : '—';
                       
                       return (
                         <div key={order.id}
@@ -2450,8 +2454,12 @@ const OrdersView: React.FC<OrdersViewProps> = ({
                           <span style={{ width: 70, fontSize: 11, fontWeight: 600, color: '#6B7280', flexShrink: 0 }}>#{cleanNum}</span>
                           {/* Name - takes remaining space */}
                           <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{truncatedName}</span>
+                          {/* Completed Time */}
+                          <span style={{ width: 55, fontSize: 10, fontWeight: 600, color: isDone ? '#22C55E' : '#9CA3AF', textAlign: 'center', flexShrink: 0 }}>{isDone ? completedTime : '—'}</span>
+                          {/* Driver initial */}
+                          <span style={{ width: 50, fontSize: 11, fontWeight: 700, color: '#6B7280', textAlign: 'center', flexShrink: 0 }}>{driverInitial}</span>
                           {/* City */}
-                          <span style={{ width: 80, fontSize: 11, fontWeight: 700, color: '#374151', textAlign: 'right', flexShrink: 0 }}>{city}</span>
+                          <span style={{ width: 70, fontSize: 11, fontWeight: 700, color: '#374151', textAlign: 'right', flexShrink: 0 }}>{city}</span>
                           {/* Status indicator */}
                           <span style={{ width: 24, textAlign: 'center', flexShrink: 0 }}>
                             {isDone && <span style={{ color: '#22C55E', fontSize: 14 }}>✓</span>}
