@@ -850,7 +850,7 @@ async function startServer() {
             weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
             hour: 'numeric', minute: '2-digit', hour12: true 
           });
-          const noteText = `✓ DELIVERED — ${deliveryTime}\nDriver: ${driverName || 'Unknown'}${notes ? `\nNote: ${notes}` : ''}${photo ? '\n📷 POD photo attached (timestamped)' : ''}${signature ? '\n✍️ Signature captured' : ''}`;
+          const noteText = `📦✅ DELIVERED — ${deliveryTime}\nDriver: ${driverName || 'Unknown'}${notes ? `\nNote: ${notes}` : ''}${photo ? '\n📷 POD photo attached (timestamped)' : ''}${signature ? '\n✍️ Signature captured' : ''}`;
           
           await fetch(`https://${SHOPIFY_STORE_URL}/admin/api/2025-01/orders/${orderId}.json`, {
             method: 'PUT',
