@@ -795,14 +795,23 @@ async function startServer() {
 
   app.post("/api/pod", async (req, res) => {
     const { orderId, photo, signature, notes, completedAt, status, driverId, driverName, failureReason, isManual, customerEmail, giftReceiverName, giftSenderName, address } = req.body;
+    
+    // DEBUG: Log what photo data is received
+    console.log(`📷 POD POST for ${orderId}: photo=${photo ? `YES (${photo.length} chars, starts: ${photo.substring(0,30)}...)` : 'NO'}, status=${status}`);
+    
     try {
       const existingPod = await readPodOrder(orderId);
+      
+      // Only update photo/signature if provided (don't overwrite existing with null)
+      const newPhoto = photo || existingPod.photo || existingPod.confirmationPhoto || null;
+      const newSignature = signature || existingPod.signature || existingPod.confirmationSignature || null;
+      
       const updated = {
         ...existingPod,
-        photo,
-        signature,
-        confirmationPhoto: photo || null,
-        confirmationSignature: signature || null,
+        photo: newPhoto,
+        signature: newSignature,
+        confirmationPhoto: newPhoto,
+        confirmationSignature: newSignature,
         notes,
         driverNotes: notes || null,
         completedAt,
