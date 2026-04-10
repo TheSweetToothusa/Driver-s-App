@@ -784,7 +784,7 @@ async function startServer() {
   });
 
   app.post("/api/pod", async (req, res) => {
-    const { orderId, photo, signature, notes, completedAt, status, driverId, driverName, failureReason, isManual } = req.body;
+    const { orderId, photo, signature, notes, completedAt, status, driverId, driverName, failureReason, isManual, customerEmail, giftReceiverName, giftSenderName, address } = req.body;
     try {
       const existingPod = await readPodOrder(orderId);
       const updated = {
@@ -866,6 +866,46 @@ async function startServer() {
           console.log(`POD note added to Shopify order ${orderId}`);
         } catch (noteErr) {
           console.error('Failed to add POD note to Shopify (non-fatal):', noteErr);
+        }
+      }
+
+      // ── AUTO-SEND DELIVERY CONFIRMATION EMAIL ───────────────────────────────
+      if (status === 'DELIVERED' && customerEmail && SENDGRID_API_KEY) {
+        try {
+          const deliveryTime = new Date(completedAt || Date.now()).toLocaleString('en-US', { 
+            timeZone: 'America/New_York',
+            weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
+            hour: 'numeric', minute: '2-digit', hour12: true 
+          });
+          
+          const receiverName = giftReceiverName || 'the recipient';
+          const senderName = giftSenderName || '';
+          const deliveryAddress = address || '';
+          
+          const subject = `Your Sweet Tooth gift has been delivered! 🍫`;
+          const body = `Great news${senderName ? `, ${senderName}` : ''}!
+
+Your gift basket has been successfully delivered to ${receiverName}${deliveryAddress ? ` at ${deliveryAddress}` : ''}.
+
+Delivered: ${deliveryTime}
+
+Thank you for choosing The Sweet Tooth — Chocolate Factory! We hope your gift brings joy and sweetness.
+
+If you have any questions, please contact us at (305) 682-1400 or reply to this email.
+
+With gratitude,
+The Sweet Tooth Team
+18435 NE 19th Ave, North Miami Beach, FL 33179
+www.thesweettooth.com`;
+
+          const emailSent = await sendEmail(customerEmail, subject, body);
+          if (emailSent) {
+            console.log(`✅ Auto-sent delivery confirmation to ${customerEmail} for order ${orderId}`);
+          } else {
+            console.log(`⚠️ Failed to auto-send confirmation to ${customerEmail} for order ${orderId}`);
+          }
+        } catch (emailErr) {
+          console.error('Auto-send email error (non-fatal):', emailErr);
         }
       }
 
