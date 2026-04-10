@@ -87,6 +87,38 @@ async function readPodData(): Promise<Record<string, any>> {
   try { return JSON.parse(fs.readFileSync(POD_STORAGE_PATH, 'utf-8')); } catch { return {}; }
 }
 
+// Lightweight version - strips photo/signature data to prevent memory issues
+async function readPodDataLight(): Promise<Record<string, any>> {
+  if (pool) {
+    try {
+      const r = await pool.query("SELECT key, value FROM kv_store WHERE key LIKE 'pod:%'");
+      const result: Record<string, any> = {};
+      for (const row of r.rows) {
+        const orderId = row.key.replace('pod:', '');
+        try {
+          const full = JSON.parse(row.value);
+          // Only keep lightweight fields, skip photo/signature data
+          result[orderId] = {
+            status: full.status,
+            completedAt: full.completedAt,
+            submittedAt: full.submittedAt,
+            driverId: full.driverId,
+            driverName: full.driverName,
+            driverNotes: full.driverNotes || full.notes,
+            failureReason: full.failureReason,
+            successNotificationSent: full.successNotificationSent,
+            failureNotificationSent: full.failureNotificationSent,
+            hasPhoto: !!(full.photo || full.confirmationPhoto),
+            hasSignature: !!(full.signature || full.confirmationSignature),
+          };
+        } catch {}
+      }
+      return result;
+    } catch(e) { console.error('readPodDataLight DB error:', e); }
+  }
+  return {};
+}
+
 async function readPodOrder(orderId: string): Promise<any> {
   if (pool) {
     try {
@@ -376,7 +408,8 @@ async function startServer() {
         );
         return hasTag || hasLocalShipping || allOrders.length < 10; // if few orders, show all
       });
-      const podData = await readPodData();
+      // Use lightweight POD loader - never loads photos into memory
+      const podData = await readPodDataLight();
 
       // Restore status/completedAt from Shopify tags (survives server restarts)
       const ordersWithTags = (filtered.length > 0 ? filtered : allOrders).map((o: any) => {
@@ -410,27 +443,8 @@ async function startServer() {
 
       const ordersToProcess = ordersWithTags.length > 0 ? ordersWithTags : (filtered.length > 0 ? filtered : allOrders);
 
-      // Strip large photo/signature data from podData to reduce response size
-      // Photos are fetched on-demand via /api/pod/:orderId when viewing order details
-      const podDataLight: Record<string, any> = {};
-      for (const [id, pod] of Object.entries(podData)) {
-        podDataLight[id] = {
-          status: (pod as any).status,
-          completedAt: (pod as any).completedAt,
-          submittedAt: (pod as any).submittedAt,
-          driverId: (pod as any).driverId,
-          driverName: (pod as any).driverName,
-          driverNotes: (pod as any).driverNotes,
-          failureReason: (pod as any).failureReason,
-          successNotificationSent: (pod as any).successNotificationSent,
-          failureNotificationSent: (pod as any).failureNotificationSent,
-          // Include a flag so frontend knows photo exists without sending the data
-          hasPhoto: !!(pod as any).photo || !!(pod as any).confirmationPhoto,
-          hasSignature: !!(pod as any).signature || !!(pod as any).confirmationSignature,
-        };
-      }
-
-      res.json({ orders: ordersToProcess, podData: podDataLight });
+      // podData is already lightweight (no photos) from readPodDataLight()
+      res.json({ orders: ordersToProcess, podData });
     } catch (e) {
       console.error('Orders fetch error:', e);
       res.status(500).json({ error: String(e) });
