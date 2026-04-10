@@ -10,6 +10,14 @@ import { BERKOWITZ_SEED_ORDERS } from './seedData.js';
 
 config({ path: '.env.local' });
 
+// Global error handlers to prevent crashes
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err);
+});
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -818,6 +826,7 @@ async function startServer() {
         // Add POD note to Shopify order (visible in order timeline)
         try {
           const deliveryTime = new Date(completedAt || Date.now()).toLocaleString('en-US', { 
+            timeZone: 'America/New_York',
             weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
             hour: 'numeric', minute: '2-digit', hour12: true 
           });
