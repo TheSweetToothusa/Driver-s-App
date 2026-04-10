@@ -9,7 +9,7 @@ import {
   MessageCircle, MessageSquare, ChevronLeft, Edit3,
   Bell, Clock, XCircle, Gift, User,
   AlertTriangle, RotateCcw, Inbox, Home, DollarSign, Store, Truck, Map as MapIcon, Route, Trash2, Plus,
-  ChevronUp, ChevronDown, MoreVertical, Printer
+  ChevronUp, ChevronDown, MoreVertical, Printer, Mail
 } from 'lucide-react';
 import { Delivery, DeliveryStatus, AppRole, FailureReason, FAILURE_REASON_LABELS, ViewMode, UserAccount, MessageTemplate } from './types';
 import { getDeliveries } from './services/shopifyService';
