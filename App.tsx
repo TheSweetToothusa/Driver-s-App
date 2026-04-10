@@ -913,10 +913,10 @@ const OrderDetail: React.FC<{
   const loadPreview = async (type: 'SUCCESS' | 'FAILURE') => {
     const res = await fetch('/api/notify/preview', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type, order, failureReason: pendingFailure ? FAILURE_REASON_LABELS[pendingFailure.reason] : '', driverNotes: order.driverNotes || '' }) });
     const data = await res.json();
-    // Determine channel: SMS if phone but no email, otherwise use server response
+    // Determine channel: SMS to gift sender if they have phone but no email, otherwise email
     const email = order.customer?.email;
-    const phone = order.customer?.phone;
-    const channel = (!email && phone) ? 'SMS' : data.channel;
+    const senderPhone = order.giftSenderPhone;
+    const channel = (!email && senderPhone) ? 'SMS' : data.channel;
     setNotifyPreviewText(data.preview); setNotifyChannel(channel); setShowNotifyPreview(type); setNotifySent(false);
   };
 
@@ -925,11 +925,11 @@ const OrderDetail: React.FC<{
     if (!isWithinSendingHours()) { setNotifyError('Messages can only be sent between 9 AM and 8 PM.'); return; }
     
     const email = order.customer?.email;
-    const phone = order.customer?.phone;
+    const senderPhone = order.giftSenderPhone;
     
-    // If no email but has phone, open SMS app with pre-filled message
-    if (!email && phone) {
-      const cleanPhone = phone.replace(/\D/g, '');
+    // If no email but gift sender has phone, open SMS app with pre-filled message
+    if (!email && senderPhone) {
+      const cleanPhone = senderPhone.replace(/\D/g, '');
       const smsBody = encodeURIComponent(notifyPreviewText);
       window.location.href = `sms:${cleanPhone}?body=${smsBody}`;
       setNotifySent(true);
