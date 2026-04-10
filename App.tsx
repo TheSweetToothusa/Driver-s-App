@@ -4964,6 +4964,10 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
   const [defaultDriverId, setDefaultDriverId] = useState<string>('');
   const [defaultDriverSaved, setDefaultDriverSaved] = useState(false);
 
+  // Bulk POD email send
+  const [bulkSending, setBulkSending] = useState(false);
+  const [bulkResult, setBulkResult] = useState<{ sent: number; total: number } | null>(null);
+
 
   useEffect(() => {
     fetch('/api/config/default-driver').then(r => r.json()).then(d => { if (d.driverId) setDefaultDriverId(d.driverId); });
@@ -5095,6 +5099,47 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
     await fetch('/api/config/default-driver', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ driverId: driver.id, driverName: driver.name }) });
     setDefaultDriverSaved(true);
     setTimeout(() => setDefaultDriverSaved(false), 2000);
+  };
+
+  // Bulk send POD emails to all delivered orders that haven't been notified
+  const handleBulkSendPOD = async () => {
+    setBulkSending(true);
+    setBulkResult(null);
+    
+    // Find delivered orders with email that haven't been notified
+    const deliveredWithEmail = deliveries.filter(d => 
+      d.status === 'DELIVERED' && 
+      d.customer?.email && 
+      !d.successNotificationSent
+    );
+    
+    if (deliveredWithEmail.length === 0) {
+      setBulkResult({ sent: 0, total: 0 });
+      setBulkSending(false);
+      return;
+    }
+    
+    const ordersToSend = deliveredWithEmail.map(d => ({
+      orderId: d.id,
+      email: d.customer?.email || '',
+      receiverName: d.giftReceiverName || 'the recipient',
+      deliveryTime: d.completedAt 
+        ? new Date(d.completedAt).toLocaleString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })
+        : 'today'
+    }));
+    
+    try {
+      const res = await fetch('/api/notify/bulk-pod', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orders: ordersToSend })
+      });
+      const data = await res.json();
+      setBulkResult({ sent: data.sent || 0, total: data.total || ordersToSend.length });
+    } catch {
+      setBulkResult({ sent: 0, total: ordersToSend.length });
+    }
+    setBulkSending(false);
   };
 
   const handleAddDriver = async () => {
@@ -5318,6 +5363,30 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
                 </button>
               </div>
             )}
+          </div>
+
+          {/* 📧 Send POD Emails */}
+          <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+            <div className="px-4 py-3">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-7 h-7 rounded-full bg-green-100 flex items-center justify-center">
+                  <Mail size={16} className="text-green-600" />
+                </div>
+                <span className="font-bold text-stone-800 flex-1 text-left">Send POD Emails</span>
+              </div>
+              <p className="text-xs text-stone-500 mb-3">Send delivery confirmation emails to all delivered orders that haven't been notified yet.</p>
+              <button 
+                onClick={handleBulkSendPOD}
+                disabled={bulkSending}
+                className="w-full py-3 bg-green-600 text-white rounded-xl font-black uppercase text-sm active:scale-95 disabled:opacity-50">
+                {bulkSending ? 'Sending...' : '📧 Send POD Emails Now'}
+              </button>
+              {bulkResult && (
+                <p className={`text-center text-sm font-bold mt-2 ${bulkResult.sent > 0 ? 'text-green-600' : 'text-stone-500'}`}>
+                  {bulkResult.total === 0 ? 'No pending emails to send' : `✅ Sent ${bulkResult.sent}/${bulkResult.total} emails`}
+                </p>
+              )}
+            </div>
           </div>
 
           {/* 💬 Driver SMS Templates */}

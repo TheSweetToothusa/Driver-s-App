@@ -1121,6 +1121,34 @@ Thank you for choosing The Sweet Tooth!`;
     res.json({ sent, message, channel: 'Email' });
   });
 
+  // ── BULK SEND POD EMAILS (one-time catch-up for delivered orders) ───────────
+  app.post("/api/notify/bulk-pod", async (req, res) => {
+    const { orders } = req.body; // Array of { email, receiverName, deliveryTime, orderId }
+    if (!orders || !Array.isArray(orders)) {
+      return res.status(400).json({ error: 'Missing orders array' });
+    }
+    
+    const results: { orderId: string; email: string; sent: boolean }[] = [];
+    
+    for (const o of orders) {
+      const subject = "Your Sweet Tooth gift has been delivered!";
+      const body = `Good news! Your gift to ${o.receiverName || 'the recipient'} has been delivered.
+
+Delivered: ${o.deliveryTime || 'today'}
+
+Proof of delivery photo is available upon request.
+
+Thank you for choosing The Sweet Tooth!`;
+      
+      const sent = await sendEmail(o.email, subject, body);
+      results.push({ orderId: o.orderId, email: o.email, sent });
+      console.log(sent ? `✅ Bulk POD sent to ${o.email}` : `❌ Failed to send to ${o.email}`);
+    }
+    
+    const sentCount = results.filter(r => r.sent).length;
+    res.json({ success: true, sent: sentCount, total: orders.length, results });
+  });
+
   // ── GEOCODING (free via OpenStreetMap Nominatim) ────────────────────────────
 
   app.post("/api/geocode", async (req, res) => {
