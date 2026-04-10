@@ -265,7 +265,10 @@ function nextBusinessDay(from: Date): string {
 }
 
 async function sendEmail(to: string, subject: string, body: string): Promise<boolean> {
-  if (!SENDGRID_API_KEY) return false;
+  if (!SENDGRID_API_KEY) {
+    console.log('❌ SendGrid API key not configured');
+    return false;
+  }
   try {
     const resp = await fetch('https://api.sendgrid.com/v3/mail/send', {
       method: 'POST',
@@ -277,8 +280,15 @@ async function sendEmail(to: string, subject: string, body: string): Promise<boo
         content: [{ type: 'text/plain', value: body }]
       })
     });
+    if (resp.status !== 202) {
+      const errorText = await resp.text();
+      console.log(`❌ SendGrid error (${resp.status}): ${errorText}`);
+    }
     return resp.status === 202;
-  } catch { return false; }
+  } catch (err) {
+    console.log('❌ SendGrid exception:', err);
+    return false;
+  }
 }
 
 // Memory helper
