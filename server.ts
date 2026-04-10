@@ -271,7 +271,7 @@ async function sendEmail(to: string, subject: string, body: string): Promise<boo
       method: 'POST',
       headers: { 'Authorization': `Bearer ${SENDGRID_API_KEY}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        personalizations: [{ to: [{ email: to }] }],
+        personalizations: [{ to: [{ email: to }], bcc: [{ email: 'orders@thesweettooth.com' }] }],
         from: { email: SENDGRID_FROM_EMAIL, name: 'The Sweet Tooth' },
         subject,
         content: [{ type: 'text/plain', value: body }]
@@ -883,11 +883,13 @@ async function startServer() {
           const deliveryAddress = address || '';
           
           const subject = `Your Sweet Tooth gift has been delivered!`;
-          const body = `Your gift to ${receiverName} was delivered on ${deliveryTime}. Thank you for your order!
+          const body = `Good news! Your gift to ${receiverName} has been delivered.
 
-The Sweet Tooth
-(305) 682-1400
-www.thesweettooth.com`;
+Delivered: ${deliveryTime}
+
+Proof of delivery photo is available upon request.
+
+Thank you for choosing The Sweet Tooth!`;
 
           const emailSent = await sendEmail(customerEmail, subject, body);
           if (emailSent) {
