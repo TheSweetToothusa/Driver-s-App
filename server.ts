@@ -30,7 +30,10 @@ const KATIE_PHONE = '305-994-4070';
 // --- PostgreSQL pool (persistent across deploys) ---
 const pool = process.env.DATABASE_URL ? new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
+  ssl: { rejectUnauthorized: false },
+  max: 5, // Limit connections to reduce memory
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000,
 }) : null;
 
 // --- File paths (fallback if no DB) ---

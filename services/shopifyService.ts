@@ -33,7 +33,12 @@ export const getDeliveries = async (): Promise<Delivery[]> => {
           // Also normalize completedAt from status tag if missing
           if (!pod.completedAt && delivery.completedAt) pod.completedAt = delivery.completedAt;
           // Merge POD data into delivery (status, timestamps, notes, flags)
-          return { ...delivery, ...pod };
+          const merged = { ...delivery, ...pod };
+          // Debug: log first few DELIVERED orders
+          if (pod.status === 'DELIVERED' && orders.indexOf(order) < 3) {
+            console.log(`[DEBUG] Order ${delivery.orderNumber}: delivery.status=${delivery.status}, pod.status=${pod.status}, merged.status=${merged.status}`);
+          }
+          return merged;
         }
         return delivery;
       });
