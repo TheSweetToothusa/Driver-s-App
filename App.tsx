@@ -3088,6 +3088,8 @@ const ScheduleView: React.FC<{
   const [dragOverId, setDragOverId] = useState<string | null>(null);
   const [routeSavedMsg, setRouteSavedMsg] = useState('');
   const [filterToast, setFilterToast] = useState('');
+  const planRouteListRef = useRef<HTMLDivElement>(null);
+  const touchDragId = useRef<string | null>(null);
 
   // Helper to show filter feedback
   const showFilterToast = (msg: string) => {
@@ -4136,7 +4138,7 @@ ${labelsHtml}
           </div>
 
           {/* Draggable order list */}
-          <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
+          <div ref={planRouteListRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
             {(() => {
               const orderedStops = customOrder.length > 0
                 ? [...optimizableStops].sort((a, b) => {
@@ -4157,6 +4159,7 @@ ${labelsHtml}
                 return (
                   <div
                     key={order.id}
+                    data-order-id={order.id}
                     draggable
                     onDragStart={() => setDragOrderId(order.id)}
                     onDragOver={e => { e.preventDefault(); setDragOverId(order.id); }}
@@ -4168,43 +4171,42 @@ ${labelsHtml}
                       setDragOverId(null);
                     }}
                     onDragEnd={() => { setDragOrderId(null); setDragOverId(null); }}
-                    className={`p-3 rounded-xl border transition-all bg-white ${
+                    onTouchStart={() => {
+                      touchDragId.current = order.id;
+                      setDragOrderId(order.id);
+                    }}
+                    onTouchMove={(e) => {
+                      if (!touchDragId.current || !planRouteListRef.current) return;
+                      const touch = e.touches[0];
+                      const elements = planRouteListRef.current.querySelectorAll('[data-order-id]');
+                      elements.forEach((el) => {
+                        const rect = el.getBoundingClientRect();
+                        const elId = el.getAttribute('data-order-id');
+                        if (touch.clientY >= rect.top && touch.clientY <= rect.bottom && elId !== touchDragId.current) {
+                          setDragOverId(elId);
+                        }
+                      });
+                    }}
+                    onTouchEnd={() => {
+                      if (touchDragId.current && dragOverId && touchDragId.current !== dragOverId) {
+                        handleDropOnStop(optimizableStops, touchDragId.current, dragOverId);
+                      }
+                      touchDragId.current = null;
+                      setDragOrderId(null);
+                      setDragOverId(null);
+                    }}
+                    className={`p-3 rounded-xl border transition-all bg-white select-none ${
+                      dragOrderId === order.id ? 'opacity-50 scale-95' : ''
+                    } ${
                       dragOverId === order.id ? 'border-blue-400 scale-[1.02] bg-blue-50' : 'border-stone-200'
                     }`}
                   >
                     <div className="flex items-center gap-2">
-                      {/* Move up/down buttons - work on iOS */}
-                      <div className="flex flex-col gap-1 shrink-0">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (idx === 0) return;
-                            const newOrder = [...(customOrder.length > 0 ? customOrder : orderedStops.map(o => o.id))];
-                            const currentIdx = newOrder.indexOf(order.id);
-                            if (currentIdx > 0) {
-                              [newOrder[currentIdx - 1], newOrder[currentIdx]] = [newOrder[currentIdx], newOrder[currentIdx - 1]];
-                              setCustomOrder(newOrder);
-                            }
-                          }}
-                          className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black ${idx === 0 ? 'bg-stone-100 text-stone-300' : 'bg-stone-200 text-stone-600 active:bg-stone-300'}`}
-                        >
-                          ▲
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (idx === orderedStops.length - 1) return;
-                            const newOrder = [...(customOrder.length > 0 ? customOrder : orderedStops.map(o => o.id))];
-                            const currentIdx = newOrder.indexOf(order.id);
-                            if (currentIdx < newOrder.length - 1) {
-                              [newOrder[currentIdx], newOrder[currentIdx + 1]] = [newOrder[currentIdx + 1], newOrder[currentIdx]];
-                              setCustomOrder(newOrder);
-                            }
-                          }}
-                          className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black ${idx === orderedStops.length - 1 ? 'bg-stone-100 text-stone-300' : 'bg-stone-200 text-stone-600 active:bg-stone-300'}`}
-                        >
-                          ▼
-                        </button>
+                      {/* Drag handle */}
+                      <div className="flex flex-col gap-0.5 px-2 py-3 cursor-grab active:cursor-grabbing shrink-0">
+                        <div className="w-5 h-0.5 bg-stone-300 rounded" />
+                        <div className="w-5 h-0.5 bg-stone-300 rounded" />
+                        <div className="w-5 h-0.5 bg-stone-300 rounded" />
                       </div>
 
                       {/* Number circle */}
@@ -4239,7 +4241,7 @@ ${labelsHtml}
           {/* Bottom hint */}
           <div className="px-4 py-3 bg-white border-t border-stone-200">
             <p className="text-[10px] text-stone-400 font-bold text-center">
-              Tap ▲▼ to reorder • Tap address to navigate • Print Labels when ready
+              Hold & drag to reorder • Tap address to navigate • Print Labels when ready
             </p>
           </div>
         </div>
