@@ -125,6 +125,7 @@ export interface Delivery {
   orderTotal?: number;
   createdAt?: string;
   isManual?: boolean;
+  deliveryMethod?: string;
 }
 
 export interface MessageTemplate {

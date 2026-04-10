@@ -3835,6 +3835,30 @@ ${labelsHtml}
         </div>
       </div>
 
+      {/* ── TODAY BREAKDOWN (SUPER ADMIN ONLY) ── */}
+      {role === 'SUPER_ADMIN' && (() => {
+        const todayOrders = filtered.filter(d => (d.deliveryDate || '').split('T')[0] === todayStr);
+        const pickupCount = todayOrders.filter(d => (d.deliveryMethod || '').toLowerCase() === 'pick up').length;
+        const deliveryCount = todayOrders.filter(d => (d.deliveryMethod || '').toLowerCase() === 'delivery').length;
+        const shippingCount = todayOrders.filter(d => (d.deliveryMethod || '').toLowerCase() === 'shipping').length;
+        return (
+          <div className="grid grid-cols-3 border-b border-stone-200" style={{ background: '#FAFAF7' }}>
+            <div className="py-2 text-center border-r border-stone-200">
+              <p className="text-lg font-black" style={{ color: '#374151' }}>{pickupCount}</p>
+              <p className="text-[7px] font-black uppercase text-stone-400 leading-tight">Pick Up</p>
+            </div>
+            <div className="py-2 text-center border-r border-stone-200">
+              <p className="text-lg font-black" style={{ color: '#374151' }}>{deliveryCount}</p>
+              <p className="text-[7px] font-black uppercase text-stone-400 leading-tight">Delivery</p>
+            </div>
+            <div className="py-2 text-center">
+              <p className="text-lg font-black" style={{ color: '#374151' }}>{shippingCount}</p>
+              <p className="text-[7px] font-black uppercase text-stone-400 leading-tight">Shipping</p>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* ── STICKY HEADER ── */}
       <div className="sticky top-0 z-10 bg-white px-4 pt-3 pb-3">
 

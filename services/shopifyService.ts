@@ -154,6 +154,7 @@ const mapShopifyOrder = (order: any): Delivery => {
     giftSenderPhone: buyer.phone || billing.phone || '',
     giftSenderEmail: buyer.email || '',
     giftReceiverName: `${shipping.first_name || ''} ${shipping.last_name || ''}`.trim() || '',
+    deliveryMethod: attributes['delivery method'] || attributes['deliverymethod'] || '',
     attempts: []
   };
 };
