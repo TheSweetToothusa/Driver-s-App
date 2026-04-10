@@ -6,6 +6,7 @@ import { fileURLToPath } from "url";
 import { config } from "dotenv";
 import pkg from 'pg';
 const { Pool } = pkg;
+import nodemailer from 'nodemailer';
 
 config({ path: '.env.local' });
 
@@ -264,29 +265,51 @@ function nextBusinessDay(from: Date): string {
   return d.toISOString().split('T')[0];
 }
 
-async function sendEmail(to: string, subject: string, body: string): Promise<boolean> {
-  if (!SENDGRID_API_KEY) {
-    console.log('❌ SendGrid API key not configured');
+async function sendEmail(to: string, subject: string, body: string, attachmentBase64?: string, attachmentFilename?: string): Promise<boolean> {
+  // Use SMTP with orders@thesweettooth.com
+  const SMTP_USER = process.env.SMTP_USER || 'orders@thesweettooth.com';
+  const SMTP_PASS = process.env.SMTP_PASS || '';
+  
+  if (!SMTP_PASS) {
+    console.log('❌ SMTP_PASS not configured');
     return false;
   }
+  
   try {
-    const resp = await fetch('https://api.sendgrid.com/v3/mail/send', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${SENDGRID_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        personalizations: [{ to: [{ email: to }], bcc: [{ email: 'orders@thesweettooth.com' }] }],
-        from: { email: SENDGRID_FROM_EMAIL, name: 'The Sweet Tooth' },
-        subject,
-        content: [{ type: 'text/plain', value: body }]
-      })
+    const transporter = nodemailer.createTransport({
+      host: 'smtp.gmail.com',
+      port: 587,
+      secure: false,
+      auth: {
+        user: SMTP_USER,
+        pass: SMTP_PASS
+      }
     });
-    if (resp.status !== 202) {
-      const errorText = await resp.text();
-      console.log(`❌ SendGrid error (${resp.status}): ${errorText}`);
+    
+    const mailOptions: any = {
+      from: '"The Sweet Tooth" <orders@thesweettooth.com>',
+      to: to,
+      bcc: 'orders@thesweettooth.com',
+      subject: subject,
+      text: body
+    };
+    
+    // Attach POD photo if provided
+    if (attachmentBase64 && attachmentFilename) {
+      // Strip data URL prefix if present
+      const base64Data = attachmentBase64.replace(/^data:image\/\w+;base64,/, '');
+      mailOptions.attachments = [{
+        filename: attachmentFilename,
+        content: base64Data,
+        encoding: 'base64'
+      }];
     }
-    return resp.status === 202;
+    
+    await transporter.sendMail(mailOptions);
+    console.log(`✅ Email sent to ${to}`);
+    return true;
   } catch (err) {
-    console.log('❌ SendGrid exception:', err);
+    console.log('❌ SMTP error:', err);
     return false;
   }
 }
@@ -1150,18 +1173,22 @@ Thank you for choosing The Sweet Tooth!`;
     const results: { orderId: string; email: string; sent: boolean }[] = [];
     
     for (const o of orders) {
+      // Fetch the POD photo for this order
+      const podData = await readPodOrder(o.orderId);
+      const photo = podData?.confirmationPhoto || podData?.photo || null;
+      
       const subject = "Your Sweet Tooth gift has been delivered!";
       const body = `Good news! Your gift to ${o.receiverName || 'the recipient'} has been delivered.
 
 Delivered: ${o.deliveryTime || 'today'}
 
-Proof of delivery photo is available upon request.
+${photo ? 'Please see attached proof of delivery photo.' : 'Proof of delivery photo is available upon request.'}
 
 Thank you for choosing The Sweet Tooth!`;
       
-      const sent = await sendEmail(o.email, subject, body);
+      const sent = await sendEmail(o.email, subject, body, photo || undefined, photo ? `delivery-${o.orderId}.jpg` : undefined);
       results.push({ orderId: o.orderId, email: o.email, sent });
-      console.log(sent ? `✅ Bulk POD sent to ${o.email}` : `❌ Failed to send to ${o.email}`);
+      console.log(sent ? `✅ Bulk POD sent to ${o.email}${photo ? ' (with photo)' : ''}` : `❌ Failed to send to ${o.email}`);
     }
     
     const sentCount = results.filter(r => r.sent).length;

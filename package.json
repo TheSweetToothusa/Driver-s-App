@@ -19,6 +19,7 @@
         "dotenv": "^17.3.1",
         "express": "^5.2.1",
         "lucide-react": "^0.562.0",
+        "nodemailer": "^8.0.5",
         "pg": "^8.20.0",
         "react": "^19.2.3",
         "react-dom": "^19.2.3",
@@ -27,5 +28,8 @@
         "tsx": "^4.21.0",
         "typescript": "~5.8.2",
         "vite": "^6.2.0"
+    },
+    "devDependencies": {
+        "@types/nodemailer": "^8.0.0"
     }
 }
