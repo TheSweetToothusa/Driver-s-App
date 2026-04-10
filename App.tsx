@@ -6249,9 +6249,9 @@ const BulkProjectsView: React.FC<{
               </button>
             )}
           </div>
-          <button onClick={() => submitPOD(fresh.id, 'DELIVERED')} disabled={!podPhoto || !podSignature}
-            className={`w-full py-4 rounded-2xl font-black text-lg uppercase tracking-wide transition-all ${(podPhoto && podSignature) ? 'bg-green-600 text-white active:scale-95' : 'bg-stone-200 text-stone-400 cursor-not-allowed'}`}>
-            {(podPhoto && podSignature) ? '✓ CONFIRM DELIVERED' : !podPhoto && !podSignature ? 'Photo + Signature Required' : !podPhoto ? 'Photo Required' : 'Signature Required'}
+          <button onClick={() => submitPOD(fresh.id, 'DELIVERED')} disabled={!podPhoto}
+            className={`w-full py-4 rounded-2xl font-black text-lg uppercase tracking-wide transition-all ${podPhoto ? 'bg-green-600 text-white active:scale-95' : 'bg-stone-200 text-stone-400 cursor-not-allowed'}`}>
+            {podPhoto ? '✓ CONFIRM DELIVERED' : 'Photo Required'}
           </button>
         </div>
       );
