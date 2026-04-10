@@ -882,20 +882,11 @@ async function startServer() {
           const senderName = giftSenderName || '';
           const deliveryAddress = address || '';
           
-          const subject = `Your Sweet Tooth gift has been delivered! 🍫`;
-          const body = `Great news${senderName ? `, ${senderName}` : ''}!
+          const subject = `Your Sweet Tooth gift has been delivered!`;
+          const body = `Your gift to ${receiverName} was delivered on ${deliveryTime}. Thank you for your order!
 
-Your gift basket has been successfully delivered to ${receiverName}${deliveryAddress ? ` at ${deliveryAddress}` : ''}.
-
-Delivered: ${deliveryTime}
-
-Thank you for choosing The Sweet Tooth — Chocolate Factory! We hope your gift brings joy and sweetness.
-
-If you have any questions, please contact us at (305) 682-1400 or reply to this email.
-
-With gratitude,
-The Sweet Tooth Team
-18435 NE 19th Ave, North Miami Beach, FL 33179
+The Sweet Tooth
+(305) 682-1400
 www.thesweettooth.com`;
 
           const emailSent = await sendEmail(customerEmail, subject, body);

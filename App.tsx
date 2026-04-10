@@ -843,6 +843,19 @@ const OrderDetail: React.FC<{
 
     // Show full-screen delivery confirmation, then go back
     setShowDeliveredConfirm(true);
+    
+    // Auto-open SMS for phone-only orders (no email)
+    const customerEmail = order.customer?.email || '';
+    const senderPhone = order.giftSenderPhone || '';
+    if (!customerEmail && senderPhone) {
+      const cleanPhone = senderPhone.replace(/\D/g, '');
+      const receiverName = order.giftReceiverName || 'the recipient';
+      const smsMessage = `Great news! Your Sweet Tooth gift to ${receiverName} has been delivered. Thank you for your order! 🍫 - The Sweet Tooth`;
+      setTimeout(() => {
+        window.location.href = `sms:${cleanPhone}?body=${encodeURIComponent(smsMessage)}`;
+      }, 2000); // Open SMS app after 2 seconds (while green checkmark shows)
+    }
+    
     setTimeout(() => { setShowDeliveredConfirm(false); onBack(); }, 2500);
   };
 

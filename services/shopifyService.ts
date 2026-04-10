@@ -156,7 +156,7 @@ const mapShopifyOrder = (order: any): Delivery => {
     internalNotes: [],
     giftMessage: attributes['gift message'] || attributes['giftmessage'] || attributes['message'] || order.note || '',
     giftSenderName: `${buyer.first_name || ''} ${buyer.last_name || ''}`.trim() || 'Customer',
-    giftSenderPhone: buyer.phone || billing.phone || '',
+    giftSenderPhone: buyer.phone || billing.phone || shipping.phone || '',
     giftSenderEmail: buyer.email || '',
     giftReceiverName: `${shipping.first_name || ''} ${shipping.last_name || ''}`.trim() || '',
     deliveryMethod: attributes['delivery method'] || attributes['deliverymethod'] || '',
