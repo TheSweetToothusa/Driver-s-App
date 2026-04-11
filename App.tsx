@@ -3167,9 +3167,11 @@ const ScheduleView: React.FC<{
           if (dateTo && orderDate > dateTo) return false;
         }
       }
-      // Status filter
-      if (statusFilter === 'OPEN' && !OPEN_STATUSES.includes(d.status)) return false;
-      if (statusFilter === 'DONE' && !DONE_STATUSES.includes(d.status)) return false;
+      // Status filter — skip when date range is active (show all statuses)
+      if (!(dateFrom || dateTo)) {
+        if (statusFilter === 'OPEN' && !OPEN_STATUSES.includes(d.status)) return false;
+        if (statusFilter === 'DONE' && !DONE_STATUSES.includes(d.status)) return false;
+      }
       // Search
       if (search.trim()) {
         const q = search.toLowerCase();
