@@ -2276,8 +2276,11 @@ const OrdersView: React.FC<OrdersViewProps> = ({
       // Date range filter
       if (dateFrom || dateTo) {
         const orderDate = (d.deliveryDate || d.completedAt || '').split('T')[0];
-        if (dateFrom && orderDate < dateFrom) return false;
-        if (dateTo && orderDate > dateTo) return false;
+        // If order has no date, skip the date filter (show it)
+        if (orderDate) {
+          if (dateFrom && orderDate < dateFrom) return false;
+          if (dateTo && orderDate > dateTo) return false;
+        }
       }
       // Status filter
       if (statusFilter === 'OPEN' && !OPEN_STATUSES.includes(d.status)) return false;
@@ -3158,8 +3161,11 @@ const ScheduleView: React.FC<{
       // Date range filter
       if (dateFrom || dateTo) {
         const orderDate = (d.deliveryDate || d.completedAt || '').split('T')[0];
-        if (dateFrom && orderDate < dateFrom) return false;
-        if (dateTo && orderDate > dateTo) return false;
+        // If order has no date, skip the date filter (show it)
+        if (orderDate) {
+          if (dateFrom && orderDate < dateFrom) return false;
+          if (dateTo && orderDate > dateTo) return false;
+        }
       }
       // Status filter
       if (statusFilter === 'OPEN' && !OPEN_STATUSES.includes(d.status)) return false;
