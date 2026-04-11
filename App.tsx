@@ -2282,9 +2282,11 @@ const OrdersView: React.FC<OrdersViewProps> = ({
           if (dateTo && orderDate > dateTo) return false;
         }
       }
-      // Status filter
-      if (statusFilter === 'OPEN' && !OPEN_STATUSES.includes(d.status)) return false;
-      if (statusFilter === 'CLOSED' && !CLOSED_STATUSES.includes(d.status)) return false;
+      // Status filter — skip when date range is active (show all statuses)
+      if (!(dateFrom || dateTo)) {
+        if (statusFilter === 'OPEN' && !OPEN_STATUSES.includes(d.status)) return false;
+        if (statusFilter === 'CLOSED' && !CLOSED_STATUSES.includes(d.status)) return false;
+      }
       // Text search
       if (!search) return true;
       const q = search.toLowerCase();
@@ -3942,14 +3944,10 @@ ${labelsHtml}
                 />
               </div>
             </div>
-            {/* Quick presets — only what makes sense for history (past dates) */}
+            {/* Quick presets */}
             <div className="flex gap-2 mt-2 flex-wrap">
-              <button onClick={() => { setDateFrom(''); setDateTo(''); showFilterToast('Showing All History'); }} className="px-3 py-1.5 bg-white border border-stone-200 rounded-lg text-[11px] font-bold active:scale-95 transition-transform">All</button>
+              <button onClick={() => { setDateFrom(''); setDateTo(''); showFilterToast('Showing All'); }} className="px-3 py-1.5 bg-white border border-stone-200 rounded-lg text-[11px] font-bold active:scale-95 transition-transform">All</button>
               <button onClick={() => { setDateFrom(todayStr); setDateTo(todayStr); showFilterToast('Showing Today'); }} className="px-3 py-1.5 bg-white border border-stone-200 rounded-lg text-[11px] font-bold active:scale-95 transition-transform">Today</button>
-              <button onClick={() => { 
-                const y = new Date(Date.now() - 86400000).toISOString().split('T')[0];
-                setDateFrom(y); setDateTo(y); showFilterToast('Showing Yesterday');
-              }} className="px-3 py-1.5 bg-white border border-stone-200 rounded-lg text-[11px] font-bold active:scale-95 transition-transform">Yesterday</button>
             </div>
           </div>
         )}
