@@ -5234,7 +5234,8 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
             )}
           </div>
 
-          {/* 📧 Send POD Emails */}
+          {/* 📧 Send POD Emails — SUPER ADMIN ONLY */}
+          {currentUser.role === 'SUPER_ADMIN' && (
           <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
             <div className="px-4 py-3">
               <div className="flex items-center gap-3 mb-2">
@@ -5257,6 +5258,7 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
               )}
             </div>
           </div>
+          )}
 
           {/* 💬 Driver SMS Templates */}
           <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
