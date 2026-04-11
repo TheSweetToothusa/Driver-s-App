@@ -4302,16 +4302,12 @@ ${labelsHtml}
 
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MESSAGES PANEL — templates + sent history
+// MESSAGES PANEL — templates
 // ─────────────────────────────────────────────────────────────────────────────
 
 const MessagesPanel: React.FC<{ role: AppRole }> = ({ role }) => {
-  const [subTab, setSubTab] = useState<'HISTORY' | 'TEMPLATES'>('HISTORY');
-  const [messages, setMessages] = useState<any[]>([]);
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
-  const [loadingMsgs, setLoadingMsgs] = useState(true);
   const [editingTemplate, setEditingTemplate] = useState<string | null>(null);
-  const [todayOnly, setTodayOnly] = useState(true);
   const [templateEdits, setTemplateEdits] = useState<Record<string, string>>({});
   const [configStatus, setConfigStatus] = useState<any>(null);
   const [testTo, setTestTo] = useState('');
@@ -4320,7 +4316,6 @@ const MessagesPanel: React.FC<{ role: AppRole }> = ({ role }) => {
   const [testLoading, setTestLoading] = useState(false);
 
   useEffect(() => {
-    fetch('/api/messages').then(r => r.json()).then(d => { setMessages(d.messages || []); setLoadingMsgs(false); });
     fetch('/api/templates').then(r => r.json()).then(d => setTemplates(d.templates || []));
     fetch('/api/config/status').then(r => r.json()).then(d => setConfigStatus(d));
   }, []);
@@ -4391,140 +4386,43 @@ const MessagesPanel: React.FC<{ role: AppRole }> = ({ role }) => {
         </div>
       )}
 
-      {/* Sub-tab toggle */}
-      <div className="flex gap-2 bg-stone-100 rounded-2xl p-1">
-        <button onClick={() => setSubTab('HISTORY')}
-          className={`flex-1 py-3 rounded-xl font-black uppercase text-[10px] transition-all ${subTab === 'HISTORY' ? 'bg-white text-black shadow-sm' : 'text-stone-400'}`}>
-          History
-        </button>
-        <button onClick={() => setSubTab('TEMPLATES')}
-          className={`flex-1 py-3 rounded-xl font-black uppercase text-[10px] transition-all ${subTab === 'TEMPLATES' ? 'bg-white text-black shadow-sm' : 'text-stone-400'}`}>
-          Templates
-        </button>
-      </div>
-
-      {/* HISTORY */}
-      {subTab === 'HISTORY' && (() => {
-        const todayStr = new Date().toISOString().slice(0, 10);
-        const filtered = todayOnly ? messages.filter(m => (m.sentAt || '').startsWith(todayStr)) : messages;
-        const todayCount = messages.filter(m => (m.sentAt || '').startsWith(todayStr)).length;
-        const todayDelivered = messages.filter(m => (m.sentAt || '').startsWith(todayStr) && m.type === 'SUCCESS').length;
-        const todayFailed = messages.filter(m => (m.sentAt || '').startsWith(todayStr) && m.type !== 'SUCCESS').length;
-        return (
-          <div className="space-y-3">
-            {/* TODAY STATS BANNER */}
-            <div className="bg-black rounded-2xl p-4 flex items-center justify-between">
-              <div>
-                <p className="text-[9px] font-black uppercase text-white/40 tracking-widest mb-1">Today's Sent Messages</p>
-                <p className="text-3xl font-black text-white">{todayCount}</p>
-              </div>
-              <div className="flex gap-3">
-                <div className="text-right">
-                  <p className="text-[9px] font-black uppercase text-green-400/70 tracking-widest">Delivered</p>
-                  <p className="text-xl font-black text-green-400">{todayDelivered}</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-[9px] font-black uppercase text-red-400/70 tracking-widest">Delay</p>
-                  <p className="text-xl font-black text-red-400">{todayFailed}</p>
-                </div>
-              </div>
-            </div>
-
-            {/* TODAY / ALL toggle */}
-            <div className="flex gap-2 bg-stone-100 rounded-2xl p-1">
-              <button onClick={() => setTodayOnly(true)}
-                className={`flex-1 py-2.5 rounded-xl font-black uppercase text-[10px] transition-all ${todayOnly ? 'bg-white text-black shadow-sm' : 'text-stone-400'}`}>
-                Today Only
-              </button>
-              <button onClick={() => setTodayOnly(false)}
-                className={`flex-1 py-2.5 rounded-xl font-black uppercase text-[10px] transition-all ${!todayOnly ? 'bg-white text-black shadow-sm' : 'text-stone-400'}`}>
-                All History
-              </button>
-            </div>
-
-            {loadingMsgs && (
-              <div className="flex items-center justify-center py-12">
-                <RefreshCw size={22} className="animate-spin text-stone-300" />
-              </div>
-            )}
-            {!loadingMsgs && filtered.length === 0 && (
-              <div className="text-center py-12">
-                <MessageCircle size={32} className="mx-auto text-stone-200 mb-2" />
-                <p className="text-[11px] font-black uppercase text-stone-300">{todayOnly ? 'No messages sent today' : 'No messages sent yet'}</p>
-              </div>
-            )}
-            {filtered.map((msg: any) => (
-              <div key={msg.id} className="bg-white border border-stone-100 rounded-[24px] shadow-sm overflow-hidden">
-                {/* Header */}
-                <div className="flex items-center justify-between px-5 py-4 border-b border-stone-50">
-                  <div className="flex items-center gap-2">
-                    <span className={`text-[9px] font-black uppercase px-2.5 py-1 rounded-full ${msg.type === 'SUCCESS' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
-                      {msg.type === 'SUCCESS' ? '✓ Delivered' : '✗ Delay'}
-                    </span>
-                    <span className="text-[9px] font-black uppercase px-2.5 py-1 rounded-full bg-stone-100 text-stone-500">
-                      {msg.channel === 'SMS' ? '📱 SMS' : '✉️ Email'}
-                    </span>
-                  </div>
-                  <span className="text-[9px] font-black text-stone-400">
-                    {msg.sentAt ? new Date(msg.sentAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
-                  </span>
-                </div>
-                {/* Details */}
-                <div className="px-5 py-3 space-y-1">
-                  <p className="font-black text-stone-900 text-sm">{msg.customerName}</p>
-                  <p className="text-[10px] font-black text-stone-400 uppercase">Order #{msg.orderNumber} · Driver: {msg.driverName}</p>
-                  <p className="text-[10px] text-stone-400">{msg.to}</p>
-                </div>
-                {/* Message body — collapsible */}
-                <details className="px-5 pb-4">
-                  <summary className="text-[10px] font-black uppercase text-stone-400 cursor-pointer select-none">View message</summary>
-                  <p className="mt-2 text-xs text-stone-600 leading-relaxed bg-stone-50 rounded-xl p-3 whitespace-pre-line">{msg.message}</p>
-                </details>
-              </div>
+      {/* TEMPLATES */}
+      <div className="space-y-5">
+        <div className="p-4 bg-amber-50 rounded-2xl border border-amber-100">
+          <p className="text-xs font-black text-amber-700 mb-2">Available variables:</p>
+          <div className="flex flex-wrap gap-1">
+            {['{{customer_name}}', '{{order_number}}', '{{driver_name}}', '{{address}}', '{{failure_reason}}', '{{driver_notes}}', '{{katie_phone}}'].map(v => (
+              <span key={v} className="text-[10px] font-black bg-white border border-amber-200 rounded-lg px-2 py-1 text-amber-700">{v}</span>
             ))}
           </div>
-        );
-      })()}
-
-      {/* TEMPLATES */}
-      {subTab === 'TEMPLATES' && (
-        <div className="space-y-5">
-          <div className="p-4 bg-amber-50 rounded-2xl border border-amber-100">
-            <p className="text-xs font-black text-amber-700 mb-2">Available variables:</p>
-            <div className="flex flex-wrap gap-1">
-              {['{{customer_name}}', '{{order_number}}', '{{driver_name}}', '{{address}}', '{{failure_reason}}', '{{driver_notes}}', '{{katie_phone}}'].map(v => (
-                <span key={v} className="text-[10px] font-black bg-white border border-amber-200 rounded-lg px-2 py-1 text-amber-700">{v}</span>
-              ))}
-            </div>
-          </div>
-          {templates.map(t => (
-            <div key={t.id} className="p-5 bg-white border border-stone-100 rounded-[28px] shadow-sm space-y-3">
-              <div className="flex items-center justify-between">
-                <p className="font-black text-stone-900">{t.label}</p>
-                <span className={`text-[9px] font-black uppercase px-2 py-1 rounded-full ${t.id === 'SUCCESS' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>{t.id}</span>
-              </div>
-              {editingTemplate === t.id ? (
-                <>
-                  <textarea value={templateEdits[t.id] ?? t.body} onChange={e => setTemplateEdits(p => ({ ...p, [t.id]: e.target.value }))} rows={6}
-                    className="w-full bg-stone-50 border border-stone-200 rounded-2xl px-4 py-3 text-sm font-medium outline-none focus:border-black resize-none" style={{ minHeight: '120px' }} />
-                  <div className="flex gap-2">
-                    <button onClick={() => handleSaveTemplate(t.id)} className="flex-1 py-3 bg-black text-white rounded-2xl font-black uppercase text-xs">Save</button>
-                    <button onClick={() => setEditingTemplate(null)} className="flex-1 py-3 bg-stone-100 text-stone-500 rounded-2xl font-black uppercase text-xs">Cancel</button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <p className="text-sm text-stone-600 leading-relaxed bg-stone-50 rounded-xl p-3 whitespace-pre-line">{t.body}</p>
-                  <button onClick={() => { setEditingTemplate(t.id); setTemplateEdits(p => ({ ...p, [t.id]: t.body })); }}
-                    className="w-full py-3 bg-stone-100 text-stone-700 rounded-2xl font-black uppercase text-xs flex items-center justify-center gap-2">
-                    <Edit3 size={14} /> Edit Template
-                  </button>
-                </>
-              )}
-            </div>
-          ))}
         </div>
-      )}
+        {templates.map(t => (
+          <div key={t.id} className="p-5 bg-white border border-stone-100 rounded-[28px] shadow-sm space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="font-black text-stone-900">{t.label}</p>
+              <span className={`text-[9px] font-black uppercase px-2 py-1 rounded-full ${t.id === 'SUCCESS' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>{t.id}</span>
+            </div>
+            {editingTemplate === t.id ? (
+              <>
+                <textarea value={templateEdits[t.id] ?? t.body} onChange={e => setTemplateEdits(p => ({ ...p, [t.id]: e.target.value }))} rows={6}
+                  className="w-full bg-stone-50 border border-stone-200 rounded-2xl px-4 py-3 text-sm font-medium outline-none focus:border-black resize-none" style={{ minHeight: '120px' }} />
+                <div className="flex gap-2">
+                  <button onClick={() => handleSaveTemplate(t.id)} className="flex-1 py-3 bg-black text-white rounded-2xl font-black uppercase text-xs">Save</button>
+                  <button onClick={() => setEditingTemplate(null)} className="flex-1 py-3 bg-stone-100 text-stone-500 rounded-2xl font-black uppercase text-xs">Cancel</button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-stone-600 leading-relaxed bg-stone-50 rounded-xl p-3 whitespace-pre-line">{t.body}</p>
+                <button onClick={() => { setEditingTemplate(t.id); setTemplateEdits(p => ({ ...p, [t.id]: t.body })); }}
+                  className="w-full py-3 bg-stone-100 text-stone-700 rounded-2xl font-black uppercase text-xs flex items-center justify-center gap-2">
+                  <Edit3 size={14} /> Edit Template
+                </button>
+              </>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 };
