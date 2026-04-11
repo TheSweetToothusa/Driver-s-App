@@ -4311,7 +4311,6 @@ const MessagesPanel: React.FC<{ role: AppRole }> = ({ role }) => {
   const [templateEdits, setTemplateEdits] = useState<Record<string, string>>({});
   const [configStatus, setConfigStatus] = useState<any>(null);
   const [testTo, setTestTo] = useState('');
-  const [testChannel, setTestChannel] = useState<'SMS'|'Email'>('SMS');
   const [testResult, setTestResult] = useState<string | null>(null);
   const [testLoading, setTestLoading] = useState(false);
 
@@ -4325,7 +4324,7 @@ const MessagesPanel: React.FC<{ role: AppRole }> = ({ role }) => {
     setTestLoading(true); setTestResult(null);
     const res = await fetch('/api/notify/test', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ to: testTo, channel: testChannel })
+      body: JSON.stringify({ to: testTo })
     });
     const data = await res.json();
     setTestResult(data.sent ? '✅ Sent successfully!' : '❌ Failed to send — check env vars on Render');
@@ -4348,19 +4347,13 @@ const MessagesPanel: React.FC<{ role: AppRole }> = ({ role }) => {
         <div className="bg-white border border-stone-200 rounded-2xl p-4 space-y-2">
           <p className="text-[10px] font-black uppercase text-stone-500 tracking-widest mb-2">Notification Services</p>
           <div className="flex items-center justify-between">
-            <span className="text-sm font-bold text-stone-700">SMS (Twilio)</span>
-            <span className={`text-xs font-black px-3 py-1 rounded-full ${configStatus.twilio ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
-              {configStatus.twilio ? `✓ Active (from ...${configStatus.twilioFrom})` : '✗ NOT CONFIGURED'}
-            </span>
-          </div>
-          <div className="flex items-center justify-between">
             <span className="text-sm font-bold text-stone-700">Email (SendGrid)</span>
             <span className={`text-xs font-black px-3 py-1 rounded-full ${configStatus.sendgrid ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
-              {configStatus.sendgrid ? `✓ Active` : '✗ NOT CONFIGURED'}
+              {configStatus.sendgrid ? '✓ Active' : '✗ NOT CONFIGURED'}
             </span>
           </div>
-          {!configStatus.twilio && !configStatus.sendgrid && (
-            <p className="text-xs text-red-600 font-bold mt-1">⚠ No notification service configured. Set TWILIO_* or SENDGRID_API_KEY env vars on Render.</p>
+          {!configStatus.sendgrid && (
+            <p className="text-xs text-red-600 font-bold mt-1">⚠ Email not configured. Set SENDGRID_API_KEY env var on Render.</p>
           )}
         </div>
       )}
@@ -4368,15 +4361,9 @@ const MessagesPanel: React.FC<{ role: AppRole }> = ({ role }) => {
       {/* ── TEST SEND — SUPER ADMIN ONLY ── */}
       {role === 'SUPER_ADMIN' && (
         <div className="bg-white border border-stone-200 rounded-2xl p-4 space-y-3">
-          <p className="text-[10px] font-black uppercase text-stone-500 tracking-widest">Send Test Notification</p>
-          <div className="flex gap-2">
-            <button onClick={() => setTestChannel('SMS')}
-              className={`flex-1 py-2 rounded-xl font-black text-xs uppercase ${testChannel==='SMS' ? 'bg-black text-white' : 'bg-stone-100 text-stone-500'}`}>SMS</button>
-            <button onClick={() => setTestChannel('Email')}
-              className={`flex-1 py-2 rounded-xl font-black text-xs uppercase ${testChannel==='Email' ? 'bg-black text-white' : 'bg-stone-100 text-stone-500'}`}>Email</button>
-          </div>
+          <p className="text-[10px] font-black uppercase text-stone-500 tracking-widest">Send Test Email</p>
           <input value={testTo} onChange={e => setTestTo(e.target.value)}
-            placeholder={testChannel === 'SMS' ? 'Phone number (e.g. 3051234567)' : 'Email address'}
+            placeholder="Email address"
             className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-black" />
           <button onClick={handleTestSend} disabled={testLoading || !testTo}
             className="w-full py-3 bg-black text-white rounded-xl font-black uppercase text-sm disabled:opacity-40">
@@ -5053,7 +5040,7 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
   };
 
   const handleZipLookup = () => {
-    const fee = ZIP_FEES[feeZip];
+    const fee = DELIVERY_FEES[feeZip];
     setFeeResult(fee !== undefined ? fee : -1);
   };
 

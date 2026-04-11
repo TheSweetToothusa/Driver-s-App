@@ -39,14 +39,11 @@ const pool = process.env.DATABASE_URL ? new Pool({
 // --- File paths (fallback if no DB) ---
 const POD_STORAGE_PATH = path.join(__dirname, "pod_data.json");
 const USERS_PATH = path.join(__dirname, "users.json");
-const TEMPLATES_PATH = path.join(__dirname, "templates.json");
 const RESCHEDULE_PATH = path.join(__dirname, "reschedule_queue.json");
-const MESSAGE_LOG_PATH = path.join(__dirname, "message_log.json");
 
 // --- Initialize file storage fallbacks ---
 if (!fs.existsSync(POD_STORAGE_PATH)) fs.writeFileSync(POD_STORAGE_PATH, JSON.stringify({}));
 if (!fs.existsSync(RESCHEDULE_PATH)) fs.writeFileSync(RESCHEDULE_PATH, JSON.stringify([]));
-if (!fs.existsSync(MESSAGE_LOG_PATH)) fs.writeFileSync(MESSAGE_LOG_PATH, JSON.stringify([]));
 
 // --- DB helpers ---
 async function dbGet(key: string): Promise<any> {
@@ -213,21 +210,6 @@ if (!fs.existsSync(USERS_PATH)) {
   ], null, 2));
 }
 
-if (!fs.existsSync(TEMPLATES_PATH)) {
-  fs.writeFileSync(TEMPLATES_PATH, JSON.stringify([
-    {
-      id: "SUCCESS",
-      label: "Delivery Successful",
-      body: "Hi {{customer_name}}! 🍫 Great news — your Sweet Tooth order #{{order_number}} was just delivered to {{address}}. We hope whoever receives it loves it! Thank you for choosing The Sweet Tooth."
-    },
-    {
-      id: "FAILURE",
-      label: "Delivery Attempted – Please Reschedule",
-      body: "Hi {{customer_name}}, this is {{driver_name}} with your Sweet Tooth delivery. We attempted to deliver your order to {{address}}, but were unsuccessful because: {{failure_reason}}.\n\nDriver Note: {{driver_notes}}\n\nPlease text our manager Katie at {{katie_phone}} to reschedule. Thanks!"
-    }
-  ], null, 2));
-}
-
 // --- Helpers ---
 function readUsers(): any[] {
   // Sync fallback — DB reads are async so callers that need sync use file
@@ -243,11 +225,34 @@ async function readUsersDB(): Promise<any[]> {
   // fallback to file
   try { return JSON.parse(fs.readFileSync(USERS_PATH, 'utf-8')); } catch { return []; }
 }
-function readTemplates() { return JSON.parse(fs.readFileSync(TEMPLATES_PATH, 'utf-8')); }
 function readRescheduleQueue() { return JSON.parse(fs.readFileSync(RESCHEDULE_PATH, 'utf-8')); }
 function writeRescheduleQueue(q: any[]) { fs.writeFileSync(RESCHEDULE_PATH, JSON.stringify(q, null, 2)); }
-function readMessageLog() { return JSON.parse(fs.readFileSync(MESSAGE_LOG_PATH, 'utf-8')); }
-function appendMessageLog(entry: any) { const log = readMessageLog(); log.unshift(entry); fs.writeFileSync(MESSAGE_LOG_PATH, JSON.stringify(log.slice(0, 500), null, 2)); }
+
+// --- PostgreSQL-backed message log (persists across deploys) ---
+async function getMessageLog(): Promise<any[]> {
+  const val = await getKV('message_log');
+  if (val) { try { return JSON.parse(val); } catch { return []; } }
+  return [];
+}
+async function appendMessageLogDB(entry: any): Promise<void> {
+  const log = await getMessageLog();
+  log.unshift(entry);
+  await setKV('message_log', JSON.stringify(log.slice(0, 500)));
+}
+
+// --- PostgreSQL-backed templates (persists across deploys) ---
+const DEFAULT_TEMPLATES = [
+  { id: 'SUCCESS', label: 'Delivery Successful', body: 'Hi {{customer_name}}! 🍫 Great news — your Sweet Tooth order #{{order_number}} was just delivered to {{address}}. We hope whoever receives it loves it! Thank you for choosing The Sweet Tooth.' },
+  { id: 'FAILURE', label: 'Delivery Attempted – Please Reschedule', body: 'Hi {{customer_name}}, this is {{driver_name}} with your Sweet Tooth delivery. We attempted to deliver your order to {{address}}, but were unsuccessful because: {{failure_reason}}.\n\nDriver Note: {{driver_notes}}\n\nPlease text our manager Katie at {{katie_phone}} to reschedule. Thanks!' }
+];
+async function getTemplates(): Promise<any[]> {
+  const val = await getKV('notification_templates');
+  if (val) { try { return JSON.parse(val); } catch { return DEFAULT_TEMPLATES; } }
+  return DEFAULT_TEMPLATES;
+}
+async function saveTemplates(templates: any[]): Promise<void> {
+  await setKV('notification_templates', JSON.stringify(templates));
+}
 
 function isWithinSendingHours(): boolean {
   const h = new Date().getHours();
@@ -1020,24 +1025,24 @@ Thank you for choosing The Sweet Tooth!`;
 
   // ── TEMPLATES ───────────────────────────────────────────────────────────────
 
-  app.get("/api/templates", (_req, res) => {
-    res.json({ templates: readTemplates() });
+  app.get("/api/templates", async (_req, res) => {
+    res.json({ templates: await getTemplates() });
   });
 
-  app.patch("/api/templates/:id", (req, res) => {
-    const templates = readTemplates();
+  app.patch("/api/templates/:id", async (req, res) => {
+    const templates = await getTemplates();
     const idx = templates.findIndex((t: any) => t.id === req.params.id);
     if (idx === -1) return res.status(404).json({ error: "Not found" });
     templates[idx] = { ...templates[idx], ...req.body };
-    fs.writeFileSync(TEMPLATES_PATH, JSON.stringify(templates, null, 2));
+    await saveTemplates(templates);
     res.json({ template: templates[idx] });
   });
 
   // ── NOTIFY ──────────────────────────────────────────────────────────────────
 
-  app.post("/api/notify/preview", (req, res) => {
+  app.post("/api/notify/preview", async (req, res) => {
     const { type, order, failureReason, driverNotes } = req.body;
-    const templates = readTemplates();
+    const templates = await getTemplates();
     const template = templates.find((t: any) => t.id === type);
     if (!template) return res.status(400).json({ error: "Template not found" });
     const vars: Record<string, string> = {
@@ -1059,7 +1064,7 @@ Thank you for choosing The Sweet Tooth!`;
     if (!isWithinSendingHours()) {
       return res.status(400).json({ error: "Messages can only be sent between 9 AM and 8 PM." });
     }
-    const templates = readTemplates();
+    const templates = await getTemplates();
     const template = templates.find((t: any) => t.id === type);
     if (!template) return res.status(400).json({ error: "Template not found" });
     const vars: Record<string, string> = {
@@ -1086,7 +1091,7 @@ Thank you for choosing The Sweet Tooth!`;
       existingPodNotif[type === 'SUCCESS' ? 'successNotificationSent' : 'failureNotificationSent'] = true;
       await writePodOrder(order.id, existingPodNotif);
       // Log the message
-      appendMessageLog({
+      await appendMessageLogDB({
         id: `msg_${Date.now()}`,
         sentAt: new Date().toISOString(),
         type,
@@ -1104,8 +1109,8 @@ Thank you for choosing The Sweet Tooth!`;
 
   // ── MESSAGE LOG ─────────────────────────────────────────────────────────────
 
-  app.get("/api/messages", (_req, res) => {
-    res.json({ messages: readMessageLog() });
+  app.get("/api/messages", async (_req, res) => {
+    res.json({ messages: await getMessageLog() });
   });
 
   // ── CONFIG STATUS — shows which integrations are active ──────────────────
