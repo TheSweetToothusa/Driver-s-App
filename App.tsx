@@ -1777,47 +1777,7 @@ const OrderDetail: React.FC<{
             )}
 
             {/* Admin actions */}
-            {isAdmin && (
-              <div style={{ paddingTop: 12, borderTop: '1px solid #F3F4F6' }}>
-                {order.status === DeliveryStatus.DELIVERED && !order.successNotificationSent && (
-                  !showRevertConfirm ? (
-                    <button onClick={() => setShowRevertConfirm(true)} style={{ width: '100%', padding: 8, background: 'transparent', border: 'none', fontSize: 11, color: '#9CA3AF', cursor: 'pointer', marginBottom: 4 }}>
-                      ↩ Undo — Marked by mistake
-                    </button>
-                  ) : (
-                    <div style={{ background: '#FEF2F2', borderRadius: 8, padding: 12, marginBottom: 8 }}>
-                      <p style={{ fontSize: 12, fontWeight: 600, color: '#B91C1C', textAlign: 'center', marginBottom: 8 }}>Revert to assigned?</p>
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <button onClick={() => setShowRevertConfirm(false)} style={{ flex: 1, padding: 8, borderRadius: 8, background: '#F3F4F6', border: 'none', fontSize: 12, fontWeight: 600, color: '#374151', cursor: 'pointer' }}>No</button>
-                        <button onClick={handleRevert} style={{ flex: 1, padding: 8, borderRadius: 8, background: '#EF4444', border: 'none', fontSize: 12, fontWeight: 600, color: 'white', cursor: 'pointer' }}>Yes</button>
-                      </div>
-                    </div>
-                  )
-                )}
 
-                {order.status === DeliveryStatus.DELIVERED && !order.successNotificationSent && !showRevertConfirm && (
-                  !showSendConfirm ? (
-                    <button onClick={() => setShowSendConfirm(true)} style={{ width: '100%', padding: 8, background: 'transparent', border: 'none', fontSize: 11, color: '#9CA3AF', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
-                      <Bell size={12} /> Send delivery confirmation
-                    </button>
-                  ) : (
-                    <div style={{ background: '#111827', borderRadius: 8, padding: 12, marginBottom: 8 }}>
-                      <p style={{ fontSize: 12, fontWeight: 600, color: 'white', textAlign: 'center', marginBottom: 8 }}>Send confirmation email?</p>
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <button onClick={() => setShowSendConfirm(false)} style={{ flex: 1, padding: 8, borderRadius: 8, background: '#374151', border: 'none', fontSize: 12, fontWeight: 600, color: 'white', cursor: 'pointer' }}>No</button>
-                        <button onClick={() => { setShowSendConfirm(false); loadPreview('SUCCESS'); }} style={{ flex: 1, padding: 8, borderRadius: 8, background: '#22C55E', border: 'none', fontSize: 12, fontWeight: 600, color: 'white', cursor: 'pointer' }}>Yes</button>
-                      </div>
-                    </div>
-                  )
-                )}
-
-                {(order.status === DeliveryStatus.FAILED || order.status === DeliveryStatus.PENDING_RESCHEDULE) && !order.failureNotificationSent && (
-                  <button onClick={() => loadPreview('FAILURE')} style={{ width: '100%', padding: 10, borderRadius: 8, background: '#374151', border: 'none', fontSize: 12, fontWeight: 600, color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                    <Bell size={14} /> Notify Customer of Delay
-                  </button>
-                )}
-              </div>
-            )}
           </div>
           );
         })()}
