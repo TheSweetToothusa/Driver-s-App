@@ -23,6 +23,7 @@ const BRAND_LOGO = "https://cdn.shopify.com/s/files/1/0559/8498/0141/files/The_S
 
 const isWithinSendingHours = () => { const h = new Date().getHours(); return h >= 9 && h < 20; };
 const STATUSES_FOR_DROPDOWN = [
+  { value: 'PENDING',            label: 'Not Assigned',       color: '#78716c' },
   { value: 'SCHEDULED',          label: 'Scheduled',          color: '#7c3aed' },
   { value: 'ASSIGNED',           label: 'Assigned',           color: '#2563eb' },
   { value: 'IN_TRANSIT',         label: 'Out for Delivery',   color: '#000000' },

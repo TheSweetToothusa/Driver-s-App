@@ -144,8 +144,9 @@ const mapShopifyOrder = (order: any): Delivery => {
     deliveryFee: shippingPrice,
     orderTotal: parseFloat(order.total_price || order.subtotal_price || "0"),
     deliveryInstructions: order._delivery_instructions || attributes['delivery instructions'] || attributes['delivery_instructions'] || attributes['deliveryinstructions'] || attributes['instructions'] || attributes['special instructions'] || attributes['special_instructions'] || '',
-    // Status priority: 1) our st_ tag, 2) Shopify fulfillment_status, 3) PENDING
-    status: (order._st_status as DeliveryStatus) ||
+    // Status priority: 1) Shopify cancelled, 2) our st_ tag, 3) Shopify fulfilled, 4) PENDING
+    status: order.cancelled_at ? 'CANCELLED' as DeliveryStatus :
+      (order._st_status as DeliveryStatus) ||
       (order.fulfillment_status === 'fulfilled' ? DeliveryStatus.DELIVERED : DeliveryStatus.PENDING),
     completedAt: order._st_completedAt || (order.fulfillment_status === "fulfilled" ? order.updated_at : undefined),
     deliveryDate: order._st_deliveryDate || parseDeliveryDate(rawDate),
