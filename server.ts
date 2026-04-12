@@ -91,27 +91,40 @@ async function readPodData(): Promise<Record<string, any>> {
 async function readPodDataLight(): Promise<Record<string, any>> {
   if (pool) {
     try {
-      const r = await pool.query("SELECT key, value FROM kv_store WHERE key LIKE 'pod:%'");
+      // Memory optimization: Use PostgreSQL to extract only the fields we need
+      // This avoids loading large base64 photo/signature data into Node memory
+      const r = await pool.query(`
+        SELECT 
+          REPLACE(key, 'pod:', '') as order_id,
+          value::jsonb->>'status' as status,
+          value::jsonb->>'completedAt' as completed_at,
+          value::jsonb->>'submittedAt' as submitted_at,
+          value::jsonb->>'driverId' as driver_id,
+          value::jsonb->>'driverName' as driver_name,
+          COALESCE(value::jsonb->>'driverNotes', value::jsonb->>'notes') as driver_notes,
+          value::jsonb->>'failureReason' as failure_reason,
+          value::jsonb->>'successNotificationSent' as success_sent,
+          value::jsonb->>'failureNotificationSent' as failure_sent,
+          (value::jsonb->>'photo' IS NOT NULL OR value::jsonb->>'confirmationPhoto' IS NOT NULL) as has_photo,
+          (value::jsonb->>'signature' IS NOT NULL OR value::jsonb->>'confirmationSignature' IS NOT NULL) as has_signature
+        FROM kv_store 
+        WHERE key LIKE 'pod:%'
+      `);
       const result: Record<string, any> = {};
       for (const row of r.rows) {
-        const orderId = row.key.replace('pod:', '');
-        try {
-          const full = JSON.parse(row.value);
-          // Only keep lightweight fields, skip photo/signature data
-          result[orderId] = {
-            status: full.status,
-            completedAt: full.completedAt,
-            submittedAt: full.submittedAt,
-            driverId: full.driverId,
-            driverName: full.driverName,
-            driverNotes: full.driverNotes || full.notes,
-            failureReason: full.failureReason,
-            successNotificationSent: full.successNotificationSent,
-            failureNotificationSent: full.failureNotificationSent,
-            hasPhoto: !!(full.photo || full.confirmationPhoto),
-            hasSignature: !!(full.signature || full.confirmationSignature),
-          };
-        } catch {}
+        result[row.order_id] = {
+          status: row.status,
+          completedAt: row.completed_at,
+          submittedAt: row.submitted_at,
+          driverId: row.driver_id,
+          driverName: row.driver_name,
+          driverNotes: row.driver_notes,
+          failureReason: row.failure_reason,
+          successNotificationSent: row.success_sent === 'true',
+          failureNotificationSent: row.failure_sent === 'true',
+          hasPhoto: row.has_photo,
+          hasSignature: row.has_signature,
+        };
       }
       return result;
     } catch(e) { console.error('readPodDataLight DB error:', e); }
