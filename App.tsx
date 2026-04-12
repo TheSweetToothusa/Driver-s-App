@@ -2306,18 +2306,6 @@ const OrdersView: React.FC<OrdersViewProps> = ({
 
     return (<>
       <div className="flex flex-col h-full" style={{ background: '#FFFFFF' }}>
-        {/* Stats bar - matching Deliveries */}
-        <div className="grid grid-cols-2 border-b border-stone-200" style={{ background: '#FFFFFF' }}>
-          <div className="py-3 text-center border-r border-stone-200">
-            <p className="text-2xl font-black" style={{ color: '#374151' }}>{deliveries.filter(d => OPEN_STATUSES.includes(d.status)).length}</p>
-            <p className="text-[8px] font-black uppercase text-stone-400 leading-tight">Open</p>
-          </div>
-          <div className="py-3 text-center">
-            <p className="text-2xl font-black" style={{ color: '#22C55E' }}>{deliveredTodayCount}</p>
-            <p className="text-[8px] font-black uppercase text-stone-400 leading-tight">Done Today</p>
-          </div>
-        </div>
-
         {/* Search + Filters */}
         <div className="px-4 pt-3 pb-3 bg-white">
           {/* Search Input */}
@@ -3848,9 +3836,17 @@ ${labelsHtml}
     };
   };
 
-  // Stats for the header
-  const openCount = filtered.filter(d => OPEN_STATUSES.includes(d.status)).length;
-  const doneTodayCount = filtered.filter(d => d.status === 'DELIVERED' && (d.completedAt || '').startsWith(todayStr)).length;
+  // Stats for the header - ACCURATE counts for today's local deliveries only
+  const openCount = deliveries.filter(d => 
+    d.deliveryDate === todayStr && 
+    d.status !== 'DELIVERED' && 
+    d.status !== 'CANCELLED' && 
+    d.status !== 'CLOSED'
+  ).length;
+  const doneTodayCount = deliveries.filter(d => 
+    d.status === 'DELIVERED' && 
+    (d.completedAt || '').startsWith(todayStr)
+  ).length;
 
   return (
     <div className="flex flex-col h-full" style={{ background: '#FFFFFF' }}>
