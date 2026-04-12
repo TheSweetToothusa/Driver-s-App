@@ -6749,7 +6749,8 @@ export default function App() {
     if (!window.confirm(`Log out as ${currentUser?.name}?`)) return;
     localStorage.removeItem('currentUser');
     localStorage.removeItem('ordersCache'); // Clear cached orders on logout
-    setCurrentUser(null); setDeliveries([]); setSelectedOrder(null);
+    // Force full page reload to clear ALL state and get fresh data
+    window.location.reload();
   };
 
   if (!currentUser) {
@@ -6801,7 +6802,7 @@ export default function App() {
             </button>
           )}
           <span className={`w-2 h-2 rounded-full ${isLoading ? 'bg-amber-400 animate-pulse' : isSyncing ? 'bg-blue-400 animate-pulse' : dataSource === 'LIVE' ? 'bg-green-500' : 'bg-red-400'}`} />
-          <button onClick={() => fetchOrders(false)} className={`p-1.5 text-[#5F6368] ${isLoading || isSyncing ? 'animate-spin' : ''}`}><RefreshCw size={15} /></button>
+          <button onClick={() => { localStorage.removeItem('ordersCache'); fetchOrders(false); }} className={`p-1.5 text-[#5F6368] ${isLoading || isSyncing ? 'animate-spin' : ''}`}><RefreshCw size={15} /></button>
           <button onClick={logout} className="flex items-center gap-1 px-3 py-2 bg-red-50 text-red-500 rounded-xl font-bold uppercase text-[10px] active:scale-95 border border-red-100">
             <LogOut size={13} /> Out
           </button>
