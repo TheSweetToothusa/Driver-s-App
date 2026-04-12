@@ -1134,10 +1134,16 @@ Thank you for choosing The Sweet Tooth!`;
 
   // ── CONFIG STATUS — shows which integrations are active ──────────────────
   app.get("/api/config/status", (_req, res) => {
+    const SMTP_PASS = process.env.SMTP_PASS || '';
+    const SMTP_USER = process.env.SMTP_USER || 'orders@thesweettooth.com';
+    const SMTP_HOST = process.env.SMTP_HOST || 'smtp.gmail.com';
     res.json({
       sendgrid: !!SENDGRID_API_KEY,
       sendgridFrom: SENDGRID_FROM_EMAIL || null,
-      notificationChannel: 'Email only (SendGrid)',
+      smtpConfigured: !!SMTP_PASS,
+      smtpUser: SMTP_USER,
+      smtpHost: SMTP_HOST,
+      emailReady: !!SMTP_PASS,
     });
   });
 
