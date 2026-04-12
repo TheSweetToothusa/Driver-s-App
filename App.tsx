@@ -4069,6 +4069,7 @@ ${labelsHtml}
                     onDragOver={e => { e.preventDefault(); setDragOverId(order.id); }}
                     onDrop={() => { if (dragOrderId) handleDropOnStop(orders, dragOrderId, order.id); setDragOrderId(null); setDragOverId(null); }}
                     onDragEnd={() => { setDragOrderId(null); setDragOverId(null); }}
+                    onClick={() => onSelectOrder(order)}
                     style={{ 
                       background: '#ffffff',
                       borderRadius: 12,
@@ -4076,6 +4077,7 @@ ${labelsHtml}
                       marginBottom: 12,
                       boxShadow: '0 1px 3px rgba(0, 0, 0, 0.08)',
                       borderLeft: order.attemptNumber === 2 ? '3px solid #D4AF37' : isOutForDelivery ? '3px solid #F59E0B' : '3px solid #E5E7EB',
+                      cursor: 'pointer',
                     }}>
                     
                     {/* HEADER: #35213 | MIAMI | [Driver Pill] */}
@@ -4116,22 +4118,16 @@ ${labelsHtml}
                     </div>
 
                     {/* BODY */}
-                    <div style={{ cursor: 'pointer' }} onClick={() => onSelectOrder(order)}>
+                    <div>
                       <p style={{ color: '#111827', fontSize: 15, fontWeight: 600, marginBottom: 2 }}>{name}</p>
                       {order.items?.[0] && (
                         <p style={{ color: '#9CA3AF', fontSize: 12, marginBottom: 6 }}>{order.items[0].name}</p>
                       )}
                       
-                      {/* ADDRESS — Subtle blue link */}
-                      <a
-                        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${order.address?.street || ''}${order.address?.unit ? ' #' + order.address.unit : ''}, ${order.address?.city || ''}, FL ${order.address?.zip || ''}`)}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={e => e.stopPropagation()}
-                        style={{ color: '#2563EB', fontSize: 12, textDecoration: 'none' }}
-                      >
+                      {/* ADDRESS — Plain text, tap card to open order */}
+                      <p style={{ color: '#2563EB', fontSize: 12 }}>
                         {order.address?.street}{order.address?.unit ? ` #${order.address.unit}` : ''}, {order.address?.city} {order.address?.zip}
-                      </a>
+                      </p>
                       
                       {/* Delivery instructions — subtle */}
                       {order.deliveryInstructions && (
