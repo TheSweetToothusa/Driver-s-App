@@ -840,7 +840,7 @@ async function startServer() {
   });
 
   app.post("/api/pod", async (req, res) => {
-    const { orderId, photo, signature, notes, completedAt, status, driverId, driverName, failureReason, isManual, customerEmail, giftReceiverName, giftSenderName, address } = req.body;
+    const { orderId, photo, signature, notes, completedAt, status, driverId, driverName, failureReason, isManual, customerEmail, giftReceiverName, giftSenderName, address, orderNumber } = req.body;
     
     // DEBUG: Log what photo data is received
     console.log(`📷 POD POST for ${orderId}: photo=${photo ? `YES (${photo.length} chars, starts: ${photo.substring(0,30)}...)` : 'NO'}, status=${status}`);
@@ -936,6 +936,12 @@ async function startServer() {
 
       // ── AUTO-SEND DELIVERY CONFIRMATION EMAIL WITH PHOTO ───────────────────────────────
       const SMTP_PASS = process.env.SMTP_PASS || '';
+      // Log why email might not be sent
+      if (status === 'DELIVERED') {
+        if (!customerEmail) console.log(`📧 No email for order ${orderId} — cannot send POD confirmation`);
+        else if (!SMTP_PASS) console.log(`📧 SMTP_PASS not set — cannot send POD confirmation to ${customerEmail}`);
+        else console.log(`📧 Attempting to send POD email to ${customerEmail} for order ${orderId}`);
+      }
       if (status === 'DELIVERED' && customerEmail && SMTP_PASS) {
         try {
           const deliveryTime = new Date(completedAt || Date.now()).toLocaleString('en-US', { 
@@ -946,7 +952,7 @@ async function startServer() {
           
           const receiverName = giftReceiverName || 'the recipient';
           
-          const subject = `Your Sweet Tooth gift has been delivered!`;
+          const subject = `Your Sweet Tooth gift has been delivered! (Order ${orderNumber || orderId})`;
           const body = `Good news! Your gift to ${receiverName} has been delivered.
 
 Delivered: ${deliveryTime}

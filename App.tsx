@@ -831,7 +831,7 @@ const OrderDetail: React.FC<{
     onUpdate(order.id, updates);
 
     // 1. Save POD data (photo, sig, notes) to DB and auto-send confirmation email
-    await fetch('/api/pod', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orderId: order.id, photo: photoData, signature: sigData, notes: driverNote, completedAt: now, status: 'DELIVERED', driverId: currentUser.id, driverName: currentUser.name, isManual: isManualOrder, customerEmail: order.customer?.email || '', giftReceiverName: order.giftReceiverName || '', giftSenderName: order.giftSenderName || '', address: order.address || '' }) });
+    await fetch('/api/pod', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orderId: order.id, photo: photoData, signature: sigData, notes: driverNote, completedAt: now, status: 'DELIVERED', driverId: currentUser.id, driverName: currentUser.name, isManual: isManualOrder, customerEmail: order.giftSenderEmail || order.customer?.email || '', giftReceiverName: order.giftReceiverName || '', giftSenderName: order.giftSenderName || '', address: order.address || '', orderNumber: order.orderNumber || '' }) });
 
     // 2. Update order status to DELIVERED — use correct endpoint for manual vs Shopify orders
     try {
