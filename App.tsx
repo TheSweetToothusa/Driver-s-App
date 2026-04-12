@@ -6636,16 +6636,22 @@ export default function App() {
 
   useEffect(() => {
     if (currentUser) {
-      // INSTANT LOAD: Show cached orders immediately (< 50ms)
+      // INSTANT LOAD: Show cached orders if < 1 hour old
       try {
         const cached = localStorage.getItem('ordersCache');
         if (cached) {
           const { orders, timestamp } = JSON.parse(cached);
-          if (orders?.length > 0) {
+          const cacheAge = Date.now() - new Date(timestamp).getTime();
+          const ONE_HOUR = 60 * 60 * 1000;
+          // Only use cache if < 1 hour old AND has orders
+          if (orders?.length > 0 && cacheAge < ONE_HOUR) {
             setDeliveries(orders);
             setIsLoading(false); // Show data instantly!
             const cacheTime = new Date(timestamp);
             setLastSync(cacheTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' (cached)');
+          } else if (cacheAge >= ONE_HOUR) {
+            // Cache too old - clear it
+            localStorage.removeItem('ordersCache');
           }
         }
       } catch { /* cache miss or corrupt - no problem */ }
