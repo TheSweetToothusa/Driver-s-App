@@ -2243,11 +2243,9 @@ const OrdersView: React.FC<OrdersViewProps> = ({
           if (dateTo && orderDate > dateTo) return false;
         }
       }
-      // Status filter — skip when date range is active (show all statuses)
-      if (!(dateFrom || dateTo)) {
-        if (statusFilter === 'OPEN' && !OPEN_STATUSES.includes(d.status)) return false;
-        if (statusFilter === 'CLOSED' && !CLOSED_STATUSES.includes(d.status)) return false;
-      }
+      // Status filter — always applies
+      if (statusFilter === 'OPEN' && !OPEN_STATUSES.includes(d.status)) return false;
+      if (statusFilter === 'CLOSED' && !CLOSED_STATUSES.includes(d.status)) return false;
       // Text search
       if (!search) return true;
       const q = search.toLowerCase();
@@ -2364,7 +2362,12 @@ const OrdersView: React.FC<OrdersViewProps> = ({
             // Group by date
             const grouped: Record<string, typeof filtered> = {};
             filtered.forEach(order => {
-              const dateKey = (order.deliveryDate || 'unscheduled').split('T')[0];
+              // For delivered/closed orders, group by completedAt (actual delivery date)
+              // For open orders, group by deliveryDate (scheduled date)
+              const isDoneOrder = order.status === 'DELIVERED' || order.status === 'CLOSED';
+              const dateKey = isDoneOrder
+                ? (order.completedAt || order.deliveryDate || 'unscheduled').split('T')[0]
+                : (order.deliveryDate || 'unscheduled').split('T')[0];
               if (!grouped[dateKey]) grouped[dateKey] = [];
               grouped[dateKey].push(order);
             });
