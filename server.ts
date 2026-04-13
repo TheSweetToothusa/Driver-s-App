@@ -106,7 +106,8 @@ async function readPodDataLight(): Promise<Record<string, any>> {
           value::jsonb->>'successNotificationSent' as success_sent,
           value::jsonb->>'failureNotificationSent' as failure_sent,
           (value::jsonb->>'photo' IS NOT NULL OR value::jsonb->>'confirmationPhoto' IS NOT NULL) as has_photo,
-          (value::jsonb->>'signature' IS NOT NULL OR value::jsonb->>'confirmationSignature' IS NOT NULL) as has_signature
+          (value::jsonb->>'signature' IS NOT NULL OR value::jsonb->>'confirmationSignature' IS NOT NULL) as has_signature,
+          value::jsonb->>'adminNotes' as admin_notes
         FROM kv_store 
         WHERE key LIKE 'pod:%'
       `);
@@ -124,6 +125,7 @@ async function readPodDataLight(): Promise<Record<string, any>> {
           failureNotificationSent: row.failure_sent === 'true',
           hasPhoto: row.has_photo,
           hasSignature: row.has_signature,
+          adminNotes: row.admin_notes || undefined,
         };
       }
       return result;
