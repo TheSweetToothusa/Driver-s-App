@@ -179,7 +179,7 @@ async function initDB() {
   const existing = await dbGet('users');
   if (!existing) {
     await dbSet('users', [
-      { id: "super_admin", name: "Mikey", pin: "1979", role: "SUPER_ADMIN", isActive: true, failedAttempts: 0, createdAt: new Date().toISOString() },
+      { id: "super_admin", name: "Mike", pin: "1979", role: "SUPER_ADMIN", isActive: true, failedAttempts: 0, createdAt: new Date().toISOString() },
       { id: "manager_1", name: "Katie", pin: "4070", role: "MANAGER", phone: "3059944070", isActive: true, failedAttempts: 0, createdAt: new Date().toISOString() }
     ]);
     console.log('Default users seeded');
@@ -218,7 +218,7 @@ async function initDB() {
 
 if (!fs.existsSync(USERS_PATH)) {
   fs.writeFileSync(USERS_PATH, JSON.stringify([
-    { id: "super_admin", name: "Mikey", pin: "1979", role: "SUPER_ADMIN", isActive: true, failedAttempts: 0, createdAt: new Date().toISOString() },
+    { id: "super_admin", name: "Mike", pin: "1979", role: "SUPER_ADMIN", isActive: true, failedAttempts: 0, createdAt: new Date().toISOString() },
     { id: "manager_1", name: "Katie", pin: "4070", role: "MANAGER", phone: "3059944070", isActive: true, failedAttempts: 0, createdAt: new Date().toISOString() }
   ], null, 2));
 }
