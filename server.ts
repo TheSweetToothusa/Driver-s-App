@@ -189,6 +189,9 @@ async function initDB() {
     let changed = false;
     const mikey = users.find((u: any) => u.id === 'super_admin');
     const katie = users.find((u: any) => u.id === 'manager_1');
+    if (mikey && mikey.name !== 'Mike') {
+      mikey.name = 'Mike'; changed = true;
+    }
     if (mikey && (mikey.lockedUntil || mikey.failedAttempts > 0)) {
       mikey.lockedUntil = undefined; mikey.failedAttempts = 0; changed = true;
     }
