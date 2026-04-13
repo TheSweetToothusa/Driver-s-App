@@ -4781,6 +4781,7 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
   const [driverRates, setDriverRates] = useState<Record<string, number>>({});
   const [payCalculated, setPayCalculated] = useState(false);
   const [payAllDrivers, setPayAllDrivers] = useState(false);
+  const payResultsRef = useRef<HTMLDivElement>(null);
   
   // Default driver
   const [defaultDriverId, setDefaultDriverId] = useState<string>('');
@@ -5448,7 +5449,7 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
                         <p className="text-xs font-bold uppercase text-stone-400 mb-3 text-center">Step 3: $ Per Delivery</p>
                         <div className="flex items-center justify-center gap-2">
                           <span className="text-3xl font-black text-stone-400">$</span>
-                          <input type="number" inputMode="decimal" placeholder="10" step="0.01"
+                          <input type="number" inputMode="decimal" placeholder="" step="0.01"
                             value={payRatePerDelivery} onChange={e => { setPayRatePerDelivery(e.target.value); setPayCalculated(false); }}
                             className="w-32 bg-white border-2 border-stone-200 rounded-xl px-4 py-3 text-3xl font-black text-center outline-none focus:border-emerald-500" />
                         </div>
@@ -5491,7 +5492,7 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
                       </details>
                       
                       {/* Calculate button */}
-                      <button onClick={() => setPayCalculated(true)} 
+                      <button onClick={() => { setPayCalculated(true); setTimeout(() => { payResultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 50); }} 
                         disabled={!payRatePerDelivery && !driverRates[payDriverId]}
                         className={`w-full py-4 rounded-2xl font-black uppercase text-lg transition-all ${(!payRatePerDelivery && !driverRates[payDriverId]) ? 'bg-stone-200 text-stone-400' : 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white shadow-lg active:scale-98'}`}>
                         Calculate Earnings
@@ -5503,7 +5504,7 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
                         const driverName = allUsers.find(u => u.id === payDriverId)?.name || 'Driver';
                         const { start, end } = getDateRangeForPay();
                         return (
-                          <div className="bg-gradient-to-br from-stone-900 to-stone-800 rounded-2xl p-5 space-y-3">
+                          <div ref={payResultsRef} className="bg-gradient-to-br from-stone-900 to-stone-800 rounded-2xl p-5 space-y-3">
                             <div className="flex items-center justify-between">
                               <div>
                                 <p className="text-emerald-400 font-black text-lg">{driverName}</p>
