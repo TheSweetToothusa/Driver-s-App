@@ -5364,6 +5364,27 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
                       ? `${formatDate(start)}, ${year}`
                       : `${formatDate(start)} – ${formatDate(end)}, ${year}`;
                     
+                    // CSV Download function
+                    const downloadReport = () => {
+                      const headers = ['Order #', 'Driver', 'City', 'Delivery Fee', 'Completed', 'Notes'];
+                      const rows = filtered.map(d => [
+                        d.orderNumber || d.id,
+                        d.driverName || 'Unassigned',
+                        d.address?.city || '',
+                        (d.deliveryFee || 0).toFixed(2),
+                        d.completedAt ? new Date(d.completedAt).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : '',
+                        (d.deliveryInstructions || '').replace(/,/g, ';').replace(/\n/g, ' ').slice(0, 100)
+                      ]);
+                      const csvContent = [headers, ...rows].map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
+                      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                      const url = URL.createObjectURL(blob);
+                      const link = document.createElement('a');
+                      link.href = url;
+                      link.download = `delivery-report-${start}-to-${end}.csv`;
+                      link.click();
+                      URL.revokeObjectURL(url);
+                    };
+                    
                     return (
                       <div className="bg-gradient-to-br from-emerald-600 to-emerald-700 rounded-2xl p-5 text-center shadow-xl">
                         <p className="text-emerald-100 text-xs uppercase font-bold mb-1">
@@ -5371,9 +5392,19 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
                         </p>
                         <p className="text-emerald-200 text-sm mb-3">{dateDisplay}</p>
                         <div className="text-5xl font-black text-white mb-2">${totalFees.toFixed(2)}</div>
-                        <div className="inline-block bg-white/20 rounded-full px-4 py-1">
+                        <div className="inline-block bg-white/20 rounded-full px-4 py-1 mb-3">
                           <span className="text-emerald-100 font-bold text-sm">{totalDeliveries} deliveries</span>
                         </div>
+                        {totalDeliveries > 0 && (
+                          <div>
+                            <button 
+                              onClick={downloadReport}
+                              className="bg-white/20 hover:bg-white/30 text-white font-bold text-sm px-4 py-2 rounded-xl transition-colors"
+                            >
+                              📥 Download Report
+                            </button>
+                          </div>
+                        )}
                       </div>
                     );
                   })()}
