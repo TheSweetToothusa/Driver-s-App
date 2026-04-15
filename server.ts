@@ -288,7 +288,7 @@ function nextBusinessDay(from: Date): string {
   return d.toISOString().split('T')[0];
 }
 
-async function sendEmail(to: string, subject: string, body: string, attachmentBase64?: string, attachmentFilename?: string, htmlBody?: string): Promise<boolean> {
+async function sendEmail(to: string, subject: string, body: string, attachmentBase64?: string, attachmentFilename?: string): Promise<boolean> {
   // Configurable SMTP - works with any provider
   const SMTP_HOST = process.env.SMTP_HOST || 'smtp.gmail.com';
   const SMTP_PORT = parseInt(process.env.SMTP_PORT || '587');
@@ -318,8 +318,7 @@ async function sendEmail(to: string, subject: string, body: string, attachmentBa
       to: to,
       bcc: 'orders@thesweettooth.com',
       subject: subject,
-      text: body,
-      ...(htmlBody ? { html: htmlBody } : {})
+      text: body
     };
     
     // Attach POD photo if provided
@@ -959,82 +958,6 @@ async function startServer() {
           const receiverName = giftReceiverName || 'the recipient';
           
           const subject = `Your Sweet Tooth gift has been delivered! (Order ${orderNumber || orderId})`;
-          const googleReviewLink = 'https://share.google/bFuhiITIBAcfjBvgc';
-          const feedbackLink = `mailto:orders@thesweettooth.com?subject=Delivery%20Feedback%20-%20Order%20${encodeURIComponent(orderNumber || orderId)}`;
-          const htmlBody = `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Your Sweet Tooth Gift Has Been Delivered</title>
-</head>
-<body style="margin:0;padding:0;background:#f5f0eb;font-family:'Helvetica Neue',Arial,sans-serif;color:#2c2c2c;">
-<table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f5f0eb;padding:24px 0;">
-<tr><td align="center">
-<table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;background:#ffffff;border-radius:4px;overflow:hidden;">
-
-  <!-- LOGO -->
-  <tr>
-    <td align="center" style="padding:28px 40px 20px;background:#ffffff;border-bottom:2px solid #f0e8df;">
-      <img src="https://thesweettooth.com/cdn/shop/files/LOGOTRANSPARENT_fe8b9799-6e4e-4fbd-909c-ed73df429cfb.png" alt="The Sweet Tooth Chocolate Factory" width="180" style="max-width:180px;height:auto;display:block;margin:0 auto;" />
-    </td>
-  </tr>
-
-  <!-- BODY -->
-  <tr>
-    <td style="padding:32px 40px 24px;">
-      <p style="font-size:16px;line-height:1.6;margin:0 0 12px;">Good news! Your gift to <strong>${receiverName}</strong> has been delivered.</p>
-      <p style="font-size:15px;color:#555;margin:0 0 8px;">Delivered: ${deliveryTime}</p>
-      <p style="font-size:15px;color:#555;margin:0 0 24px;">${photo ? 'Please see attached proof of delivery photo.' : 'Proof of delivery photo is available upon request.'}</p>
-    </td>
-  </tr>
-
-  <!-- REVIEW SECTION -->
-  <tr>
-    <td align="center" style="padding:24px 40px 32px;border-top:1px solid #f0e8df;">
-      <p style="font-size:13px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#999;margin:0 0 8px;">Quick favor</p>
-      <p style="font-size:18px;font-weight:700;color:#1a1a1a;margin:0 0 6px;">How did we do?</p>
-      <p style="font-size:13px;color:#777;margin:0 0 20px;line-height:1.6;">Tap the stars to rate your experience.</p>
-      <table cellpadding="0" cellspacing="0" border="0" align="center">
-        <tr>
-          <td style="padding:0 4px;"><a href="${feedbackLink}" style="font-size:32px;text-decoration:none;color:#ccc;" title="1 star">&#9733;</a></td>
-          <td style="padding:0 4px;"><a href="${feedbackLink}" style="font-size:32px;text-decoration:none;color:#ccc;" title="2 stars">&#9733;</a></td>
-          <td style="padding:0 4px;"><a href="${feedbackLink}" style="font-size:32px;text-decoration:none;color:#ccc;" title="3 stars">&#9733;</a></td>
-          <td style="padding:0 4px;"><a href="${feedbackLink}" style="font-size:32px;text-decoration:none;color:#ccc;" title="4 stars">&#9733;</a></td>
-          <td style="padding:0 4px;"><a href="${googleReviewLink}" style="font-size:32px;text-decoration:none;color:#f5a623;" title="5 stars">&#9733;</a></td>
-        </tr>
-        <tr>
-          <td colspan="4" align="left" style="padding-top:4px;font-size:10px;color:#bbb;letter-spacing:0.5px;">1&nbsp;&nbsp;&nbsp;&nbsp;2&nbsp;&nbsp;&nbsp;&nbsp;3&nbsp;&nbsp;&nbsp;&nbsp;4</td>
-          <td align="center" style="padding-top:4px;font-size:10px;color:#f5a623;font-weight:700;letter-spacing:0.5px;">5</td>
-        </tr>
-      </table>
-    </td>
-  </tr>
-
-  <!-- MENU LINK -->
-  <tr>
-    <td align="center" style="padding:20px 40px 28px;background:#faf7f4;border-top:1px solid #f0e8df;">
-      <p style="font-size:13px;color:#777;margin:0 0 14px;">Sending another gift soon?</p>
-      <a href="https://thesweettooth.com/collections/all" style="display:inline-block;background:#1a1a1a;color:#ffffff;text-decoration:none;font-size:12px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;padding:12px 28px;border-radius:3px;">View Our Full Menu &rarr;</a>
-    </td>
-  </tr>
-
-  <!-- FOOTER -->
-  <tr>
-    <td align="center" style="padding:20px 40px;background:#1a1a1a;">
-      <p style="font-size:12px;color:rgba(255,255,255,0.45);margin:0;line-height:1.8;">
-        The Sweet Tooth &mdash; Chocolate Factory<br>
-        18435 NE 19th Ave, North Miami Beach, FL 33179<br>
-        (305) 682-1400 &nbsp;&middot;&nbsp; thesweettooth.com
-      </p>
-    </td>
-  </tr>
-
-</table>
-</td></tr>
-</table>
-</body>
-</html>`;
           const body = `Good news! Your gift to ${receiverName} has been delivered.
 
 Delivered: ${deliveryTime}
@@ -1043,7 +966,7 @@ ${photo ? 'Please see attached proof of delivery photo.' : 'Proof of delivery ph
 
 Thank you for choosing The Sweet Tooth!`;
 
-          const emailSent = await sendEmail(customerEmail, subject, body, photo || undefined, photo ? `delivery-${orderId}.jpg` : undefined, htmlBody);
+          const emailSent = await sendEmail(customerEmail, subject, body, photo || undefined, photo ? `delivery-${orderId}.jpg` : undefined);
           if (emailSent) {
             console.log(`✅ Auto-sent delivery confirmation to ${customerEmail} for order ${orderId}${photo ? ' (with photo)' : ''}`);
           } else {
