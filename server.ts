@@ -356,7 +356,11 @@ function getMemoryMB() {
 }
 
 async function startServer() {
-  await initDB();
+  try {
+    await initDB();
+  } catch (e) {
+    console.error('⚠️ initDB failed — server starting without DB init. DB writes/reads will retry on each request.', e);
+  }
   const app = express();
   const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000;
   app.use(express.json({ limit: '10mb' })); // Reduced from 50mb to prevent memory spikes
