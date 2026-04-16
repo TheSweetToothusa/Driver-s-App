@@ -147,7 +147,8 @@ async function readPodOrder(orderId: string): Promise<any> {
   } catch { return {}; }
 }
 
-async function writePodOrder(orderId: string, data: any): Promise<void> {
+async function writePodOrder(orderId: string, data: any): Promise<boolean> {
+  let dbSuccess = false;
   // Always write to DB
   if (pool) {
     try {
@@ -155,6 +156,7 @@ async function writePodOrder(orderId: string, data: any): Promise<void> {
         'INSERT INTO kv_store(key,value) VALUES($1,$2) ON CONFLICT(key) DO UPDATE SET value=$2, updated_at=NOW()',
         [`pod:${orderId}`, JSON.stringify(data)]
       );
+      dbSuccess = true;
     } catch(e) { console.error('writePodOrder DB error:', e); }
   }
   // Also write to file as fallback
@@ -163,6 +165,7 @@ async function writePodOrder(orderId: string, data: any): Promise<void> {
     all[orderId] = data;
     fs.writeFileSync(POD_STORAGE_PATH, JSON.stringify(all, null, 2));
   } catch {}
+  return dbSuccess;
 }
 
 // --- Init DB tables ---
@@ -872,7 +875,12 @@ async function startServer() {
         driverName,
         failureReason
       };
-      await writePodOrder(orderId, updated);
+      const podSaved = await writePodOrder(orderId, updated);
+      if (!podSaved) {
+        console.error(`❌ POD SAVE FAILED for ${orderId} — DB write did not persist`);
+        res.status(500).json({ success: false, error: 'Failed to save proof of delivery. Please try again.' });
+        return;
+      }
 
       // For manual orders (stored in DB only) — update the manual_orders record directly
       const isManualOrder = isManual || String(orderId).startsWith('manual_');
