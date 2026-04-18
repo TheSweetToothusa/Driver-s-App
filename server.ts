@@ -46,9 +46,10 @@ if (pool) {
 }
 
 // Retry wrapper for transient Postgres connection errors.
-// Most "DB down" failures we see are stale connections that recover immediately
-// on the next attempt. This tries up to 3 times with exponential backoff.
-async function withDbRetry<T>(op: () => Promise<T>, label: string, retries = 2): Promise<T> {
+// Render's shared Postgres shows sustained outages lasting several seconds,
+// so we retry up to 5 times with exponential backoff across ~9 seconds total.
+// That catches the vast majority of outages we observe in production.
+async function withDbRetry<T>(op: () => Promise<T>, label: string, retries = 5): Promise<T> {
   let lastErr: any;
   for (let i = 0; i <= retries; i++) {
     try {
@@ -62,7 +63,9 @@ async function withDbRetry<T>(op: () => Promise<T>, label: string, retries = 2):
          '57P01', '57P02', '57P03', '08000', '08003', '08006'].includes(code) ||
         /terminat|closed|timeout|connection/i.test(msg);
       if (!retryable || i === retries) throw e;
-      const delay = 150 * Math.pow(3, i); // 150ms, 450ms
+      // Backoff schedule: 250, 600, 1200, 2500, 4500 ms (total ~9 sec)
+      const delays = [250, 600, 1200, 2500, 4500];
+      const delay = delays[i] ?? 4500;
       console.warn(`[${label}] DB transient error (${code || 'unknown'}), retry ${i + 1}/${retries} in ${delay}ms`);
       await new Promise((r) => setTimeout(r, delay));
     }
