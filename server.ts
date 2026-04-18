@@ -34,7 +34,41 @@ const pool = process.env.DATABASE_URL ? new Pool({
   max: 5, // Limit connections to reduce memory
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 10000,
+  keepAlive: true, // TCP keepalive — prevents network from silently killing idle connections
 }) : null;
+
+// Handle pool errors on idle clients — without this, an error on an idle
+// connection can crash the process or leave the pool in a bad state.
+if (pool) {
+  pool.on('error', (err) => {
+    console.error('pg pool idle client error (will recover):', err.message);
+  });
+}
+
+// Retry wrapper for transient Postgres connection errors.
+// Most "DB down" failures we see are stale connections that recover immediately
+// on the next attempt. This tries up to 3 times with exponential backoff.
+async function withDbRetry<T>(op: () => Promise<T>, label: string, retries = 2): Promise<T> {
+  let lastErr: any;
+  for (let i = 0; i <= retries; i++) {
+    try {
+      return await op();
+    } catch (e: any) {
+      lastErr = e;
+      const code = e?.code || '';
+      const msg = e?.message || '';
+      const retryable =
+        ['ECONNREFUSED', 'ETIMEDOUT', 'ECONNRESET', 'EPIPE', 'EHOSTUNREACH',
+         '57P01', '57P02', '57P03', '08000', '08003', '08006'].includes(code) ||
+        /terminat|closed|timeout|connection/i.test(msg);
+      if (!retryable || i === retries) throw e;
+      const delay = 150 * Math.pow(3, i); // 150ms, 450ms
+      console.warn(`[${label}] DB transient error (${code || 'unknown'}), retry ${i + 1}/${retries} in ${delay}ms`);
+      await new Promise((r) => setTimeout(r, delay));
+    }
+  }
+  throw lastErr;
+}
 
 // --- File paths (fallback if no DB) ---
 const POD_STORAGE_PATH = path.join(__dirname, "pod_data.json");
@@ -137,9 +171,15 @@ async function readPodDataLight(): Promise<Record<string, any>> {
 async function readPodOrder(orderId: string): Promise<any> {
   if (pool) {
     try {
-      const r = await pool.query('SELECT value FROM kv_store WHERE key=$1', [`pod:${orderId}`]);
+      const r = await withDbRetry(
+        () => pool.query('SELECT value FROM kv_store WHERE key=$1', [`pod:${orderId}`]),
+        `readPodOrder:${orderId}`
+      );
       return r.rows[0] ? JSON.parse(r.rows[0].value) : {};
-    } catch { return {}; }
+    } catch (e) {
+      console.error('readPodOrder DB error (after retries):', (e as any)?.message);
+      return {};
+    }
   }
   try {
     const all = JSON.parse(fs.readFileSync(POD_STORAGE_PATH, 'utf-8'));
@@ -149,15 +189,15 @@ async function readPodOrder(orderId: string): Promise<any> {
 
 async function writePodOrder(orderId: string, data: any): Promise<boolean> {
   let dbSuccess = false;
-  // Always write to DB
+  // Always write to DB (with retry on transient connection errors)
   if (pool) {
     try {
-      await pool.query(
+      await withDbRetry(() => pool.query(
         'INSERT INTO kv_store(key,value) VALUES($1,$2) ON CONFLICT(key) DO UPDATE SET value=$2, updated_at=NOW()',
         [`pod:${orderId}`, JSON.stringify(data)]
-      );
+      ), `writePodOrder:${orderId}`);
       dbSuccess = true;
-    } catch(e) { console.error('writePodOrder DB error:', e); }
+    } catch(e) { console.error('writePodOrder DB error (after retries):', e); }
   }
   // Also write to file as fallback
   try {
