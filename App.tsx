@@ -496,6 +496,7 @@ const FailedDeliveryFlow: React.FC<FailedFlowProps> = ({ order, currentUser, onS
   const [notes, setNotes] = useState('');
   const [photo, setPhoto] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const cameraRef = useRef<HTMLInputElement>(null);
 
   const handlePhoto = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -593,18 +594,40 @@ const FailedDeliveryFlow: React.FC<FailedFlowProps> = ({ order, currentUser, onS
 
             {/* Photo — REQUIRED */}
             <input type="file" accept="image/*" ref={fileRef} onChange={handlePhoto} className="hidden" />
+            <input type="file" accept="image/*" capture="environment" ref={cameraRef} onChange={handlePhoto} className="hidden" />
             <div>
               <label className="text-[10px] font-black uppercase text-stone-500 tracking-widest block mb-2">
                 📷 Photo of Property <span className="text-red-500">*Required</span>
               </label>
-              <button onClick={() => fileRef.current?.click()}
-                className={`w-full py-5 rounded-[24px] font-black uppercase text-sm flex items-center justify-center gap-3 active:scale-95 transition-all ${photo ? 'bg-green-50 text-green-700 border-2 border-green-400' : 'bg-red-50 text-red-700 border-2 border-red-300'}`}
-              >
-                <Camera size={20} />
-                {photo ? '✓ Photo Taken — Retake' : 'TAKE PHOTO NOW (Required)'}
-              </button>
-              {!photo && <p className="text-[10px] font-black text-red-500 mt-1 text-center">You must take a photo before submitting</p>}
-              {photo && <img src={photo} className="w-full rounded-[18px] max-h-40 object-cover border border-stone-100 mt-2" alt="Proof" />}
+              {photo ? (
+                <>
+                  <img src={photo} className="w-full rounded-[18px] max-h-40 object-cover border border-stone-100 mb-2" alt="Proof" />
+                  <div className="grid grid-cols-2 gap-2">
+                    <button onClick={() => cameraRef.current?.click()}
+                      className="py-3 rounded-[20px] font-black uppercase text-xs flex items-center justify-center gap-2 bg-green-50 text-green-700 border-2 border-green-400 active:scale-95 transition-all">
+                      <Camera size={16} /> Retake
+                    </button>
+                    <button onClick={() => fileRef.current?.click()}
+                      className="py-3 rounded-[20px] font-black uppercase text-xs flex items-center justify-center gap-2 bg-green-50 text-green-700 border-2 border-green-400 active:scale-95 transition-all">
+                      🖼️ Library
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button onClick={() => cameraRef.current?.click()}
+                      className="py-5 rounded-[20px] font-black uppercase text-xs flex items-center justify-center gap-2 bg-red-50 text-red-700 border-2 border-red-300 active:scale-95 transition-all">
+                      <Camera size={18} /> Take Photo
+                    </button>
+                    <button onClick={() => fileRef.current?.click()}
+                      className="py-5 rounded-[20px] font-black uppercase text-xs flex items-center justify-center gap-2 bg-red-50 text-red-700 border-2 border-red-300 active:scale-95 transition-all">
+                      🖼️ Upload
+                    </button>
+                  </div>
+                  <p className="text-[10px] font-black text-red-500 mt-1 text-center">You must take a photo before submitting</p>
+                </>
+              )}
             </div>
 
             {/* Notes — mandatory */}
@@ -735,6 +758,7 @@ const OrderDetail: React.FC<{
   const [isSending, setIsSending] = useState(false);
   const [notifyError, setNotifyError] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
+  const cameraRef = useRef<HTMLInputElement>(null);
   const isAdmin = role === 'SUPER_ADMIN' || role === 'MANAGER';
   const isCompleted = order.status === DeliveryStatus.DELIVERED || order.status === DeliveryStatus.FAILED || order.status === DeliveryStatus.PENDING_RESCHEDULE || order.status === DeliveryStatus.SECOND_ATTEMPT;
 
@@ -1625,30 +1649,41 @@ const OrderDetail: React.FC<{
         {!isCompleted && (
           <div style={{ padding: '0 16px', marginTop: 16 }}>
             <input type="file" accept="image/*" ref={fileRef} onChange={handlePhoto} className="hidden" />
+            <input type="file" accept="image/*" capture="environment" ref={cameraRef} onChange={handlePhoto} className="hidden" />
 
             {/* POD Card */}
             <div style={{ background: '#ffffff', borderRadius: 12, padding: 16, marginBottom: 12, boxShadow: '0 1px 3px rgba(0, 0, 0, 0.08)', borderLeft: '3px solid #E5E7EB' }}>
               <p style={{ fontSize: 10, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 16 }}>Proof of Delivery</p>
-              
+
               {/* Photo + Signature tiles */}
               <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
-                {/* Photo tile */}
-                <button
-                  onClick={() => fileRef.current?.click()}
-                  style={{ flex: 1, background: '#F9FAFB', borderRadius: 12, border: '1px solid #E5E7EB', minHeight: 120, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', overflow: 'hidden', position: 'relative' }}
-                >
-                  {photoData ? (
-                    <>
-                      <img src={photoData} style={{ width: '100%', height: '100%', objectFit: 'cover', position: 'absolute', inset: 0 }} alt="Photo" />
-                      <div style={{ position: 'absolute', bottom: 8, left: 8, background: '#22C55E', color: 'white', fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 9999 }}>✓ Photo</div>
-                    </>
-                  ) : (
-                    <>
-                      <Camera size={24} style={{ color: '#6B7280', marginBottom: 8 }} />
-                      <span style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>Take Photo</span>
-                    </>
-                  )}
-                </button>
+                {/* Photo tile — shows preview if set, two capture options when empty */}
+                {photoData ? (
+                  <button
+                    onClick={() => cameraRef.current?.click()}
+                    style={{ flex: 1, background: '#F9FAFB', borderRadius: 12, border: '1px solid #E5E7EB', minHeight: 120, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', overflow: 'hidden', position: 'relative' }}
+                  >
+                    <img src={photoData} style={{ width: '100%', height: '100%', objectFit: 'cover', position: 'absolute', inset: 0 }} alt="Photo" />
+                    <div style={{ position: 'absolute', bottom: 8, left: 8, background: '#22C55E', color: 'white', fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 9999 }}>✓ Photo</div>
+                  </button>
+                ) : (
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <button
+                      onClick={() => cameraRef.current?.click()}
+                      style={{ flex: 1, background: '#F9FAFB', borderRadius: 12, border: '1px solid #E5E7EB', minHeight: 57, display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, cursor: 'pointer' }}
+                    >
+                      <Camera size={18} style={{ color: '#6B7280' }} />
+                      <span style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>Take Photo</span>
+                    </button>
+                    <button
+                      onClick={() => fileRef.current?.click()}
+                      style={{ flex: 1, background: '#F9FAFB', borderRadius: 12, border: '1px solid #E5E7EB', minHeight: 57, display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, cursor: 'pointer' }}
+                    >
+                      <span style={{ fontSize: 16 }}>🖼️</span>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>Upload</span>
+                    </button>
+                  </div>
+                )}
 
                 {/* Signature tile */}
                 <button
@@ -5846,6 +5881,7 @@ const BulkProjectsView: React.FC<{
   const [showUnscheduled, setShowUnscheduled] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { loadProjects(); }, []);
   useEffect(() => { if (activeProjectId) loadOrders(activeProjectId); }, [activeProjectId]);
@@ -6087,11 +6123,17 @@ const BulkProjectsView: React.FC<{
                 <button onClick={() => setPodPhoto(null)} className="absolute top-2 right-2 bg-red-500 text-white w-7 h-7 rounded-full flex items-center justify-center"><X size={14} /></button>
               </div>
             ) : (
-              <button onClick={() => photoInputRef.current?.click()} className="w-full py-8 border-2 border-dashed border-stone-300 rounded-xl text-stone-400 font-bold flex flex-col items-center gap-2">
-                <Camera size={28} /><span>Take Photo</span>
-              </button>
+              <div className="grid grid-cols-2 gap-2">
+                <button onClick={() => cameraInputRef.current?.click()} className="w-full py-6 border-2 border-dashed border-stone-300 rounded-xl text-stone-500 font-bold flex flex-col items-center gap-1">
+                  <Camera size={22} /><span className="text-xs">Take Photo</span>
+                </button>
+                <button onClick={() => photoInputRef.current?.click()} className="w-full py-6 border-2 border-dashed border-stone-300 rounded-xl text-stone-500 font-bold flex flex-col items-center gap-1">
+                  <span style={{ fontSize: 20 }}>🖼️</span><span className="text-xs">Upload</span>
+                </button>
+              </div>
             )}
             <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoCapture} />
+            <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handlePhotoCapture} />
           </div>
           <div className="mb-4">
             <p className="font-black text-sm mb-2 uppercase text-stone-500">✍️ Signature</p>
