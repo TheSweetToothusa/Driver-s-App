@@ -183,15 +183,21 @@ async function readPodDataLight(): Promise<Record<string, any>> {
           value::jsonb->>'failureReason' as failure_reason,
           value::jsonb->>'successNotificationSent' as success_sent,
           value::jsonb->>'failureNotificationSent' as failure_sent,
-          (value::jsonb->>'photo' IS NOT NULL OR value::jsonb->>'confirmationPhoto' IS NOT NULL) as has_photo,
-          (value::jsonb->>'signature' IS NOT NULL OR value::jsonb->>'confirmationSignature' IS NOT NULL) as has_signature,
+          (value::jsonb->>'photo' IS NOT NULL OR value::jsonb->>'confirmationPhoto' IS NOT NULL OR value::jsonb->>'photoR2Key' IS NOT NULL) as has_photo,
+          (value::jsonb->>'signature' IS NOT NULL OR value::jsonb->>'confirmationSignature' IS NOT NULL OR value::jsonb->>'signatureR2Key' IS NOT NULL) as has_signature,
+          value::jsonb->>'photoR2Key' as photo_r2_key,
+          value::jsonb->>'signatureR2Key' as signature_r2_key,
           value::jsonb->>'adminNotes' as admin_notes
         FROM kv_store 
         WHERE key LIKE 'pod:%'
       `);
       const result: Record<string, any> = {};
       for (const row of r.rows) {
-        result[row.order_id] = {
+        // If photo/signature lives in R2, expose the proxy URL so the list view
+        // can render thumbnails without needing to open each order individually.
+        // Only include these keys when R2 keys exist — if we set them to undefined,
+        // the spread merge in shopifyService would overwrite real base64 values.
+        const entry: any = {
           status: row.status,
           completedAt: row.completed_at,
           submittedAt: row.submitted_at,
@@ -205,6 +211,9 @@ async function readPodDataLight(): Promise<Record<string, any>> {
           hasSignature: row.has_signature,
           adminNotes: row.admin_notes || undefined,
         };
+        if (row.photo_r2_key) entry.confirmationPhoto = `/api/pod/${row.order_id}/photo`;
+        if (row.signature_r2_key) entry.confirmationSignature = `/api/pod/${row.order_id}/signature`;
+        result[row.order_id] = entry;
       }
       return result;
     } catch(e) { console.error('readPodDataLight DB error:', e); }
