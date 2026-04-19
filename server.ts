@@ -7,6 +7,7 @@ import { config } from "dotenv";
 import pkg from 'pg';
 const { Pool } = pkg;
 import nodemailer from 'nodemailer';
+import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 
 config({ path: '.env.local' });
 
@@ -71,6 +72,46 @@ async function withDbRetry<T>(op: () => Promise<T>, label: string, retries = 5):
     }
   }
   throw lastErr;
+}
+
+// --- Cloudflare R2 (S3-compatible object storage for POD photos/signatures) ---
+// Photos are uploaded to R2 as binary objects; only the key is stored in Postgres.
+// This moves 2-3 MB photo writes off the database entirely.
+const R2 = (process.env.R2_ACCOUNT_ID && process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY)
+  ? new S3Client({
+      region: 'auto',
+      endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+      credentials: {
+        accessKeyId: process.env.R2_ACCESS_KEY_ID!,
+        secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
+      },
+    })
+  : null;
+const R2_BUCKET = process.env.R2_BUCKET || 'sweet-tooth-pod-photos';
+if (R2) console.log(`R2 configured: bucket=${R2_BUCKET}`);
+else console.log('R2 not configured — photos will remain in DB (legacy mode)');
+
+// Upload a base64 data URL ("data:image/jpeg;base64,...") to R2. Returns the R2 key
+// on success, or null on failure. Does NOT throw — caller decides how to handle failure.
+async function uploadToR2(dataUrl: string, key: string): Promise<string | null> {
+  if (!R2 || !dataUrl || typeof dataUrl !== 'string') return null;
+  const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+  if (!match) return null;
+  const contentType = match[1];
+  const buffer = Buffer.from(match[2], 'base64');
+  try {
+    await R2.send(new PutObjectCommand({
+      Bucket: R2_BUCKET,
+      Key: key,
+      Body: buffer,
+      ContentType: contentType,
+    }));
+    console.log(`R2 upload OK: ${key} (${buffer.length} bytes, ${contentType})`);
+    return key;
+  } catch (e: any) {
+    console.error(`R2 upload error for key ${key}:`, e?.message || e);
+    return null;
+  }
 }
 
 // --- File paths (fallback if no DB) ---
@@ -887,6 +928,16 @@ async function startServer() {
         if (pod.photo && !pod.confirmationPhoto) pod.confirmationPhoto = pod.photo;
         if (pod.signature && !pod.confirmationSignature) pod.confirmationSignature = pod.signature;
         if (pod.notes && !pod.driverNotes) pod.driverNotes = pod.notes;
+        // If photo/signature is in R2, expose a proxy URL the frontend can use as <img src>.
+        // Keep legacy base64 data URLs working too.
+        if (pod.photoR2Key && !pod.confirmationPhoto) {
+          pod.confirmationPhoto = `/api/pod/${req.params.orderId}/photo`;
+          pod.photo = pod.confirmationPhoto;
+        }
+        if (pod.signatureR2Key && !pod.confirmationSignature) {
+          pod.confirmationSignature = `/api/pod/${req.params.orderId}/signature`;
+          pod.signature = pod.confirmationSignature;
+        }
         res.json({ pod });
       } else {
         res.json({ pod: null });
@@ -894,25 +945,90 @@ async function startServer() {
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
+  // Proxy endpoints: stream photo/signature from R2. Keeps bucket private.
+  async function streamR2Object(res: express.Response, key: string) {
+    if (!R2) { res.status(404).end(); return; }
+    try {
+      const obj = await R2.send(new GetObjectCommand({ Bucket: R2_BUCKET, Key: key }));
+      res.setHeader('Content-Type', obj.ContentType || 'application/octet-stream');
+      res.setHeader('Cache-Control', 'private, max-age=3600');
+      (obj.Body as any).pipe(res);
+    } catch (e: any) {
+      console.error(`R2 fetch error for ${key}:`, e?.message || e);
+      res.status(404).end();
+    }
+  }
+  app.get("/api/pod/:orderId/photo", async (req, res) => {
+    const pod = await readPodOrder(req.params.orderId);
+    if (!pod?.photoR2Key) { res.status(404).end(); return; }
+    await streamR2Object(res, pod.photoR2Key);
+  });
+  app.get("/api/pod/:orderId/signature", async (req, res) => {
+    const pod = await readPodOrder(req.params.orderId);
+    if (!pod?.signatureR2Key) { res.status(404).end(); return; }
+    await streamR2Object(res, pod.signatureR2Key);
+  });
+
   app.post("/api/pod", async (req, res) => {
     const { orderId, photo, signature, notes, completedAt, status, driverId, driverName, failureReason, isManual, customerEmail, giftReceiverName, giftSenderName, address, orderNumber } = req.body;
-    
+
     // DEBUG: Log what photo data is received
     console.log(`📷 POD POST for ${orderId}: photo=${photo ? `YES (${photo.length} chars, starts: ${photo.substring(0,30)}...)` : 'NO'}, status=${status}`);
-    
+
     try {
       const existingPod = await readPodOrder(orderId);
-      
-      // Only update photo/signature if provided (don't overwrite existing with null)
-      const newPhoto = photo || existingPod.photo || existingPod.confirmationPhoto || null;
-      const newSignature = signature || existingPod.signature || existingPod.confirmationSignature || null;
-      
+
+      // Upload new photo/signature to R2 if configured and we got base64 data.
+      // If R2 upload fails, we fall back to storing base64 in the DB (legacy path).
+      let photoR2Key: string | null = existingPod.photoR2Key || null;
+      let signatureR2Key: string | null = existingPod.signatureR2Key || null;
+      let newPhotoBase64: string | null = null;
+      let newSignatureBase64: string | null = null;
+
+      if (photo && typeof photo === 'string' && photo.startsWith('data:')) {
+        if (R2) {
+          const key = `photos/${orderId}/${Date.now()}.jpg`;
+          const uploaded = await uploadToR2(photo, key);
+          if (uploaded) {
+            photoR2Key = uploaded;
+          } else {
+            // R2 upload failed — fall back to base64 in DB so we don't lose it
+            console.warn(`R2 photo upload failed for ${orderId}, falling back to DB base64`);
+            newPhotoBase64 = photo;
+          }
+        } else {
+          newPhotoBase64 = photo;
+        }
+      }
+
+      if (signature && typeof signature === 'string' && signature.startsWith('data:')) {
+        if (R2) {
+          const key = `signatures/${orderId}/${Date.now()}.png`;
+          const uploaded = await uploadToR2(signature, key);
+          if (uploaded) {
+            signatureR2Key = uploaded;
+          } else {
+            console.warn(`R2 signature upload failed for ${orderId}, falling back to DB base64`);
+            newSignatureBase64 = signature;
+          }
+        } else {
+          newSignatureBase64 = signature;
+        }
+      }
+
+      // Resolve final photo/signature fields — prefer R2 keys, then new base64, then existing
+      // When using R2, clear the base64 fields so we don't double-store.
+      const finalPhoto = photoR2Key ? null : (newPhotoBase64 || existingPod.photo || existingPod.confirmationPhoto || null);
+      const finalSignature = signatureR2Key ? null : (newSignatureBase64 || existingPod.signature || existingPod.confirmationSignature || null);
+
       const updated = {
         ...existingPod,
-        photo: newPhoto,
-        signature: newSignature,
-        confirmationPhoto: newPhoto,
-        confirmationSignature: newSignature,
+        photo: finalPhoto,
+        signature: finalSignature,
+        confirmationPhoto: finalPhoto,
+        confirmationSignature: finalSignature,
+        photoR2Key,
+        signatureR2Key,
         notes,
         driverNotes: notes || null,
         completedAt,
