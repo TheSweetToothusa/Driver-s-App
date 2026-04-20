@@ -890,6 +890,7 @@ const OrderDetail: React.FC<{
   const [notifyChannel, setNotifyChannel] = useState('');
   const [notifySent, setNotifySent] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [isSavingPOD, setIsSavingPOD] = useState(false);
   const [notifyError, setNotifyError] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
@@ -983,15 +984,34 @@ const OrderDetail: React.FC<{
 
 
   const handleComplete = async () => {
+    if (isSavingPOD) return; // prevent double-submit
     const now = new Date().toISOString();
     const isManualOrder = (order as any).isManual;
+
+    // 1. Save POD FIRST and verify it persisted before anything else.
+    // If this fails (DB outage, network), we must NOT mark the order delivered —
+    // otherwise we lose photo/signature/timestamp and the order shows as delivered
+    // with no proof of delivery.
+    setIsSavingPOD(true);
+    try {
+      const podResp = await fetch('/api/pod', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orderId: order.id, photo: photoData, signature: sigData, notes: driverNote, completedAt: now, status: 'DELIVERED', driverId: currentUser.id, driverName: currentUser.name, isManual: isManualOrder, customerEmail: order.giftSenderEmail || order.customer?.email || '', giftReceiverName: order.giftReceiverName || '', giftSenderName: order.giftSenderName || '', address: order.address || '', orderNumber: order.orderNumber || '' }) });
+      if (!podResp.ok) {
+        const errData = await podResp.json().catch(() => ({ error: `Server error (${podResp.status})` }));
+        setIsSavingPOD(false);
+        alert(`❌ Could not save proof of delivery.\n\n${errData.error || 'Unknown server error'}\n\nThe order was NOT marked as delivered. Please check your connection and try again.`);
+        return;
+      }
+    } catch (err: any) {
+      setIsSavingPOD(false);
+      alert(`❌ Network error — could not save proof of delivery.\n\n${err?.message || ''}\n\nThe order was NOT marked as delivered. Please check your connection and try again.`);
+      return;
+    }
+
+    // POD saved — now safe to update local state and Shopify tag.
     const updates: Partial<Delivery> = { status: DeliveryStatus.DELIVERED, confirmationPhoto: photoData || undefined, confirmationSignature: sigData || undefined, driverNotes: driverNote, completedAt: now, submittedAt: now };
     onUpdate(order.id, updates);
 
-    // 1. Save POD data (photo, sig, notes) to DB and auto-send confirmation email
-    await fetch('/api/pod', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orderId: order.id, photo: photoData, signature: sigData, notes: driverNote, completedAt: now, status: 'DELIVERED', driverId: currentUser.id, driverName: currentUser.name, isManual: isManualOrder, customerEmail: order.giftSenderEmail || order.customer?.email || '', giftReceiverName: order.giftReceiverName || '', giftSenderName: order.giftSenderName || '', address: order.address || '', orderNumber: order.orderNumber || '' }) });
-
-    // 2. Update order status to DELIVERED — use correct endpoint for manual vs Shopify orders
+    // 2. Update order status tag (Shopify) or manual-orders record. Non-fatal — POD is source of truth.
     try {
       if (isManualOrder) {
         await fetch(`/api/manual-orders/${order.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'DELIVERED', completedAt: now, confirmationPhoto: photoData || null, driverNotes: driverNote }) });
@@ -1000,6 +1020,7 @@ const OrderDetail: React.FC<{
       }
     } catch { /* non-fatal — POD already saved */ }
 
+    setIsSavingPOD(false);
     // Show full-screen delivery confirmation, then go back
     setShowDeliveredConfirm(true);
     
@@ -1019,15 +1040,29 @@ const OrderDetail: React.FC<{
   };
 
   const handleAdminOverride = async () => {
+    if (isSavingPOD) return;
     const now = new Date().toISOString();
     const isManualOrder = (order as any).isManual;
+
+    // Save POD first; abort if DB write doesn't persist.
+    setIsSavingPOD(true);
+    try {
+      const podResp = await fetch('/api/pod', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orderId: order.id, notes: driverNote || 'Admin override — marked delivered manually', completedAt: now, status: 'DELIVERED', driverId: currentUser.id, driverName: currentUser.name, isManual: isManualOrder, adminOverride: true }) });
+      if (!podResp.ok) {
+        const errData = await podResp.json().catch(() => ({ error: `Server error (${podResp.status})` }));
+        setIsSavingPOD(false);
+        alert(`❌ Could not save admin override.\n\n${errData.error || 'Unknown server error'}\n\nOrder was NOT marked as delivered. Please try again.`);
+        return;
+      }
+    } catch (err: any) {
+      setIsSavingPOD(false);
+      alert(`❌ Network error — could not save admin override.\n\n${err?.message || ''}\n\nOrder was NOT marked as delivered. Please try again.`);
+      return;
+    }
+
     const updates: Partial<Delivery> = { status: DeliveryStatus.DELIVERED, driverNotes: driverNote || 'Admin override — marked delivered manually', completedAt: now, submittedAt: now };
     onUpdate(order.id, updates);
 
-    // Save POD with admin override flag
-    await fetch('/api/pod', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orderId: order.id, notes: driverNote || 'Admin override — marked delivered manually', completedAt: now, status: 'DELIVERED', driverId: currentUser.id, driverName: currentUser.name, isManual: isManualOrder, adminOverride: true }) });
-
-    // Update order status
     try {
       if (isManualOrder) {
         await fetch(`/api/manual-orders/${order.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'DELIVERED', completedAt: now, driverNotes: driverNote || 'Admin override' }) });
@@ -1036,6 +1071,7 @@ const OrderDetail: React.FC<{
       }
     } catch { /* non-fatal */ }
 
+    setIsSavingPOD(false);
     setShowAdminOverrideConfirm(false);
     setShowDeliveredConfirm(true);
     setTimeout(() => { setShowDeliveredConfirm(false); onBack(); }, 2500);
@@ -1058,10 +1094,27 @@ const OrderDetail: React.FC<{
   };
 
   const handleFailSubmit = async (reason: FailureReason, notes: string, photo: string | null) => {
+    if (isSavingPOD) return;
     const now = new Date().toISOString();
+
+    setIsSavingPOD(true);
+    try {
+      const podResp = await fetch('/api/pod', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orderId: order.id, photo, notes, submittedAt: now, status: 'FAILED', driverId: currentUser.id, driverName: currentUser.name, failureReason: reason }) });
+      if (!podResp.ok) {
+        const errData = await podResp.json().catch(() => ({ error: `Server error (${podResp.status})` }));
+        setIsSavingPOD(false);
+        alert(`❌ Could not record failed delivery.\n\n${errData.error || 'Unknown server error'}\n\nPlease try again.`);
+        return;
+      }
+    } catch (err: any) {
+      setIsSavingPOD(false);
+      alert(`❌ Network error — could not record failed delivery.\n\n${err?.message || ''}\n\nPlease try again.`);
+      return;
+    }
+
     const attempt = { id: Date.now().toString(), timestamp: now, driverId: currentUser.id, driverName: currentUser.name, attemptNumber: (order.attemptNumber || 1) as 1 | 2, reason, notes, photo: photo || undefined };
     onUpdate(order.id, { status: DeliveryStatus.FAILED, confirmationPhoto: photo || undefined, driverNotes: notes, submittedAt: now, attempts: [...(order.attempts || []), attempt] });
-    await fetch('/api/pod', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orderId: order.id, photo, notes, submittedAt: now, status: 'FAILED', driverId: currentUser.id, driverName: currentUser.name, failureReason: reason }) });
+    setIsSavingPOD(false);
     setPendingFailure({ reason, notes, photo });
     setShowFailFlow(false);
     setShowReschedule(true);
@@ -1820,26 +1873,26 @@ const OrderDetail: React.FC<{
 
             {/* Action buttons */}
             <button
-              onClick={(photoData && sigData) ? handleComplete : undefined}
-              disabled={!photoData || !sigData}
-              style={{ 
-                width: '100%', 
-                padding: '16px', 
-                borderRadius: 12, 
+              onClick={(photoData && sigData && !isSavingPOD) ? handleComplete : undefined}
+              disabled={!photoData || !sigData || isSavingPOD}
+              style={{
+                width: '100%',
+                padding: '16px',
+                borderRadius: 12,
                 border: 'none',
-                fontSize: 15, 
-                fontWeight: 700, 
-                display: 'flex', 
-                alignItems: 'center', 
-                justifyContent: 'center', 
+                fontSize: 15,
+                fontWeight: 700,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
                 gap: 8,
-                cursor: (photoData && sigData) ? 'pointer' : 'not-allowed',
+                cursor: (photoData && sigData && !isSavingPOD) ? 'pointer' : 'not-allowed',
                 marginBottom: 8,
-                background: (photoData && sigData) ? '#22C55E' : '#E5E7EB',
-                color: (photoData && sigData) ? 'white' : '#9CA3AF'
+                background: (photoData && sigData && !isSavingPOD) ? '#22C55E' : '#E5E7EB',
+                color: (photoData && sigData && !isSavingPOD) ? 'white' : '#9CA3AF'
               }}
             >
-              <CheckCircle2 size={20} /> {(photoData && sigData) ? 'Mark Delivered' : !photoData && !sigData ? 'Photo + Signature Required' : !photoData ? 'Photo Required' : 'Signature Required'}
+              <CheckCircle2 size={20} /> {isSavingPOD ? 'Saving…' : (photoData && sigData) ? 'Mark Delivered' : !photoData && !sigData ? 'Photo + Signature Required' : !photoData ? 'Photo Required' : 'Signature Required'}
             </button>
 
             <button
