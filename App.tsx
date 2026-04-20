@@ -37,6 +37,140 @@ const STATUSES_FOR_DROPDOWN = [
 const formatTime = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 const formatDate = (iso: string) => new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// PRINT PREVIEW — bulletproof cross-platform print UI
+//
+// Renders label content in a full-screen in-app modal (no pop-ups, no new tabs,
+// no hidden iframes). Calls window.print() on the main window; @media print
+// CSS hides the rest of the app so only the labels print. Works identically on
+// iOS Safari, iOS standalone PWA, Chrome Android, and desktop.
+// ─────────────────────────────────────────────────────────────────────────────
+function showPrintPreview(opts: {
+  content: string;       // inner HTML (labels, cover, etc.)
+  css: string;           // raw CSS rules (auto-scoped to #sweet-print-scroll via nesting)
+  title: string;         // toolbar title
+  pageSize?: string;     // CSS @page size, default '4in 6in'
+}) {
+  const { content, css, title, pageSize = '4in 6in' } = opts;
+
+  document.getElementById('sweet-print-overlay')?.remove();
+  document.getElementById('sweet-print-styles')?.remove();
+
+  const styleEl = document.createElement('style');
+  styleEl.id = 'sweet-print-styles';
+  styleEl.textContent = `
+    #sweet-print-overlay {
+      position: fixed; inset: 0; z-index: 99999;
+      background: #4b5563;
+      display: flex; flex-direction: column;
+      font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
+    }
+    #sweet-print-toolbar {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 12px;
+      background: #111; color: #fff;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.35);
+      flex-shrink: 0;
+      padding-top: max(10px, env(safe-area-inset-top));
+    }
+    #sweet-print-close {
+      background: transparent; color: #fff; border: 0;
+      width: 44px; height: 44px; font-size: 22px;
+      cursor: pointer; border-radius: 999px;
+      display: flex; align-items: center; justify-content: center;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #sweet-print-close:active { background: rgba(255,255,255,0.15); }
+    #sweet-print-title {
+      flex: 1; font-weight: 700; font-size: 14px;
+      min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    #sweet-print-btn {
+      background: #fff; color: #000; border: 0;
+      padding: 11px 22px; font-size: 15px; font-weight: 900;
+      border-radius: 10px; cursor: pointer;
+      -webkit-appearance: none; appearance: none;
+      flex-shrink: 0;
+    }
+    #sweet-print-btn:active { background: #ddd; }
+    #sweet-print-scroll {
+      flex: 1 1 auto; overflow-y: auto; overflow-x: hidden;
+      -webkit-overflow-scrolling: touch;
+      padding: 16px 8px 32px;
+      display: flex; flex-direction: column; align-items: center; gap: 14px;
+      background: #4b5563;
+    }
+    #sweet-print-scroll > * {
+      box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+      background: #fff;
+      flex-shrink: 0;
+    }
+    #sweet-print-hint {
+      background: #111; color: #d1d5db;
+      font-size: 12px; text-align: center;
+      padding: 10px 16px;
+      padding-bottom: max(10px, env(safe-area-inset-bottom));
+      line-height: 1.5; flex-shrink: 0;
+    }
+
+    /* Caller's styles — scoped via CSS nesting (Chrome 112+, Safari 16.5+, FF 117+) */
+    #sweet-print-scroll {
+      ${css}
+    }
+
+    /* Print: hide app, show only labels */
+    @media print {
+      @page { size: ${pageSize}; margin: 0; }
+      body > *:not(#sweet-print-overlay) { display: none !important; }
+      #sweet-print-overlay {
+        position: static !important;
+        background: #fff !important;
+        display: block !important;
+      }
+      #sweet-print-toolbar, #sweet-print-hint { display: none !important; }
+      #sweet-print-scroll {
+        padding: 0 !important;
+        gap: 0 !important;
+        background: #fff !important;
+        overflow: visible !important;
+        display: block !important;
+      }
+      #sweet-print-scroll > * { box-shadow: none !important; }
+    }
+  `;
+  document.head.appendChild(styleEl);
+
+  const overlay = document.createElement('div');
+  overlay.id = 'sweet-print-overlay';
+  overlay.innerHTML = `
+    <div id="sweet-print-toolbar">
+      <button id="sweet-print-close" aria-label="Close preview">✕</button>
+      <div id="sweet-print-title">${title}</div>
+      <button id="sweet-print-btn">🖨️ Print</button>
+    </div>
+    <div id="sweet-print-scroll">${content}</div>
+    <div id="sweet-print-hint">If Print doesn't open the print dialog, use <b>Share → Print</b> (iPhone) or <b>⋮ menu → Print</b> (Android).</div>
+  `;
+  document.body.appendChild(overlay);
+
+  const prevBodyOverflow = document.body.style.overflow;
+  document.body.style.overflow = 'hidden';
+
+  const close = () => {
+    overlay.remove();
+    styleEl.remove();
+    document.body.style.overflow = prevBodyOverflow;
+    document.removeEventListener('keydown', onKey);
+  };
+  const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
+  document.addEventListener('keydown', onKey);
+
+  overlay.querySelector('#sweet-print-close')!.addEventListener('click', close);
+  overlay.querySelector('#sweet-print-btn')!.addEventListener('click', () => {
+    window.print();
+  });
+}
+
 // Status badge config
 const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string }> = {
   PENDING:             { label: 'Not Assigned',       bg: 'bg-stone-800',   text: 'text-white' },
@@ -1114,157 +1248,128 @@ const OrderDetail: React.FC<{
     const is2ndAttempt = order.attemptNumber === 2;
     const stopNum = stopNumber || 1;
 
-    const labelHtml = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <title>Delivery Label #${cleanOrderNum}</title>
-  <style>
-    @page { size: 4in 6in; margin: 0; }
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { 
-      font-family: 'Arial Black', Arial, sans-serif; 
-      width: 4in; 
-      height: 6in; 
-      padding: 0.15in;
-      display: flex;
-      flex-direction: column;
-    }
-    .header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding-bottom: 6px;
-      border-bottom: 2px solid #000;
-      margin-bottom: 8px;
-    }
-    .driver-name { font-size: 14px; font-weight: 900; text-transform: uppercase; }
-    .date { font-size: 11px; font-weight: 700; }
-    .stop-row {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 10px;
-    }
-    .stop-box {
-      border: 3px solid #000;
-      width: 50px;
-      height: 50px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 32px;
-      font-weight: 900;
-    }
-    .city { font-size: 22px; font-weight: 900; text-transform: uppercase; flex: 1; }
-    .order-num { font-size: 14px; font-weight: 700; color: #666; }
-    .info-section { margin-bottom: 6px; }
-    .label { font-size: 10px; color: #666; text-transform: uppercase; }
-    .value { font-size: 13px; font-weight: 700; }
-    .items-row { margin-bottom: 6px; }
-    .gift-card { display: flex; align-items: center; gap: 4px; margin-bottom: 6px; }
-    .checkmark { font-size: 16px; }
-    .phone-row { margin-bottom: 4px; }
-    .address-section { margin-bottom: 8px; }
-    .street { font-size: 12px; font-weight: 600; }
-    .instructions { font-size: 11px; font-weight: 600; margin-bottom: 6px; padding: 4px 6px; background: #f5f5f5; border-left: 3px solid #000; }
-    
-    .tear-off {
-      margin-top: auto;
-      border-top: 2px dashed #999;
-      padding-top: 8px;
-    }
-    .tear-header {
-      font-size: 11px;
-      font-weight: 900;
-      text-align: center;
-      margin-bottom: 4px;
-    }
-    .tear-info {
-      font-size: 11px;
-      font-weight: 700;
-      text-align: center;
-    }
-  </style>
-</head>
-<body>
+    const css = `
+  & { font-family: 'Arial Black', Arial, sans-serif; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  .single-label {
+    width: 4in;
+    min-height: 6in;
+    padding: 0.15in;
+    display: flex;
+    flex-direction: column;
+    page-break-after: always;
+  }
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 6px;
+    border-bottom: 2px solid #000;
+    margin-bottom: 8px;
+  }
+  .driver-name { font-size: 14px; font-weight: 900; text-transform: uppercase; }
+  .date { font-size: 11px; font-weight: 700; }
+  .stop-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .stop-box {
+    border: 3px solid #000;
+    width: 50px;
+    height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 32px;
+    font-weight: 900;
+  }
+  .city { font-size: 22px; font-weight: 900; text-transform: uppercase; flex: 1; }
+  .order-num { font-size: 14px; font-weight: 700; color: #666; }
+  .info-section { margin-bottom: 6px; }
+  .field-label { font-size: 10px; color: #666; text-transform: uppercase; }
+  .value { font-size: 13px; font-weight: 700; }
+  .items-row { margin-bottom: 6px; }
+  .gift-card { display: flex; align-items: center; gap: 4px; margin-bottom: 6px; }
+  .checkmark { font-size: 16px; }
+  .phone-row { margin-bottom: 4px; }
+  .address-section { margin-bottom: 8px; }
+  .street { font-size: 12px; font-weight: 600; }
+  .instructions { font-size: 11px; font-weight: 600; margin-bottom: 6px; padding: 4px 6px; background: #f5f5f5; border-left: 3px solid #000; }
+
+  .tear-off {
+    margin-top: auto;
+    border-top: 2px dashed #999;
+    padding-top: 8px;
+  }
+  .tear-header {
+    font-size: 11px;
+    font-weight: 900;
+    text-align: center;
+    margin-bottom: 4px;
+  }
+  .tear-info {
+    font-size: 11px;
+    font-weight: 700;
+    text-align: center;
+  }
+`;
+
+    const content = `
+<div class="single-label">
   <div class="header">
     <span class="driver-name">${driverName}</span>
     <span class="date">${deliveryDate}</span>
   </div>
-  
+
   <div class="stop-row">
     <div class="stop-box">${stopNum}</div>
     <span class="city">${city}</span>
     <span class="order-num">#${cleanOrderNum}</span>
   </div>
-  
+
   <div class="info-section">
-    <span class="label">Gift Receiver:</span>
+    <span class="field-label">Gift Receiver:</span>
     <span class="value">${receiverName}</span>
   </div>
-  
+
   <div class="items-row">
     <span class="value">📦 ${itemCount} items: ${itemNames.substring(0, 50)}${itemNames.length > 50 ? '...' : ''}</span>
   </div>
-  
+
   ${hasGiftCard ? '<div class="gift-card"><span class="checkmark">✓</span><span class="value">Gift Card</span></div>' : ''}
-  
+
   ${gateCode ? '<div class="instructions">' + gateCode.substring(0, 80) + '</div>' : ''}
-  
+
   <div class="phone-row">
     <span class="value">Receiver: ${receiverPhone || '—'}</span>
   </div>
-  
+
   <div class="phone-row">
     <span class="value">Sender: ${senderPhoneNum || '—'}</span>
   </div>
-  
+
   <div class="address-section">
     <div class="street">${order.address?.street || ''}</div>
     <div class="street">${order.address?.unit ? 'Unit ' + order.address.unit + ', ' : ''}${city}, FL ${order.address?.zip || ''}</div>
   </div>
-  
+
   <div class="tear-off">
     <div class="tear-header">
       ${is2ndAttempt ? 'FAILED 2ND ATTEMPT' : 'FAILED 1ST ATTEMPT'}
     </div>
     <div class="tear-info">#${cleanOrderNum} | ${receiverName.split(' ')[0] || 'Customer'} | ${city}</div>
   </div>
-</body>
-</html>`;
+</div>`;
 
-    // Create hidden iframe for printing without navigating away
-    const existingFrame = document.getElementById('print-frame');
-    if (existingFrame) existingFrame.remove();
-    
-    const iframe = document.createElement('iframe');
-    iframe.id = 'print-frame';
-    iframe.style.position = 'fixed';
-    iframe.style.right = '0';
-    iframe.style.bottom = '0';
-    iframe.style.width = '0';
-    iframe.style.height = '0';
-    iframe.style.border = 'none';
-    document.body.appendChild(iframe);
-    
-    const doc = iframe.contentDocument || iframe.contentWindow?.document;
-    if (doc) {
-      doc.open();
-      doc.write(labelHtml);
-      doc.close();
-      
-      // Wait for content to load then print
-      setTimeout(() => {
-        iframe.contentWindow?.focus();
-        iframe.contentWindow?.print();
-        // Remove iframe after print dialog closes
-        setTimeout(() => {
-          iframe.remove();
-        }, 1000);
-      }, 250);
-    }
+    showPrintPreview({
+      content,
+      css,
+      title: `Label #${cleanOrderNum} · Stop ${stopNum}`,
+      pageSize: '4in 6in',
+    });
   };
 
   const openNavChoice = (addr: string) => {
@@ -3545,14 +3650,9 @@ const ScheduleView: React.FC<{
       `;
     }).join('');
 
-    const html = `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<title>Route Sheet — ${dateLabel}</title>
-<style>
+    const css = `
+  & { font-family: Arial, sans-serif; }
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: Arial, sans-serif; background: #fff; }
 
   /* Cover page */
   .cover {
@@ -3741,16 +3841,9 @@ const ScheduleView: React.FC<{
     gap: 4px;
   }
   .ud-label { font-weight: 800; min-width: 52px; }
+`;
 
-  @media print {
-    body { margin: 0; }
-    .label, .cover { border: none; }
-  }
-</style>
-</head>
-<body>
-
-<!-- COVER PAGE: Summary of all stops -->
+    const coverHtml = `
 <div class="cover">
   <div class="cover-logo">🍫 The Sweet Tooth</div>
   <div class="cover-date">${dateLabel} &nbsp;·&nbsp; Printed ${timeLabel}</div>
@@ -3765,43 +3858,16 @@ const ScheduleView: React.FC<{
       return `<div class="cover-stop-row"><span class="cover-stop-num">${i+1}</span> #${num} — ${n} &nbsp;·&nbsp; ${c}${drv ? ' &nbsp;·&nbsp; ' + drv : ''}</div>`;
     }).join('')}
   </div>
-</div>
+</div>`;
 
-<!-- LABELS: One per stop -->
-${labelsHtml}
-
-<script>window.onload = () => { window.print(); }</script>
-</body>
-</html>`;
-
-    // Use hidden iframe for printing without navigating away
-    const existingFrame = document.getElementById('route-print-frame');
-    if (existingFrame) existingFrame.remove();
-    
-    const iframe = document.createElement('iframe');
-    iframe.id = 'route-print-frame';
-    iframe.style.position = 'fixed';
-    iframe.style.right = '0';
-    iframe.style.bottom = '0';
-    iframe.style.width = '0';
-    iframe.style.height = '0';
-    iframe.style.border = 'none';
-    document.body.appendChild(iframe);
-    
-    const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
-    if (iframeDoc) {
-      iframeDoc.open();
-      iframeDoc.write(html);
-      iframeDoc.close();
-      
-      setTimeout(() => {
-        iframe.contentWindow?.focus();
-        iframe.contentWindow?.print();
-        setTimeout(() => {
-          iframe.remove();
-        }, 1000);
-      }, 300);
-    }
+    const stopsCount = orderedStops.length;
+    const titleStr = `${stopsCount} Delivery Label${stopsCount === 1 ? '' : 's'} · ${dateLabel}`;
+    showPrintPreview({
+      content: coverHtml + labelsHtml,
+      css,
+      title: titleStr,
+      pageSize: '4in 6in',
+    });
   };
 
   const startNavigation = (app: 'waze' | 'google') => {
