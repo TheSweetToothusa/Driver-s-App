@@ -3675,35 +3675,41 @@ const ScheduleView: React.FC<{
   .cover-stop-row { font-size: 13px; padding: 4px 0; border-bottom: 1px solid #eee; text-align: left; }
   .cover-stop-num { display: inline-block; width: 28px; height: 28px; border-radius: 50%; background: #000; color: #fff; font-weight: 900; font-size: 13px; text-align: center; line-height: 28px; margin-right: 8px; }
 
-  /* Labels */
+  /* Labels — LOCKED to 4x6 exactly. Content must never overflow to next sheet. */
   .label {
     width: 4in;
-    min-height: 6in;
-    padding: 0.25in 0.3in 0.2in;
+    height: 6in;
+    max-height: 6in;
+    padding: 0.2in 0.3in 0.15in;
     page-break-after: always;
+    page-break-inside: avoid;
+    break-inside: avoid;
     border: 1px solid #ccc;
     display: flex;
     flex-direction: column;
+    overflow: hidden;
   }
   .stop-circle {
-    width: 1.4in;
-    height: 1.4in;
+    width: 0.9in;
+    height: 0.9in;
     border-radius: 50%;
     background: #000;
     color: #fff;
-    font-size: 72px;
+    font-size: 48px;
     font-weight: 900;
     display: flex;
     align-items: center;
     justify-content: center;
-    margin: 0 auto 6px;
+    margin: 0 auto 4px;
     line-height: 1;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
   .stop-of {
     text-align: center;
-    font-size: 12px;
+    font-size: 11px;
     color: #777;
-    margin-bottom: 14px;
+    margin-bottom: 8px;
   }
   .order-num {
     font-size: 22px;
@@ -3792,16 +3798,17 @@ const ScheduleView: React.FC<{
     border-radius: 6px;
   }
 
-  /* Tear spacer — pushes tear line down */
+  /* Tear spacer — pushes tear line down toward the bottom half */
   .tear-spacer {
     flex-grow: 1;
-    min-height: 0.8in;
+    min-height: 0;
   }
 
   /* Tear line */
   .tear-line {
     padding: 7px 0 5px;
     border-top: 2px dashed #aaa;
+    flex-shrink: 0;
   }
   .tear-text {
     font-size: 7px;
@@ -3811,9 +3818,10 @@ const ScheduleView: React.FC<{
     text-align: center;
   }
 
-  /* Undeliverable slip — compact */
+  /* Undeliverable slip — compact, fixed to bottom of label */
   .undeliverable {
     padding-top: 6px;
+    flex-shrink: 0;
   }
   .ud-header {
     display: flex;
