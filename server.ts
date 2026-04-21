@@ -1049,9 +1049,10 @@ async function startServer() {
       };
       const podSaved = await writePodOrder(orderId, updated);
       if (!podSaved) {
-        console.error(`❌ POD SAVE FAILED for ${orderId} — DB write did not persist`);
-        res.status(500).json({ success: false, error: 'Failed to save proof of delivery. Please try again.' });
-        return;
+        // DB write failed. Do NOT abort — the driver did their job and the gift sender
+        // still needs to be notified. The file fallback in writePodOrder captured the
+        // record on this server instance; the photo is also on the driver's phone.
+        console.error(`⚠️ POD DB write failed for ${orderId} — continuing with Shopify tag + customer email anyway`);
       }
 
       // For manual orders (stored in DB only) — update the manual_orders record directly

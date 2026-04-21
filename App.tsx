@@ -876,7 +876,6 @@ const OrderDetail: React.FC<{
   onBack: () => void;
   stopNumber?: number;
 }> = ({ order, role, currentUser, allUsers, onUpdate, onAddDelivery, onBack, stopNumber }) => {
-  const [isSigning, setIsSigning] = useState(false);
   const [photoData, setPhotoData] = useState<string | null>(order.confirmationPhoto || null);
   const [sigData, setSigData] = useState<string | null>(order.confirmationSignature || null);
   const [driverNote, setDriverNote] = useState(order.driverNotes || '');
@@ -988,42 +987,23 @@ const OrderDetail: React.FC<{
     const now = new Date().toISOString();
     const isManualOrder = (order as any).isManual;
 
-    // 1. Save POD FIRST and verify it persisted before anything else.
-    // If this fails (DB outage, network), we must NOT mark the order delivered —
-    // otherwise we lose photo/signature/timestamp and the order shows as delivered
-    // with no proof of delivery.
-    setIsSavingPOD(true);
-    try {
-      const podResp = await fetch('/api/pod', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orderId: order.id, photo: photoData, signature: sigData, notes: driverNote, completedAt: now, status: 'DELIVERED', driverId: currentUser.id, driverName: currentUser.name, isManual: isManualOrder, customerEmail: order.giftSenderEmail || order.customer?.email || '', giftReceiverName: order.giftReceiverName || '', giftSenderName: order.giftSenderName || '', address: order.address || '', orderNumber: order.orderNumber || '' }) });
-      if (!podResp.ok) {
-        const errData = await podResp.json().catch(() => ({ error: `Server error (${podResp.status})` }));
-        setIsSavingPOD(false);
-        alert(`❌ Could not save proof of delivery.\n\n${errData.error || 'Unknown server error'}\n\nThe order was NOT marked as delivered. Please check your connection and try again.`);
-        return;
-      }
-    } catch (err: any) {
-      setIsSavingPOD(false);
-      alert(`❌ Network error — could not save proof of delivery.\n\n${err?.message || ''}\n\nThe order was NOT marked as delivered. Please check your connection and try again.`);
-      return;
-    }
-
-    // POD saved — now safe to update local state and Shopify tag.
+    // Record-first, never gatekeep. The driver handed chocolate to a real person —
+    // the app's job is to RECORD that, not block on DB state. Order:
+    //   1) mark delivered in UI   2) update Shopify/manual tag
+    //   3) show driver success    4) attempt POD save (never blocking)
     const updates: Partial<Delivery> = { status: DeliveryStatus.DELIVERED, confirmationPhoto: photoData || undefined, confirmationSignature: sigData || undefined, driverNotes: driverNote, completedAt: now, submittedAt: now };
     onUpdate(order.id, updates);
 
-    // 2. Update order status tag (Shopify) or manual-orders record. Non-fatal — POD is source of truth.
     try {
       if (isManualOrder) {
         await fetch(`/api/manual-orders/${order.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'DELIVERED', completedAt: now, confirmationPhoto: photoData || null, driverNotes: driverNote }) });
       } else {
         await fetch(`/api/orders/${order.id}/status`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'DELIVERED', completedAt: now }) });
       }
-    } catch { /* non-fatal — POD already saved */ }
+    } catch (err) { console.error('status update failed (non-blocking):', err); }
 
-    setIsSavingPOD(false);
-    // Show full-screen delivery confirmation, then go back
     setShowDeliveredConfirm(true);
-    
+
     // Auto-open SMS for phone-only orders (no email)
     const customerEmail = order.customer?.email || '';
     const senderPhone = order.giftSenderPhone || '';
@@ -1033,9 +1013,19 @@ const OrderDetail: React.FC<{
       const smsMessage = `Great news! Your Sweet Tooth gift to ${receiverName} has been delivered. Thank you for your order! 🍫 - The Sweet Tooth`;
       setTimeout(() => {
         window.location.href = `sms:${cleanPhone}?body=${encodeURIComponent(smsMessage)}`;
-      }, 2000); // Open SMS app after 2 seconds (while green checkmark shows)
+      }, 2000);
     }
-    
+
+    // Save POD + fire server-side confirmation email. Never block the driver on this;
+    // the photo stays on the phone as a natural backup if the DB write fails.
+    setIsSavingPOD(true);
+    try {
+      await fetch('/api/pod', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orderId: order.id, photo: photoData, signature: sigData, notes: driverNote, completedAt: now, status: 'DELIVERED', driverId: currentUser.id, driverName: currentUser.name, isManual: isManualOrder, customerEmail: order.giftSenderEmail || order.customer?.email || '', giftReceiverName: order.giftReceiverName || '', giftSenderName: order.giftSenderName || '', address: order.address || '', orderNumber: order.orderNumber || '' }) });
+    } catch (err) {
+      console.error('POD save failed (non-blocking):', err);
+    }
+    setIsSavingPOD(false);
+
     setTimeout(() => { setShowDeliveredConfirm(false); onBack(); }, 2500);
   };
 
@@ -1043,22 +1033,6 @@ const OrderDetail: React.FC<{
     if (isSavingPOD) return;
     const now = new Date().toISOString();
     const isManualOrder = (order as any).isManual;
-
-    // Save POD first; abort if DB write doesn't persist.
-    setIsSavingPOD(true);
-    try {
-      const podResp = await fetch('/api/pod', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orderId: order.id, notes: driverNote || 'Admin override — marked delivered manually', completedAt: now, status: 'DELIVERED', driverId: currentUser.id, driverName: currentUser.name, isManual: isManualOrder, adminOverride: true }) });
-      if (!podResp.ok) {
-        const errData = await podResp.json().catch(() => ({ error: `Server error (${podResp.status})` }));
-        setIsSavingPOD(false);
-        alert(`❌ Could not save admin override.\n\n${errData.error || 'Unknown server error'}\n\nOrder was NOT marked as delivered. Please try again.`);
-        return;
-      }
-    } catch (err: any) {
-      setIsSavingPOD(false);
-      alert(`❌ Network error — could not save admin override.\n\n${err?.message || ''}\n\nOrder was NOT marked as delivered. Please try again.`);
-      return;
-    }
 
     const updates: Partial<Delivery> = { status: DeliveryStatus.DELIVERED, driverNotes: driverNote || 'Admin override — marked delivered manually', completedAt: now, submittedAt: now };
     onUpdate(order.id, updates);
@@ -1069,11 +1043,20 @@ const OrderDetail: React.FC<{
       } else {
         await fetch(`/api/orders/${order.id}/status`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'DELIVERED', completedAt: now }) });
       }
-    } catch { /* non-fatal */ }
+    } catch (err) { console.error('status update failed (non-blocking):', err); }
 
-    setIsSavingPOD(false);
     setShowAdminOverrideConfirm(false);
     setShowDeliveredConfirm(true);
+
+    // Save POD in the background; never block the admin on DB state.
+    setIsSavingPOD(true);
+    try {
+      await fetch('/api/pod', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orderId: order.id, notes: driverNote || 'Admin override — marked delivered manually', completedAt: now, status: 'DELIVERED', driverId: currentUser.id, driverName: currentUser.name, isManual: isManualOrder, adminOverride: true }) });
+    } catch (err) {
+      console.error('POD save failed (non-blocking):', err);
+    }
+    setIsSavingPOD(false);
+
     setTimeout(() => { setShowDeliveredConfirm(false); onBack(); }, 2500);
   };
 
@@ -1097,27 +1080,21 @@ const OrderDetail: React.FC<{
     if (isSavingPOD) return;
     const now = new Date().toISOString();
 
-    setIsSavingPOD(true);
-    try {
-      const podResp = await fetch('/api/pod', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orderId: order.id, photo, notes, submittedAt: now, status: 'FAILED', driverId: currentUser.id, driverName: currentUser.name, failureReason: reason }) });
-      if (!podResp.ok) {
-        const errData = await podResp.json().catch(() => ({ error: `Server error (${podResp.status})` }));
-        setIsSavingPOD(false);
-        alert(`❌ Could not record failed delivery.\n\n${errData.error || 'Unknown server error'}\n\nPlease try again.`);
-        return;
-      }
-    } catch (err: any) {
-      setIsSavingPOD(false);
-      alert(`❌ Network error — could not record failed delivery.\n\n${err?.message || ''}\n\nPlease try again.`);
-      return;
-    }
-
+    // Mark failed + open the reschedule flow immediately. Never block on DB state —
+    // the driver still needs to call the sender and pick a next step.
     const attempt = { id: Date.now().toString(), timestamp: now, driverId: currentUser.id, driverName: currentUser.name, attemptNumber: (order.attemptNumber || 1) as 1 | 2, reason, notes, photo: photo || undefined };
     onUpdate(order.id, { status: DeliveryStatus.FAILED, confirmationPhoto: photo || undefined, driverNotes: notes, submittedAt: now, attempts: [...(order.attempts || []), attempt] });
-    setIsSavingPOD(false);
     setPendingFailure({ reason, notes, photo });
     setShowFailFlow(false);
     setShowReschedule(true);
+
+    setIsSavingPOD(true);
+    try {
+      await fetch('/api/pod', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orderId: order.id, photo, notes, submittedAt: now, status: 'FAILED', driverId: currentUser.id, driverName: currentUser.name, failureReason: reason }) });
+    } catch (err) {
+      console.error('POD save failed (non-blocking):', err);
+    }
+    setIsSavingPOD(false);
   };
 
   const handleAutoReschedule = async () => {
@@ -1813,53 +1790,34 @@ const OrderDetail: React.FC<{
             <div style={{ background: '#ffffff', borderRadius: 12, padding: 16, marginBottom: 12, boxShadow: '0 1px 3px rgba(0, 0, 0, 0.08)', borderLeft: '3px solid #E5E7EB' }}>
               <p style={{ fontSize: 10, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 16 }}>Proof of Delivery</p>
 
-              {/* Photo + Signature tiles */}
-              <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
-                {/* Photo tile — shows preview if set, two capture options when empty */}
+              {/* Photo tile — shows preview if set, two capture options when empty */}
+              <div style={{ marginBottom: 16 }}>
                 {photoData ? (
                   <button
                     onClick={() => cameraRef.current?.click()}
-                    style={{ flex: 1, background: '#F9FAFB', borderRadius: 12, border: '1px solid #E5E7EB', minHeight: 120, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', overflow: 'hidden', position: 'relative' }}
+                    style={{ width: '100%', background: '#F9FAFB', borderRadius: 12, border: '1px solid #E5E7EB', minHeight: 160, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', overflow: 'hidden', position: 'relative' }}
                   >
                     <img src={photoData} style={{ width: '100%', height: '100%', objectFit: 'cover', position: 'absolute', inset: 0 }} alt="Photo" />
                     <div style={{ position: 'absolute', bottom: 8, left: 8, background: '#22C55E', color: 'white', fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 9999 }}>✓ Photo</div>
                   </button>
                 ) : (
-                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <div style={{ display: 'flex', gap: 8 }}>
                     <button
                       onClick={() => cameraRef.current?.click()}
-                      style={{ flex: 1, background: '#F9FAFB', borderRadius: 12, border: '1px solid #E5E7EB', minHeight: 57, display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, cursor: 'pointer' }}
+                      style={{ flex: 1, background: '#F9FAFB', borderRadius: 12, border: '1px solid #E5E7EB', minHeight: 64, display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, cursor: 'pointer' }}
                     >
                       <Camera size={18} style={{ color: '#6B7280' }} />
-                      <span style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>Take Photo</span>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>Take Photo</span>
                     </button>
                     <button
                       onClick={() => fileRef.current?.click()}
-                      style={{ flex: 1, background: '#F9FAFB', borderRadius: 12, border: '1px solid #E5E7EB', minHeight: 57, display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, cursor: 'pointer' }}
+                      style={{ flex: 1, background: '#F9FAFB', borderRadius: 12, border: '1px solid #E5E7EB', minHeight: 64, display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, cursor: 'pointer' }}
                     >
                       <span style={{ fontSize: 16 }}>🖼️</span>
-                      <span style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>Upload</span>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>Upload</span>
                     </button>
                   </div>
                 )}
-
-                {/* Signature tile */}
-                <button
-                  onClick={() => setIsSigning(true)}
-                  style={{ flex: 1, background: '#F9FAFB', borderRadius: 12, border: '1px solid #E5E7EB', minHeight: 120, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: 12 }}
-                >
-                  {sigData ? (
-                    <>
-                      <img src={sigData} style={{ maxWidth: '100%', maxHeight: 70, objectFit: 'contain', marginBottom: 8 }} alt="Signature" />
-                      <span style={{ background: '#DCFCE7', color: '#166534', fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 9999 }}>✓ Signed</span>
-                    </>
-                  ) : (
-                    <>
-                      <PenTool size={24} style={{ color: '#9CA3AF', marginBottom: 8 }} />
-                      <span style={{ fontSize: 13, fontWeight: 600, color: '#6B7280' }}>Signature</span>
-                    </>
-                  )}
-                </button>
               </div>
 
               {/* Driver Note */}
@@ -1873,8 +1831,8 @@ const OrderDetail: React.FC<{
 
             {/* Action buttons */}
             <button
-              onClick={(photoData && sigData && !isSavingPOD) ? handleComplete : undefined}
-              disabled={!photoData || !sigData || isSavingPOD}
+              onClick={(photoData && !isSavingPOD) ? handleComplete : undefined}
+              disabled={!photoData || isSavingPOD}
               style={{
                 width: '100%',
                 padding: '16px',
@@ -1886,13 +1844,13 @@ const OrderDetail: React.FC<{
                 alignItems: 'center',
                 justifyContent: 'center',
                 gap: 8,
-                cursor: (photoData && sigData && !isSavingPOD) ? 'pointer' : 'not-allowed',
+                cursor: (photoData && !isSavingPOD) ? 'pointer' : 'not-allowed',
                 marginBottom: 8,
-                background: (photoData && sigData && !isSavingPOD) ? '#22C55E' : '#E5E7EB',
-                color: (photoData && sigData && !isSavingPOD) ? 'white' : '#9CA3AF'
+                background: (photoData && !isSavingPOD) ? '#22C55E' : '#E5E7EB',
+                color: (photoData && !isSavingPOD) ? 'white' : '#9CA3AF'
               }}
             >
-              <CheckCircle2 size={20} /> {isSavingPOD ? 'Saving…' : (photoData && sigData) ? 'Mark Delivered' : !photoData && !sigData ? 'Photo + Signature Required' : !photoData ? 'Photo Required' : 'Signature Required'}
+              <CheckCircle2 size={20} /> {isSavingPOD ? 'Saving…' : photoData ? 'Mark Delivered' : 'Photo Required'}
             </button>
 
             <button
@@ -2274,10 +2232,6 @@ const OrderDetail: React.FC<{
         )}
 
       </div>
-
-      {isSigning && (
-        <SignaturePad onSave={(sig) => { setSigData(sig); setIsSigning(false); }} onCancel={() => setIsSigning(false)} />
-      )}
 
       {showFailFlow && (
         <FailedDeliveryFlow
