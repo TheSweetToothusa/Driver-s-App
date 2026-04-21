@@ -7,7 +7,7 @@ import { config } from "dotenv";
 import pkg from 'pg';
 const { Pool } = pkg;
 import nodemailer from 'nodemailer';
-import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, GetObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
 
 config({ path: '.env.local' });
 
@@ -111,6 +111,17 @@ async function uploadToR2(dataUrl: string, key: string): Promise<string | null> 
   } catch (e: any) {
     console.error(`R2 upload error for key ${key}:`, e?.message || e);
     return null;
+  }
+}
+
+// Check if a Cloudflare key already exists. Used to append -2, -3 etc. for retaken photos.
+async function r2KeyExists(key: string): Promise<boolean> {
+  if (!R2) return false;
+  try {
+    await R2.send(new HeadObjectCommand({ Bucket: R2_BUCKET, Key: key }));
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -1017,19 +1028,25 @@ async function startServer() {
 
       if (photo && typeof photo === 'string' && photo.startsWith('data:')) {
         if (R2) {
-          // Human-readable R2 key: photos/2026-04-21/35363_Smith_13-38-31.jpg
+          // Simple Cloudflare key: photos/2026-04-21/35363.jpg
+          // If retaken: photos/2026-04-21/35363-2.jpg, then -3, etc.
           const _now = new Date(completedAt || Date.now());
           const _etDate = _now.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-          const _etTime = _now.toLocaleTimeString('en-GB', { timeZone: 'America/New_York', hour12: false }).replace(/:/g, '-');
-          const _safeDriver = (driverName || 'unknown').replace(/[^a-zA-Z0-9]/g, '');
           const _safeOrderNum = (orderNumber || orderId).toString().replace(/[^a-zA-Z0-9]/g, '');
-          const key = `photos/${_etDate}/${_safeOrderNum}_${_safeDriver}_${_etTime}.jpg`;
+          let key = `photos/${_etDate}/${_safeOrderNum}.jpg`;
+          // If a photo already exists for this order on this date, append -2, -3, etc.
+          let _suffix = 2;
+          while (await r2KeyExists(key)) {
+            key = `photos/${_etDate}/${_safeOrderNum}-${_suffix}.jpg`;
+            _suffix++;
+            if (_suffix > 50) break; // safety cap
+          }
           const uploaded = await uploadToR2(photo, key);
           if (uploaded) {
             photoR2Key = uploaded;
           } else {
-            // R2 upload failed — fall back to base64 in DB so we don't lose it
-            console.warn(`R2 photo upload failed for ${orderId}, falling back to DB base64`);
+            // Cloudflare upload failed — fall back to base64 in DB so we don't lose it
+            console.warn(`Cloudflare photo upload failed for ${orderId}, falling back to DB base64`);
             newPhotoBase64 = photo;
           }
         } else {
@@ -1039,13 +1056,17 @@ async function startServer() {
 
       if (signature && typeof signature === 'string' && signature.startsWith('data:')) {
         if (R2) {
-          // Human-readable R2 key: signatures/2026-04-21/35363_Smith_13-38-31.png
+          // Simple Cloudflare key: signatures/2026-04-21/35363.png
           const _now = new Date(completedAt || Date.now());
           const _etDate = _now.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-          const _etTime = _now.toLocaleTimeString('en-GB', { timeZone: 'America/New_York', hour12: false }).replace(/:/g, '-');
-          const _safeDriver = (driverName || 'unknown').replace(/[^a-zA-Z0-9]/g, '');
           const _safeOrderNum = (orderNumber || orderId).toString().replace(/[^a-zA-Z0-9]/g, '');
-          const key = `signatures/${_etDate}/${_safeOrderNum}_${_safeDriver}_${_etTime}.png`;
+          let key = `signatures/${_etDate}/${_safeOrderNum}.png`;
+          let _suffix = 2;
+          while (await r2KeyExists(key)) {
+            key = `signatures/${_etDate}/${_safeOrderNum}-${_suffix}.png`;
+            _suffix++;
+            if (_suffix > 50) break;
+          }
           const uploaded = await uploadToR2(signature, key);
           if (uploaded) {
             signatureR2Key = uploaded;
@@ -1836,31 +1857,47 @@ Thank you for choosing The Sweet Tooth!`;
 
   // ── POD DEBUG (read-only diagnostic for POD storage issues) ─────────────────
   app.get('/api/debug/pod-check/:orderId', async (req, res) => {
+    const orderId = req.params.orderId;
+    const result: any = { orderId };
+
+    // Each query isolated — one failure doesn't break the rest
     try {
-      const orderId = req.params.orderId;
       const direct = await readPodOrder(orderId);
+      result.directReadHasData = direct && Object.keys(direct).length > 0;
+      result.directReadKeys = direct ? Object.keys(direct) : [];
+      result.directRead = direct;
+    } catch (e: any) { result.directReadError = String(e?.message || e); }
+
+    try {
       const light = await readPodDataLight();
-      let totalPodKeys: any = 'no-pool';
-      let sampleRawKeys: string[] = [];
-      if (pool) {
+      result.existsInLightData = !!light[orderId];
+      result.lightDataForOrder = light[orderId] || null;
+      result.totalKeysInLightData = Object.keys(light).length;
+      result.sampleLightKeys = Object.keys(light).slice(0, 10);
+    } catch (e: any) { result.lightDataError = String(e?.message || e); }
+
+    if (pool) {
+      try {
         const c = await pool.query("SELECT COUNT(*) FROM kv_store WHERE key LIKE 'pod:%'");
-        totalPodKeys = c.rows[0].count;
-        const s = await pool.query("SELECT key FROM kv_store WHERE key LIKE 'pod:%' LIMIT 10");
-        sampleRawKeys = s.rows.map((r: any) => r.key);
-      }
-      res.json({
-        orderId,
-        directReadHasData: direct && Object.keys(direct).length > 0,
-        directReadKeys: direct ? Object.keys(direct) : [],
-        directRead: direct,
-        existsInLightData: !!light[orderId],
-        lightDataForOrder: light[orderId] || null,
-        totalPodKeysInDb: totalPodKeys,
-        totalKeysInLightData: Object.keys(light).length,
-        sampleRawKeys,
-        sampleLightKeys: Object.keys(light).slice(0, 10)
-      });
-    } catch (e) { res.status(500).json({ error: String(e) }); }
+        result.totalPodKeysInDb = c.rows[0].count;
+      } catch (e: any) { result.countError = String(e?.message || e); }
+
+      try {
+        const s = await pool.query("SELECT key FROM kv_store WHERE key LIKE 'pod:%' ORDER BY updated_at DESC LIMIT 10");
+        result.sampleRawKeys = s.rows.map((r: any) => r.key);
+      } catch (e: any) { result.sampleKeysError = String(e?.message || e); }
+
+      // Direct lookup for this specific key
+      try {
+        const d = await pool.query("SELECT key, updated_at, length(value) as size FROM kv_store WHERE key=$1", [`pod:${orderId}`]);
+        result.directRowExists = d.rows.length > 0;
+        result.directRow = d.rows[0] || null;
+      } catch (e: any) { result.directRowError = String(e?.message || e); }
+    } else {
+      result.poolStatus = 'no-pool';
+    }
+
+    res.json(result);
   });
 
   // ── MANUAL ORDERS ───────────────────────────────────────────────────────────
