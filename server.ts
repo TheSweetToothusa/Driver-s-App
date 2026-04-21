@@ -438,6 +438,27 @@ async function sendEmail(to: string, subject: string, body: string, attachmentBa
   }
 }
 
+// Log every email send to kv_store for audit purposes. Never throws — never blocks email delivery.
+async function logEmailSend(orderNumber: string, recipient: string, subject: string, success: boolean, errorMsg?: string): Promise<void> {
+  try {
+    const logKey = `email_log:${orderNumber}`;
+    const existing = (await getKV(logKey)) || { sends: [] };
+    if (!Array.isArray(existing.sends)) existing.sends = [];
+    existing.sends.push({
+      timestamp: new Date().toISOString(),
+      recipient,
+      subject,
+      success,
+      errorMsg: errorMsg || null
+    });
+    // Keep last 20 sends per order to prevent unbounded growth
+    if (existing.sends.length > 20) existing.sends = existing.sends.slice(-20);
+    await setKV(logKey, existing);
+  } catch (e: any) {
+    console.error('logEmailSend failed (non-fatal):', e?.message || e);
+  }
+}
+
 // Memory helper
 function getMemoryMB() {
   const used = process.memoryUsage();
@@ -996,7 +1017,13 @@ async function startServer() {
 
       if (photo && typeof photo === 'string' && photo.startsWith('data:')) {
         if (R2) {
-          const key = `photos/${orderId}/${Date.now()}.jpg`;
+          // Human-readable R2 key: photos/2026-04-21/35363_Smith_13-38-31.jpg
+          const _now = new Date(completedAt || Date.now());
+          const _etDate = _now.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+          const _etTime = _now.toLocaleTimeString('en-GB', { timeZone: 'America/New_York', hour12: false }).replace(/:/g, '-');
+          const _safeDriver = (driverName || 'unknown').replace(/[^a-zA-Z0-9]/g, '');
+          const _safeOrderNum = (orderNumber || orderId).toString().replace(/[^a-zA-Z0-9]/g, '');
+          const key = `photos/${_etDate}/${_safeOrderNum}_${_safeDriver}_${_etTime}.jpg`;
           const uploaded = await uploadToR2(photo, key);
           if (uploaded) {
             photoR2Key = uploaded;
@@ -1012,7 +1039,13 @@ async function startServer() {
 
       if (signature && typeof signature === 'string' && signature.startsWith('data:')) {
         if (R2) {
-          const key = `signatures/${orderId}/${Date.now()}.png`;
+          // Human-readable R2 key: signatures/2026-04-21/35363_Smith_13-38-31.png
+          const _now = new Date(completedAt || Date.now());
+          const _etDate = _now.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+          const _etTime = _now.toLocaleTimeString('en-GB', { timeZone: 'America/New_York', hour12: false }).replace(/:/g, '-');
+          const _safeDriver = (driverName || 'unknown').replace(/[^a-zA-Z0-9]/g, '');
+          const _safeOrderNum = (orderNumber || orderId).toString().replace(/[^a-zA-Z0-9]/g, '');
+          const key = `signatures/${_etDate}/${_safeOrderNum}_${_safeDriver}_${_etTime}.png`;
           const uploaded = await uploadToR2(signature, key);
           if (uploaded) {
             signatureR2Key = uploaded;
@@ -1148,6 +1181,7 @@ ${photo ? 'Please see attached proof of delivery photo.' : 'Proof of delivery ph
 Thank you for choosing The Sweet Tooth!`;
 
           const emailSent = await sendEmail(customerEmail, subject, body, photo || undefined, photo ? `delivery-${orderId}.jpg` : undefined);
+          await logEmailSend(String(orderNumber || orderId), customerEmail, subject, emailSent);
           if (emailSent) {
             console.log(`✅ Auto-sent delivery confirmation to ${customerEmail} for order ${orderId}${photo ? ' (with photo)' : ''}`);
           } else {
@@ -1773,6 +1807,58 @@ Thank you for choosing The Sweet Tooth!`;
         shipping_lines: order.shipping_lines,
         fulfillment_orders: fulfillmentOrders,
         tags: order.tags,
+      });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  // ── EMAIL LOG (audit trail for delivery-confirmation emails) ────────────────
+  app.get('/api/email-log/:orderNumber', async (req, res) => {
+    try {
+      const key = `email_log:${req.params.orderNumber}`;
+      const log = await getKV(key);
+      res.json(log || { sends: [] });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  // List all email logs (most recent first) for admin audit view
+  app.get('/api/email-log', async (_req, res) => {
+    try {
+      if (!pool) return res.json({ logs: [] });
+      const r = await pool.query("SELECT key, value FROM kv_store WHERE key LIKE 'email_log:%' ORDER BY updated_at DESC LIMIT 200");
+      const logs = r.rows.map((row: any) => {
+        let parsed: any = {};
+        try { parsed = JSON.parse(row.value); } catch {}
+        return { orderNumber: row.key.replace('email_log:', ''), ...parsed };
+      });
+      res.json({ logs });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  // ── POD DEBUG (read-only diagnostic for POD storage issues) ─────────────────
+  app.get('/api/debug/pod-check/:orderId', async (req, res) => {
+    try {
+      const orderId = req.params.orderId;
+      const direct = await readPodOrder(orderId);
+      const light = await readPodDataLight();
+      let totalPodKeys: any = 'no-pool';
+      let sampleRawKeys: string[] = [];
+      if (pool) {
+        const c = await pool.query("SELECT COUNT(*) FROM kv_store WHERE key LIKE 'pod:%'");
+        totalPodKeys = c.rows[0].count;
+        const s = await pool.query("SELECT key FROM kv_store WHERE key LIKE 'pod:%' LIMIT 10");
+        sampleRawKeys = s.rows.map((r: any) => r.key);
+      }
+      res.json({
+        orderId,
+        directReadHasData: direct && Object.keys(direct).length > 0,
+        directReadKeys: direct ? Object.keys(direct) : [],
+        directRead: direct,
+        existsInLightData: !!light[orderId],
+        lightDataForOrder: light[orderId] || null,
+        totalPodKeysInDb: totalPodKeys,
+        totalKeysInLightData: Object.keys(light).length,
+        sampleRawKeys,
+        sampleLightKeys: Object.keys(light).slice(0, 10)
       });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
