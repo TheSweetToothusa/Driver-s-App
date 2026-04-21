@@ -1885,7 +1885,7 @@ const OrderDetail: React.FC<{
               {order.driverId && <p style={{ fontSize: 11, color: '#9CA3AF', marginTop: 8 }}>Delivered by {order.driverName || order.driverId}</p>}
             </div>
 
-            {/* Photo + Signature tiles */}
+            {/* Photo tile — plus signature tile only when a historical signature exists */}
             <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
               <div
                 onClick={() => podPhoto && setLightboxPhoto(podPhoto)}
@@ -1904,19 +1904,12 @@ const OrderDetail: React.FC<{
                   </div>
                 )}
               </div>
-              <div style={{ flex: 1, background: '#F9FAFB', borderRadius: 12, border: '1px solid #E5E7EB', minHeight: 100, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 12 }}>
-                {podSig ? (
-                  <>
-                    <img src={podSig} style={{ maxWidth: '100%', maxHeight: 60, objectFit: 'contain', marginBottom: 8 }} alt="Signature" />
-                    <span style={{ background: '#DCFCE7', color: '#166534', fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 9999 }}>✓ Signed</span>
-                  </>
-                ) : (
-                  <>
-                    <PenTool size={20} style={{ color: '#D1D5DB', marginBottom: 4 }} />
-                    <span style={{ fontSize: 11, color: '#9CA3AF' }}>No signature</span>
-                  </>
-                )}
-              </div>
+              {podSig && (
+                <div style={{ flex: 1, background: '#F9FAFB', borderRadius: 12, border: '1px solid #E5E7EB', minHeight: 100, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 12 }}>
+                  <img src={podSig} style={{ maxWidth: '100%', maxHeight: 60, objectFit: 'contain', marginBottom: 8 }} alt="Signature" />
+                  <span style={{ background: '#DCFCE7', color: '#166534', fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 9999 }}>✓ Signed</span>
+                </div>
+              )}
             </div>
 
             {/* Notification status */}
@@ -5952,8 +5945,7 @@ const BulkProjectsView: React.FC<{
   const [detailOrder, setDetailOrder] = useState<BulkOrder | null>(null);
   const [showPOD, setShowPOD] = useState(false);
   const [podPhoto, setPodPhoto] = useState<string | null>(null);
-  const [podSignature, setPodSignature] = useState<string | null>(null);
-  const [showSigPad, setShowSigPad] = useState(false);
+  const [podSignature, setPodSignature] = useState<string | null>(null); // kept null-only so /api/bulk POD payload shape is unchanged
   const [showFailedFlow, setShowFailedFlow] = useState(false);
   const [failReason, setFailReason] = useState('');
   const [failNotes, setFailNotes] = useState('');
@@ -6216,21 +6208,6 @@ const BulkProjectsView: React.FC<{
             <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoCapture} />
             <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handlePhotoCapture} />
           </div>
-          <div className="mb-4">
-            <p className="font-black text-sm mb-2 uppercase text-stone-500">✍️ Signature</p>
-            {podSignature ? (
-              <div className="relative">
-                <img src={podSignature} alt="Sig" className="w-full rounded-xl bg-white border border-stone-200" style={{ maxHeight: 120 }} />
-                <button onClick={() => setPodSignature(null)} className="absolute top-2 right-2 bg-red-500 text-white w-7 h-7 rounded-full flex items-center justify-center"><X size={14} /></button>
-              </div>
-            ) : showSigPad ? (
-              <SignaturePad onSave={(d) => { setPodSignature(d); setShowSigPad(false); }} onCancel={() => setShowSigPad(false)} />
-            ) : (
-              <button onClick={() => setShowSigPad(true)} className="w-full py-6 border-2 border-dashed border-stone-300 rounded-xl text-stone-400 font-bold flex flex-col items-center gap-2">
-                <PenTool size={24} /><span>Capture Signature</span>
-              </button>
-            )}
-          </div>
           <button onClick={() => submitPOD(fresh.id, 'DELIVERED')} disabled={!podPhoto}
             className={`w-full py-4 rounded-2xl font-black text-lg uppercase tracking-wide transition-all ${podPhoto ? 'bg-green-600 text-white active:scale-95' : 'bg-stone-200 text-stone-400 cursor-not-allowed'}`}>
             {podPhoto ? '✓ CONFIRM DELIVERED' : 'Photo Required'}
@@ -6330,7 +6307,7 @@ const BulkProjectsView: React.FC<{
             <div className="space-y-2">
               <button onClick={() => setShowPOD(true)}
                 className="w-full py-4 bg-green-600 text-white rounded-2xl font-black text-lg flex items-center justify-center gap-3 active:scale-95 shadow-lg">
-                <Camera size={22} /> 📸 DELIVER — Take Photo + Signature
+                <Camera size={22} /> 📸 DELIVER — Take Photo
               </button>
               <button onClick={() => setShowFailedFlow(true)}
                 className="w-full py-3 bg-red-100 text-red-600 rounded-2xl font-black text-sm flex items-center justify-center gap-2 active:scale-95">
