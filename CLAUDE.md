@@ -4,6 +4,56 @@ Read this entire file before doing anything. It contains everything you need to 
 
 ---
 
+## ⚠️ FIRST ACTIONS — DO THESE BEFORE READING ANYTHING ELSE ⚠️
+
+**1. Verify you're in the right repo (takes 5 seconds):**
+
+```bash
+git remote -v
+git log --oneline | head -3
+```
+
+Paste the output to Mikey. The remote MUST be `https://github.com/TheSweetToothusa/Driver-s-App.git`. If it shows any other URL, STOP — you have the wrong code. Do not read any other files. Tell Mikey and re-clone.
+
+**2. Verify the live app is reachable:**
+
+```bash
+curl -s "https://driver-s-app.onrender.com/api/debug/pod-check/test"
+```
+
+If this returns `ECONNREFUSED` or "recovery mode" errors, the database is unreachable. Report this to Mikey FIRST before investigating any code-level issue. A 40-minute debugging session on April 22, 2026 could have been 5 minutes if we'd checked this first.
+
+**3. Confirm the architecture matches reality:**
+
+- Should see: single `server.ts` + single `App.tsx` at repo root
+- Should NOT see: any separate `shopifyService.ts`, `types.ts`, or multi-file frontend structure
+- If you see the old multi-file structure, you cloned the wrong repo or an old branch.
+
+---
+
+## ⚠️ DEPLOYMENT CORRECTION ⚠️
+
+**Render auto-deploys INSTANTLY on every `git push origin main`.** There is no "Manual Deploy" step. The moment code is pushed it is LIVE in front of real customers. This means:
+
+- NEVER push code without Mikey's explicit "yes, push" approval
+- Any older instruction in this file saying "Tell Mikey to Manual Deploy" is OUTDATED — ignore it
+
+---
+
+## ⚠️ DATABASE FACT ⚠️
+
+**The ONLY working database is `sweet-tooth-db-v2`** (hostname `dpg-d7h7snl7vvec7390vhkg-a`, database name `sweet_tooth_db_v2`). The old `sweet-tooth-db` (hostname `dpg-d6upi9ffte5s739r1ha0-a`) is broken and should never be referenced. If `DATABASE_URL` points anywhere other than `sweet_tooth_db_v2`, the whole app silently fails.
+
+---
+
+## ⚠️ DEBUGGING DISCIPLINE ⚠️
+
+- Demand raw tool output from yourself — paste real `curl` responses, real file contents, real `git log` results. Do not summarize evidence. Do not theorize about code before looking at the live system.
+- If something feels off or the user pushes back, STOP and verify with a tool call before defending your theory.
+- Never trust training data for the architecture — always verify with `git log`, `ls`, and reading the actual files.
+
+---
+
 ## Store Info (NEVER GET THIS WRONG)
 
 - **Store Name:** The Sweet Tooth — Chocolate Factory
