@@ -2006,6 +2006,7 @@ Thank you for choosing The Sweet Tooth!`;
         giftMessage: req.body.giftMessage || '',
         giftSenderName: req.body.giftSenderName || '',
         giftSenderPhone: req.body.giftSenderPhone || '',
+        giftSenderEmail: req.body.giftSenderEmail || '',
         giftReceiverName: req.body.recipientName || '',
         orderTotal: parseFloat(req.body.orderTotal) || 0,
         attempts: [],

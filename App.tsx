@@ -2406,7 +2406,7 @@ const OrdersView: React.FC<OrdersViewProps> = ({
     street: '', unit: '', city: '', zip: '',
     deliveryDate: new Date().toISOString().split('T')[0],
     deliveryInstructions: '', itemDescription: '', orderTotal: '',
-    giftSenderName: '', giftMessage: '',
+    giftSenderName: '', giftSenderPhone: '', giftSenderEmail: '', giftMessage: '',
     driverId: '', driverName: '',
   });
   const [manualSaving, setManualSaving] = useState(false);
@@ -2729,6 +2729,8 @@ const OrdersView: React.FC<OrdersViewProps> = ({
                 placeholder="Recipient Name *" className="w-full border border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black" />
               <input value={manualForm.recipientPhone} onChange={e => setManualForm(f => ({ ...f, recipientPhone: e.target.value }))}
                 placeholder="Recipient Phone" type="tel" className="w-full border border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black" />
+              <input value={manualForm.recipientEmail} onChange={e => setManualForm(f => ({ ...f, recipientEmail: e.target.value }))}
+                placeholder="Recipient Email (optional)" type="email" className="w-full border border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black" />
 
               {/* Section: Address */}
               <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest mt-2">Delivery Address</p>
@@ -2762,10 +2764,14 @@ const OrdersView: React.FC<OrdersViewProps> = ({
               <input value={manualForm.orderTotal} onChange={e => setManualForm(f => ({ ...f, orderTotal: e.target.value }))}
                 placeholder="Order Total (e.g. 850)" type="number" className="w-full border border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black" />
 
-              {/* Section: Sender & Message */}
-              <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest mt-2">Sender & Gift Message</p>
+              {/* Section: Gift Sender — phone OR email required for delivery notification */}
+              <p className="text-[9px] font-black uppercase text-red-600 tracking-widest mt-2">Gift Sender — Phone OR Email Required *</p>
               <input value={manualForm.giftSenderName} onChange={e => setManualForm(f => ({ ...f, giftSenderName: e.target.value }))}
                 placeholder="Gift Sender Name" className="w-full border border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black" />
+              <input value={manualForm.giftSenderPhone} onChange={e => setManualForm(f => ({ ...f, giftSenderPhone: e.target.value }))}
+                placeholder="Gift Sender Phone" type="tel" className="w-full border border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black" />
+              <input value={manualForm.giftSenderEmail} onChange={e => setManualForm(f => ({ ...f, giftSenderEmail: e.target.value }))}
+                placeholder="Gift Sender Email" type="email" className="w-full border border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black" />
               <textarea value={manualForm.giftMessage} onChange={e => setManualForm(f => ({ ...f, giftMessage: e.target.value }))}
                 placeholder="Gift Message" rows={2}
                 className="w-full border border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black resize-none" />
@@ -2797,6 +2803,7 @@ const OrdersView: React.FC<OrdersViewProps> = ({
                   if (!manualForm.zip.trim()) { setManualError('ZIP code is required.'); return; }
                   if (!manualForm.itemDescription.trim()) { setManualError('Item description is required.'); return; }
                   if (!manualForm.deliveryDate) { setManualError('Delivery date is required.'); return; }
+                  if (!manualForm.giftSenderPhone.trim() && !manualForm.giftSenderEmail.trim()) { setManualError('Gift sender needs a phone or email so we can notify them when delivered.'); return; }
                   setManualSaving(true);
                   try {
                     const resp = await fetch('/api/manual-orders', {
@@ -6798,10 +6805,10 @@ export default function App() {
   const [defaultDriver, setDefaultDriver] = useState<{ driverId: string | null; driverName: string | null }>({ driverId: null, driverName: null });
   // Global manual delivery state — accessible from any tab
   const [showGlobalAddManual, setShowGlobalAddManual] = useState(false);
-  const [globalManualForm, setGlobalManualForm] = useState({ recipientName: '', recipientPhone: '', recipientEmail: '', street: '', unit: '', city: '', zip: '', deliveryFee: '', deliveryDate: new Date(Date.now() + 86400000).toISOString().split('T')[0], deliveryInstructions: '', itemDescription: '', orderTotal: '', giftSenderName: '', giftMessage: '', driverId: '', driverName: '' });
+  const [globalManualForm, setGlobalManualForm] = useState({ recipientName: '', recipientPhone: '', recipientEmail: '', street: '', unit: '', city: '', zip: '', deliveryFee: '', deliveryDate: new Date(Date.now() + 86400000).toISOString().split('T')[0], deliveryInstructions: '', itemDescription: '', orderTotal: '', giftSenderName: '', giftSenderPhone: '', giftSenderEmail: '', giftMessage: '', driverId: '', driverName: '' });
   const [globalManualSaving, setGlobalManualSaving] = useState(false);
   const [globalManualError, setGlobalManualError] = useState('');
-  const openAddManual = () => { setGlobalManualForm({ recipientName: '', recipientPhone: '', recipientEmail: '', street: '', unit: '', city: '', zip: '', deliveryFee: '', deliveryDate: new Date(Date.now() + 86400000).toISOString().split('T')[0], deliveryInstructions: '', itemDescription: '', orderTotal: '', giftSenderName: '', giftMessage: '', driverId: '', driverName: '' }); setGlobalManualError(''); setShowGlobalAddManual(true); };
+  const openAddManual = () => { setGlobalManualForm({ recipientName: '', recipientPhone: '', recipientEmail: '', street: '', unit: '', city: '', zip: '', deliveryFee: '', deliveryDate: new Date(Date.now() + 86400000).toISOString().split('T')[0], deliveryInstructions: '', itemDescription: '', orderTotal: '', giftSenderName: '', giftSenderPhone: '', giftSenderEmail: '', giftMessage: '', driverId: '', driverName: '' }); setGlobalManualError(''); setShowGlobalAddManual(true); };
 
   useEffect(() => {
     if (currentUser) {
@@ -7018,6 +7025,8 @@ export default function App() {
                 placeholder="Recipient Name *" className="w-full border-2 border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black" />
               <input value={globalManualForm.recipientPhone} onChange={e => setGlobalManualForm(f => ({ ...f, recipientPhone: e.target.value }))}
                 placeholder="Recipient Phone" type="tel" className="w-full border-2 border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black" />
+              <input value={globalManualForm.recipientEmail} onChange={e => setGlobalManualForm(f => ({ ...f, recipientEmail: e.target.value }))}
+                placeholder="Recipient Email (optional)" type="email" className="w-full border-2 border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black" />
 
               {/* Address */}
               <p className="text-[10px] font-black uppercase text-stone-400 tracking-widest pt-1">Delivery Address</p>
@@ -7075,10 +7084,14 @@ export default function App() {
                 placeholder="Order Total e.g. 850" type="number"
                 className="w-full border-2 border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black" />
 
-              {/* Sender */}
-              <p className="text-[10px] font-black uppercase text-stone-400 tracking-widest pt-1">Gift Sender (optional)</p>
+              {/* Sender — phone OR email required for delivery notification */}
+              <p className="text-[10px] font-black uppercase text-red-600 tracking-widest pt-1">Gift Sender — Phone OR Email Required *</p>
               <input value={globalManualForm.giftSenderName} onChange={e => setGlobalManualForm(f => ({ ...f, giftSenderName: e.target.value }))}
                 placeholder="Sender Name" className="w-full border-2 border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black" />
+              <input value={globalManualForm.giftSenderPhone} onChange={e => setGlobalManualForm(f => ({ ...f, giftSenderPhone: e.target.value }))}
+                placeholder="Sender Phone" type="tel" className="w-full border-2 border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black" />
+              <input value={globalManualForm.giftSenderEmail} onChange={e => setGlobalManualForm(f => ({ ...f, giftSenderEmail: e.target.value }))}
+                placeholder="Sender Email" type="email" className="w-full border-2 border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black" />
               <textarea value={globalManualForm.giftMessage} onChange={e => setGlobalManualForm(f => ({ ...f, giftMessage: e.target.value }))}
                 placeholder="Gift Message" rows={2}
                 className="w-full border-2 border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black resize-none" />
@@ -7104,6 +7117,7 @@ export default function App() {
                 if (!globalManualForm.zip.trim()) { setGlobalManualError('ZIP code is required.'); return; }
                 if (!globalManualForm.itemDescription.trim()) { setGlobalManualError('Item description is required.'); return; }
                 if (!globalManualForm.deliveryFee) { setGlobalManualError('Delivery fee is required.'); return; }
+                if (!globalManualForm.giftSenderPhone.trim() && !globalManualForm.giftSenderEmail.trim()) { setGlobalManualError('Gift sender needs a phone or email so we can notify them when delivered.'); return; }
                 setGlobalManualSaving(true);
                 try {
                   const selectedDriver = allUsers.find(u => u.id === globalManualForm.driverId);
