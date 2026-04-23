@@ -2038,72 +2038,6 @@ Thank you for choosing The Sweet Tooth!`;
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
-  // ── STATIC / VITE ───────────────────────────────────────────────────────────
-
-  if (process.env.NODE_ENV !== "production") {
-    const vite = await createViteServer({ server: { middlewareMode: true }, appType: "spa" });
-    app.use(vite.middlewares);
-  // One-time migration: rename "Mikey" to "Mike" in all POD records and Shopify tags
-  app.post('/api/admin/migrate-mikey-to-mike', async (_req, res) => {
-    try {
-      // 1. Fix all pod: keys in PostgreSQL
-      const podRows = await pool.query("SELECT key, value FROM kv_store WHERE key LIKE 'pod:%'");
-      let podFixed = 0;
-      for (const row of podRows.rows) {
-        const data = JSON.parse(row.value);
-        if (data.driverName === 'Mikey') {
-          data.driverName = 'Mike';
-          await pool.query('UPDATE kv_store SET value=$1 WHERE key=$2', [JSON.stringify(data), row.key]);
-          podFixed++;
-        }
-      }
-
-      // 2. Fix manual orders in PostgreSQL
-      const manualRaw = await getKV('manual_orders');
-      let manualFixed = 0;
-      if (manualRaw) {
-        const manualOrders = JSON.parse(manualRaw);
-        let changed = false;
-        for (const o of manualOrders) {
-          if (o.driverName === 'Mikey') { o.driverName = 'Mike'; changed = true; manualFixed++; }
-          if (o.driverId === 'super_admin' && o.driverName !== 'Mike') { o.driverName = 'Mike'; changed = true; manualFixed++; }
-        }
-        if (changed) await setKV('manual_orders', JSON.stringify(manualOrders));
-      }
-
-      // 3. Fix Shopify tags: find all orders with st_drivername:Mikey and update to Mike
-      let shopifyFixed = 0;
-      try {
-        const shopifyRes = await fetch(
-          `https://${process.env.SHOPIFY_STORE_DOMAIN}/admin/api/2025-01/orders.json?tag=st_drivername:Mikey&status=any&limit=250`,
-          { headers: { 'X-Shopify-Access-Token': process.env.SHOPIFY_ACCESS_TOKEN || '' } }
-        );
-        const shopifyData = await shopifyRes.json() as { orders?: any[] };
-        const orders = shopifyData.orders || [];
-        for (const order of orders) {
-          const currentTags: string = order.tags || '';
-          const newTags = currentTags
-            .split(',')
-            .map((t: string) => t.trim())
-            .map((t: string) => t === 'st_drivername:Mikey' ? 'st_drivername:Mike' : t)
-            .join(', ');
-          await fetch(
-            `https://${process.env.SHOPIFY_STORE_DOMAIN}/admin/api/2025-01/orders/${order.id}.json`,
-            { method: 'PUT', headers: { 'X-Shopify-Access-Token': process.env.SHOPIFY_ACCESS_TOKEN || '', 'Content-Type': 'application/json' },
-              body: JSON.stringify({ order: { id: order.id, tags: newTags } }) }
-          );
-          shopifyFixed++;
-        }
-      } catch (shopifyErr) {
-        console.error('Shopify tag migration error (non-fatal):', shopifyErr);
-      }
-
-      res.json({ ok: true, podFixed, manualFixed, shopifyFixed });
-    } catch (err) {
-      res.status(500).json({ error: String(err) });
-    }
-  });
-
   // One-shot recovery: find POD records that are missing photoR2Key/signatureR2Key
   // but whose photo DID make it to Cloudflare (the DB write failed after the R2
   // upload succeeded). For each orphan, probe the expected R2 keys and patch the
@@ -2112,6 +2046,7 @@ Thank you for choosing The Sweet Tooth!`;
   // Safe to run multiple times — records that already have a key are skipped.
   // Only writes to kv_store (UPDATE on the pod:{id} row). Does NOT send emails,
   // texts, or any other notification, and does NOT touch Shopify tags.
+  // Registered outside the dev-only block on purpose so it's callable in prod.
   app.post('/api/admin/heal-orphan-photos', async (_req, res) => {
     if (!pool) return res.status(500).json({ error: 'DB not configured' });
     if (!R2) return res.status(500).json({ error: 'R2 not configured' });
@@ -2217,6 +2152,72 @@ Thank you for choosing The Sweet Tooth!`;
     } catch (e: any) {
       console.error('heal-orphan-photos error:', e?.stack || e?.message || e);
       res.status(500).json({ error: String(e?.message || e), summary });
+    }
+  });
+
+  // ── STATIC / VITE ───────────────────────────────────────────────────────────
+
+  if (process.env.NODE_ENV !== "production") {
+    const vite = await createViteServer({ server: { middlewareMode: true }, appType: "spa" });
+    app.use(vite.middlewares);
+  // One-time migration: rename "Mikey" to "Mike" in all POD records and Shopify tags
+  app.post('/api/admin/migrate-mikey-to-mike', async (_req, res) => {
+    try {
+      // 1. Fix all pod: keys in PostgreSQL
+      const podRows = await pool.query("SELECT key, value FROM kv_store WHERE key LIKE 'pod:%'");
+      let podFixed = 0;
+      for (const row of podRows.rows) {
+        const data = JSON.parse(row.value);
+        if (data.driverName === 'Mikey') {
+          data.driverName = 'Mike';
+          await pool.query('UPDATE kv_store SET value=$1 WHERE key=$2', [JSON.stringify(data), row.key]);
+          podFixed++;
+        }
+      }
+
+      // 2. Fix manual orders in PostgreSQL
+      const manualRaw = await getKV('manual_orders');
+      let manualFixed = 0;
+      if (manualRaw) {
+        const manualOrders = JSON.parse(manualRaw);
+        let changed = false;
+        for (const o of manualOrders) {
+          if (o.driverName === 'Mikey') { o.driverName = 'Mike'; changed = true; manualFixed++; }
+          if (o.driverId === 'super_admin' && o.driverName !== 'Mike') { o.driverName = 'Mike'; changed = true; manualFixed++; }
+        }
+        if (changed) await setKV('manual_orders', JSON.stringify(manualOrders));
+      }
+
+      // 3. Fix Shopify tags: find all orders with st_drivername:Mikey and update to Mike
+      let shopifyFixed = 0;
+      try {
+        const shopifyRes = await fetch(
+          `https://${process.env.SHOPIFY_STORE_DOMAIN}/admin/api/2025-01/orders.json?tag=st_drivername:Mikey&status=any&limit=250`,
+          { headers: { 'X-Shopify-Access-Token': process.env.SHOPIFY_ACCESS_TOKEN || '' } }
+        );
+        const shopifyData = await shopifyRes.json() as { orders?: any[] };
+        const orders = shopifyData.orders || [];
+        for (const order of orders) {
+          const currentTags: string = order.tags || '';
+          const newTags = currentTags
+            .split(',')
+            .map((t: string) => t.trim())
+            .map((t: string) => t === 'st_drivername:Mikey' ? 'st_drivername:Mike' : t)
+            .join(', ');
+          await fetch(
+            `https://${process.env.SHOPIFY_STORE_DOMAIN}/admin/api/2025-01/orders/${order.id}.json`,
+            { method: 'PUT', headers: { 'X-Shopify-Access-Token': process.env.SHOPIFY_ACCESS_TOKEN || '', 'Content-Type': 'application/json' },
+              body: JSON.stringify({ order: { id: order.id, tags: newTags } }) }
+          );
+          shopifyFixed++;
+        }
+      } catch (shopifyErr) {
+        console.error('Shopify tag migration error (non-fatal):', shopifyErr);
+      }
+
+      res.json({ ok: true, podFixed, manualFixed, shopifyFixed });
+    } catch (err) {
+      res.status(500).json({ error: String(err) });
     }
   });
 
