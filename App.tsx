@@ -37,6 +37,45 @@ const STATUSES_FOR_DROPDOWN = [
 const formatTime = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 const formatDate = (iso: string) => new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
+// POST /api/pod with retry — blocking until it succeeds or exhausts retries.
+// Retries on network error or 5xx (including 503 from backend when DB is unreachable).
+// Does NOT retry on 4xx — those are caller-side problems that won't recover with time.
+// Returns { ok: true } on success, { ok: false, error } on final failure.
+// Schedule: 1s → 3s → 7s backoff. Total worst case ~11 sec before surrender.
+async function postPodWithRetry(
+  body: Record<string, any>,
+  attempts: number = 3,
+  delays: number[] = [1000, 3000, 7000]
+): Promise<{ ok: boolean; error?: string; status?: number }> {
+  let lastError = 'Unknown error';
+  let lastStatus: number | undefined;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const resp = await fetch('/api/pod', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (resp.ok) return { ok: true };
+      lastStatus = resp.status;
+      // 4xx — not retryable, caller sent something bad
+      if (resp.status >= 400 && resp.status < 500) {
+        const errBody = await resp.json().catch(() => ({}));
+        return { ok: false, error: errBody?.error || `Bad request (${resp.status})`, status: resp.status };
+      }
+      // 5xx — retryable
+      const errBody = await resp.json().catch(() => ({}));
+      lastError = errBody?.error || `Server error (${resp.status})`;
+    } catch (err: any) {
+      lastError = err?.message || 'Network error';
+    }
+    if (i < attempts - 1) {
+      await new Promise((r) => setTimeout(r, delays[i] ?? 3000));
+    }
+  }
+  return { ok: false, error: lastError, status: lastStatus };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // PRINT PREVIEW — bulletproof cross-platform print UI
 //
@@ -890,6 +929,7 @@ const OrderDetail: React.FC<{
   const [notifySent, setNotifySent] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [isSavingPOD, setIsSavingPOD] = useState(false);
+  const [podSaveError, setPodSaveError] = useState<string | null>(null);
   const [notifyError, setNotifyError] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
@@ -987,10 +1027,36 @@ const OrderDetail: React.FC<{
     const now = new Date().toISOString();
     const isManualOrder = (order as any).isManual;
 
-    // Record-first, never gatekeep. The driver handed chocolate to a real person —
-    // the app's job is to RECORD that, not block on DB state. Order:
-    //   1) mark delivered in UI   2) update Shopify/manual tag
-    //   3) show driver success    4) attempt POD save (never blocking)
+    // Save POD FIRST with retry, then mark delivered. If POD fails after all
+    // retries, keep the order in its current state so the driver can retry —
+    // their photo and notes stay in the form. The previous "record-first then
+    // fire-and-forget" flow was losing proof of delivery when the DB was flaky.
+    setIsSavingPOD(true);
+    setPodSaveError(null);
+    const podResult = await postPodWithRetry({
+      orderId: order.id,
+      photo: photoData,
+      signature: sigData,
+      notes: driverNote,
+      completedAt: now,
+      status: 'DELIVERED',
+      driverId: currentUser.id,
+      driverName: currentUser.name,
+      isManual: isManualOrder,
+      customerEmail: order.giftSenderEmail || order.customer?.email || '',
+      giftReceiverName: order.giftReceiverName || '',
+      giftSenderName: order.giftSenderName || '',
+      address: order.address || '',
+      orderNumber: order.orderNumber || '',
+    });
+
+    if (!podResult.ok) {
+      setIsSavingPOD(false);
+      setPodSaveError(podResult.error || 'Save failed');
+      return;
+    }
+
+    // POD persisted — now safe to update Shopify tag and local state.
     const updates: Partial<Delivery> = { status: DeliveryStatus.DELIVERED, confirmationPhoto: photoData || undefined, confirmationSignature: sigData || undefined, driverNotes: driverNote, completedAt: now, submittedAt: now };
     onUpdate(order.id, updates);
 
@@ -1002,6 +1068,7 @@ const OrderDetail: React.FC<{
       }
     } catch (err) { console.error('status update failed (non-blocking):', err); }
 
+    setIsSavingPOD(false);
     setShowDeliveredConfirm(true);
 
     // Auto-open SMS for phone-only orders (no email)
@@ -1016,16 +1083,6 @@ const OrderDetail: React.FC<{
       }, 2000);
     }
 
-    // Save POD + fire server-side confirmation email. Never block the driver on this;
-    // the photo stays on the phone as a natural backup if the DB write fails.
-    setIsSavingPOD(true);
-    try {
-      await fetch('/api/pod', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orderId: order.id, photo: photoData, signature: sigData, notes: driverNote, completedAt: now, status: 'DELIVERED', driverId: currentUser.id, driverName: currentUser.name, isManual: isManualOrder, customerEmail: order.giftSenderEmail || order.customer?.email || '', giftReceiverName: order.giftReceiverName || '', giftSenderName: order.giftSenderName || '', address: order.address || '', orderNumber: order.orderNumber || '' }) });
-    } catch (err) {
-      console.error('POD save failed (non-blocking):', err);
-    }
-    setIsSavingPOD(false);
-
     setTimeout(() => { setShowDeliveredConfirm(false); onBack(); }, 2500);
   };
 
@@ -1033,6 +1090,27 @@ const OrderDetail: React.FC<{
     if (isSavingPOD) return;
     const now = new Date().toISOString();
     const isManualOrder = (order as any).isManual;
+
+    // Save POD FIRST with retry. See handleComplete for rationale.
+    setIsSavingPOD(true);
+    setPodSaveError(null);
+    const podResult = await postPodWithRetry({
+      orderId: order.id,
+      notes: driverNote || 'Admin override — marked delivered manually',
+      completedAt: now,
+      status: 'DELIVERED',
+      driverId: currentUser.id,
+      driverName: currentUser.name,
+      isManual: isManualOrder,
+      adminOverride: true,
+    });
+
+    if (!podResult.ok) {
+      setIsSavingPOD(false);
+      setPodSaveError(podResult.error || 'Save failed');
+      setShowAdminOverrideConfirm(false);
+      return;
+    }
 
     const updates: Partial<Delivery> = { status: DeliveryStatus.DELIVERED, driverNotes: driverNote || 'Admin override — marked delivered manually', completedAt: now, submittedAt: now };
     onUpdate(order.id, updates);
@@ -1045,17 +1123,9 @@ const OrderDetail: React.FC<{
       }
     } catch (err) { console.error('status update failed (non-blocking):', err); }
 
+    setIsSavingPOD(false);
     setShowAdminOverrideConfirm(false);
     setShowDeliveredConfirm(true);
-
-    // Save POD in the background; never block the admin on DB state.
-    setIsSavingPOD(true);
-    try {
-      await fetch('/api/pod', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orderId: order.id, notes: driverNote || 'Admin override — marked delivered manually', completedAt: now, status: 'DELIVERED', driverId: currentUser.id, driverName: currentUser.name, isManual: isManualOrder, adminOverride: true }) });
-    } catch (err) {
-      console.error('POD save failed (non-blocking):', err);
-    }
-    setIsSavingPOD(false);
 
     setTimeout(() => { setShowDeliveredConfirm(false); onBack(); }, 2500);
   };
@@ -1829,6 +1899,18 @@ const OrderDetail: React.FC<{
               />
             </div>
 
+            {/* Save-failure banner — surface clearly so the driver retries
+                instead of walking away thinking the order was saved. */}
+            {podSaveError && (
+              <div style={{ background: '#FEF2F2', border: '1px solid #FCA5A5', borderRadius: 12, padding: 12, marginBottom: 12, display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                <AlertTriangle size={18} style={{ color: '#B91C1C', flexShrink: 0, marginTop: 2 }} />
+                <div style={{ flex: 1 }}>
+                  <p style={{ fontSize: 13, fontWeight: 700, color: '#B91C1C', marginBottom: 4 }}>Save failed — not yet delivered</p>
+                  <p style={{ fontSize: 12, color: '#7F1D1D', lineHeight: 1.4 }}>Your photo is safe on this phone. Tap <b>Mark Delivered</b> again to retry.</p>
+                </div>
+              </div>
+            )}
+
             {/* Action buttons */}
             <button
               onClick={(photoData && !isSavingPOD) ? handleComplete : undefined}
@@ -1850,7 +1932,7 @@ const OrderDetail: React.FC<{
                 color: (photoData && !isSavingPOD) ? 'white' : '#9CA3AF'
               }}
             >
-              <CheckCircle2 size={20} /> {isSavingPOD ? 'Saving…' : photoData ? 'Mark Delivered' : 'Photo Required'}
+              <CheckCircle2 size={20} /> {isSavingPOD ? 'Saving…' : (podSaveError ? 'Retry Mark Delivered' : (photoData ? 'Mark Delivered' : 'Photo Required'))}
             </button>
 
             <button

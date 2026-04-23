@@ -241,8 +241,13 @@ async function readPodOrder(orderId: string): Promise<any> {
       );
       return r.rows[0] ? JSON.parse(r.rows[0].value) : {};
     } catch (e) {
+      // DB is configured but unreachable after retries. Return a sentinel so callers
+      // that care about atomicity (e.g. /api/pod) can bail with 503 instead of
+      // proceeding with a blank existingPod and corrupting idempotency checks.
+      // Field-access callers (existing.photo, existing.notes, …) see the sentinel
+      // as effectively {} — same behavior as before.
       console.error('readPodOrder DB error (after retries):', (e as any)?.message);
-      return {};
+      return { __dbError: true };
     }
   }
   try {
@@ -1019,6 +1024,13 @@ async function startServer() {
     try {
       const existingPod = await readPodOrder(orderId);
 
+      // DB is configured but unreachable — bail early with 503 so the frontend
+      // retry loop can try again. Proceeding with a blank existingPod would break
+      // every idempotency check below (re-uploading photos, re-sending emails).
+      if (existingPod && existingPod.__dbError) {
+        return res.status(503).json({ error: 'Database unavailable, retry in a moment' });
+      }
+
       // Upload new photo/signature to R2 if configured and we got base64 data.
       // If R2 upload fails, we fall back to storing base64 in the DB (legacy path).
       let photoR2Key: string | null = existingPod.photoR2Key || null;
@@ -1028,26 +1040,33 @@ async function startServer() {
 
       if (photo && typeof photo === 'string' && photo.startsWith('data:')) {
         if (R2) {
-          // Simple Cloudflare key: photos/2026-04-21/35363.jpg
-          // If retaken: photos/2026-04-21/35363-2.jpg, then -3, etc.
-          const _now = new Date(completedAt || Date.now());
-          const _etDate = _now.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-          const _safeOrderNum = (orderNumber || orderId).toString().replace(/[^a-zA-Z0-9]/g, '');
-          let key = `photos/${_etDate}/${_safeOrderNum}.jpg`;
-          // If a photo already exists for this order on this date, append -2, -3, etc.
-          let _suffix = 2;
-          while (await r2KeyExists(key)) {
-            key = `photos/${_etDate}/${_safeOrderNum}-${_suffix}.jpg`;
-            _suffix++;
-            if (_suffix > 50) break; // safety cap
-          }
-          const uploaded = await uploadToR2(photo, key);
-          if (uploaded) {
-            photoR2Key = uploaded;
+          // Idempotency: if this order already has a photo uploaded and the caller
+          // is retrying with what we assume is the same photo, reuse the existing
+          // key. Prevents duplicate -2/-3 uploads on retry of a flaky save.
+          if (photoR2Key) {
+            console.log(`📷 Reusing existing photo key for ${orderId}: ${photoR2Key}`);
           } else {
-            // Cloudflare upload failed — fall back to base64 in DB so we don't lose it
-            console.warn(`Cloudflare photo upload failed for ${orderId}, falling back to DB base64`);
-            newPhotoBase64 = photo;
+            // Simple Cloudflare key: photos/2026-04-21/35363.jpg
+            // If retaken: photos/2026-04-21/35363-2.jpg, then -3, etc.
+            const _now = new Date(completedAt || Date.now());
+            const _etDate = _now.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+            const _safeOrderNum = (orderNumber || orderId).toString().replace(/[^a-zA-Z0-9]/g, '');
+            let key = `photos/${_etDate}/${_safeOrderNum}.jpg`;
+            // If a photo already exists for this order on this date, append -2, -3, etc.
+            let _suffix = 2;
+            while (await r2KeyExists(key)) {
+              key = `photos/${_etDate}/${_safeOrderNum}-${_suffix}.jpg`;
+              _suffix++;
+              if (_suffix > 50) break; // safety cap
+            }
+            const uploaded = await uploadToR2(photo, key);
+            if (uploaded) {
+              photoR2Key = uploaded;
+            } else {
+              // Cloudflare upload failed — fall back to base64 in DB so we don't lose it
+              console.warn(`Cloudflare photo upload failed for ${orderId}, falling back to DB base64`);
+              newPhotoBase64 = photo;
+            }
           }
         } else {
           newPhotoBase64 = photo;
@@ -1056,23 +1075,27 @@ async function startServer() {
 
       if (signature && typeof signature === 'string' && signature.startsWith('data:')) {
         if (R2) {
-          // Simple Cloudflare key: signatures/2026-04-21/35363.png
-          const _now = new Date(completedAt || Date.now());
-          const _etDate = _now.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-          const _safeOrderNum = (orderNumber || orderId).toString().replace(/[^a-zA-Z0-9]/g, '');
-          let key = `signatures/${_etDate}/${_safeOrderNum}.png`;
-          let _suffix = 2;
-          while (await r2KeyExists(key)) {
-            key = `signatures/${_etDate}/${_safeOrderNum}-${_suffix}.png`;
-            _suffix++;
-            if (_suffix > 50) break;
-          }
-          const uploaded = await uploadToR2(signature, key);
-          if (uploaded) {
-            signatureR2Key = uploaded;
+          if (signatureR2Key) {
+            console.log(`✍️ Reusing existing signature key for ${orderId}: ${signatureR2Key}`);
           } else {
-            console.warn(`R2 signature upload failed for ${orderId}, falling back to DB base64`);
-            newSignatureBase64 = signature;
+            // Simple Cloudflare key: signatures/2026-04-21/35363.png
+            const _now = new Date(completedAt || Date.now());
+            const _etDate = _now.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+            const _safeOrderNum = (orderNumber || orderId).toString().replace(/[^a-zA-Z0-9]/g, '');
+            let key = `signatures/${_etDate}/${_safeOrderNum}.png`;
+            let _suffix = 2;
+            while (await r2KeyExists(key)) {
+              key = `signatures/${_etDate}/${_safeOrderNum}-${_suffix}.png`;
+              _suffix++;
+              if (_suffix > 50) break;
+            }
+            const uploaded = await uploadToR2(signature, key);
+            if (uploaded) {
+              signatureR2Key = uploaded;
+            } else {
+              console.warn(`R2 signature upload failed for ${orderId}, falling back to DB base64`);
+              newSignatureBase64 = signature;
+            }
           }
         } else {
           newSignatureBase64 = signature;
@@ -1140,9 +1163,13 @@ async function startServer() {
           });
           const existingData = await existing.json();
           const currentTags = existingData.order?.tags || '';
-          const tagsList = currentTags.split(',').map((t: string) => t.trim()).filter((t: string) => t && !t.startsWith('st_status:') && !t.startsWith('st_completed:') && !t.startsWith('st_driver:') && !t.startsWith('st_drivername:'));
+          const allTags = currentTags.split(',').map((t: string) => t.trim()).filter(Boolean);
+          // Idempotency: on retry, preserve the original st_completed timestamp so
+          // the customer-facing delivery time doesn't drift later with each retry.
+          const existingCompletedTag = allTags.find((t: string) => t.startsWith('st_completed:'));
+          const tagsList = allTags.filter((t: string) => !t.startsWith('st_status:') && !t.startsWith('st_completed:') && !t.startsWith('st_driver:') && !t.startsWith('st_drivername:'));
           tagsList.push(`st_status:DELIVERED`);
-          tagsList.push(`st_completed:${(completedAt || new Date().toISOString()).replace(/:/g,'-')}`);
+          tagsList.push(existingCompletedTag || `st_completed:${(completedAt || new Date().toISOString()).replace(/:/g,'-')}`);
           if (driverId) tagsList.push(`st_driver:${driverId}`);
           if (driverName) tagsList.push(`st_drivername:${driverName.replace(/,/g, '')}`);
           await fetch(`https://${SHOPIFY_STORE_URL}/admin/api/2025-01/orders/${orderId}.json`, {
@@ -1176,13 +1203,37 @@ async function startServer() {
 
       // ── AUTO-SEND DELIVERY CONFIRMATION EMAIL WITH PHOTO ───────────────────────────────
       const SMTP_PASS = process.env.SMTP_PASS || '';
+
+      // Idempotency: if we already sent a successful delivery confirmation for
+      // this order, skip — prevents duplicate emails when the frontend retries.
+      // Audit trail lives in email_log:{orderNumber}.
+      let alreadySentPodEmail = false;
+      if (status === 'DELIVERED' && customerEmail) {
+        try {
+          const logKey = `email_log:${String(orderNumber || orderId)}`;
+          const existingLog: any = await getKV(logKey);
+          if (existingLog && Array.isArray(existingLog.sends)) {
+            alreadySentPodEmail = existingLog.sends.some((s: any) =>
+              s && s.success === true && typeof s.subject === 'string' && s.subject.includes('has been delivered')
+            );
+          }
+        } catch (e: any) {
+          // Log check failed — err on the side of NOT sending a dup. The frontend
+          // retry that got us here was likely caused by a transient error, not a
+          // missing email, so a false-positive skip is better than a false-negative resend.
+          console.error('email idempotency check failed (treating as already-sent):', e?.message || e);
+          alreadySentPodEmail = true;
+        }
+      }
+
       // Log why email might not be sent
       if (status === 'DELIVERED') {
         if (!customerEmail) console.log(`📧 No email for order ${orderId} — cannot send POD confirmation`);
         else if (!SMTP_PASS) console.log(`📧 SMTP_PASS not set — cannot send POD confirmation to ${customerEmail}`);
+        else if (alreadySentPodEmail) console.log(`📧 POD email already sent for ${orderId} — skipping duplicate`);
         else console.log(`📧 Attempting to send POD email to ${customerEmail} for order ${orderId}`);
       }
-      if (status === 'DELIVERED' && customerEmail && SMTP_PASS) {
+      if (status === 'DELIVERED' && customerEmail && SMTP_PASS && !alreadySentPodEmail) {
         try {
           const deliveryTime = new Date(completedAt || Date.now()).toLocaleString('en-US', { 
             timeZone: 'America/New_York',
@@ -1214,7 +1265,13 @@ Thank you for choosing The Sweet Tooth!`;
       }
 
       res.json({ success: true });
-    } catch { res.status(500).json({ error: "Failed to save POD" }); }
+    } catch (e: any) {
+      // Surface the real error so the frontend retry loop can act on it instead
+      // of silently swallowing. Status 500 → frontend retries; status 503 was
+      // already returned above for DB-unreachable bail.
+      console.error(`POD handler error for ${orderId}:`, e?.stack || e?.message || e);
+      res.status(500).json({ error: 'Failed to save POD', detail: String(e?.message || e) });
+    }
   });
 
   // ── RESCHEDULE ──────────────────────────────────────────────────────────────
@@ -2044,6 +2101,122 @@ Thank you for choosing The Sweet Tooth!`;
       res.json({ ok: true, podFixed, manualFixed, shopifyFixed });
     } catch (err) {
       res.status(500).json({ error: String(err) });
+    }
+  });
+
+  // One-shot recovery: find POD records that are missing photoR2Key/signatureR2Key
+  // but whose photo DID make it to Cloudflare (the DB write failed after the R2
+  // upload succeeded). For each orphan, probe the expected R2 keys and patch the
+  // POD record if a match is found.
+  //
+  // Safe to run multiple times — records that already have a key are skipped.
+  // Only writes to kv_store (UPDATE on the pod:{id} row). Does NOT send emails,
+  // texts, or any other notification, and does NOT touch Shopify tags.
+  app.post('/api/admin/heal-orphan-photos', async (_req, res) => {
+    if (!pool) return res.status(500).json({ error: 'DB not configured' });
+    if (!R2) return res.status(500).json({ error: 'R2 not configured' });
+
+    const summary = {
+      scanned: 0,
+      orphans: 0,
+      healed: 0,
+      unhealable: 0,
+      healedDetails: [] as any[],
+      unhealedDetails: [] as any[],
+    };
+
+    try {
+      // Build orderId → orderNumber map from recent Shopify orders. The R2 key
+      // uses orderNumber (e.g. "35363"), but the kv_store key uses orderId
+      // (Shopify numeric ID). Limit to last 30 days — enough to cover any
+      // orphan caused by the recent silent-failure bug.
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+      const orderMap = new Map<string, string>();
+      const shopUrl = `https://${SHOPIFY_STORE_URL}/admin/api/2025-01/orders.json?status=any&limit=250&created_at_min=${thirtyDaysAgo}`;
+      try {
+        const shopResp = await fetch(shopUrl, { headers: { 'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN } });
+        if (shopResp.ok) {
+          const shopData: any = await shopResp.json();
+          for (const o of (shopData.orders || [])) {
+            const safeNum = String(o.name || '').replace(/[^a-zA-Z0-9]/g, '');
+            if (safeNum) orderMap.set(String(o.id), safeNum);
+          }
+        }
+      } catch (shopErr: any) {
+        console.error('heal: Shopify fetch error:', shopErr?.message || shopErr);
+      }
+
+      const podRows = await pool.query("SELECT key, value FROM kv_store WHERE key LIKE 'pod:%'");
+      summary.scanned = podRows.rows.length;
+
+      for (const row of podRows.rows) {
+        let data: any;
+        try { data = JSON.parse(row.value); } catch { continue; }
+        const orderId = String(row.key).replace('pod:', '');
+
+        // Skip if already has a key or legacy inline base64 — not an orphan.
+        if (data.photoR2Key || data.signatureR2Key) continue;
+        if (data.photo || data.confirmationPhoto) continue;
+        // Skip records without completedAt — not delivered, no photo expected.
+        if (!data.completedAt) continue;
+
+        summary.orphans++;
+
+        const orderNumber = orderMap.get(orderId);
+        if (!orderNumber) {
+          summary.unhealable++;
+          summary.unhealedDetails.push({ orderId, reason: 'orderId not in last 30 days of Shopify orders' });
+          continue;
+        }
+
+        let etDate: string;
+        try {
+          etDate = new Date(data.completedAt).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+        } catch {
+          summary.unhealable++;
+          summary.unhealedDetails.push({ orderId, orderNumber, reason: 'invalid completedAt' });
+          continue;
+        }
+
+        // Probe base key + up to -5 suffix. Highest-numbered hit wins (most recent retake).
+        let foundPhotoKey: string | null = null;
+        const basePhoto = `photos/${etDate}/${orderNumber}.jpg`;
+        if (await r2KeyExists(basePhoto)) foundPhotoKey = basePhoto;
+        for (let i = 2; i <= 5; i++) {
+          const k = `photos/${etDate}/${orderNumber}-${i}.jpg`;
+          if (await r2KeyExists(k)) foundPhotoKey = k;
+        }
+
+        let foundSigKey: string | null = null;
+        const baseSig = `signatures/${etDate}/${orderNumber}.png`;
+        if (await r2KeyExists(baseSig)) foundSigKey = baseSig;
+        for (let i = 2; i <= 5; i++) {
+          const k = `signatures/${etDate}/${orderNumber}-${i}.png`;
+          if (await r2KeyExists(k)) foundSigKey = k;
+        }
+
+        if (!foundPhotoKey && !foundSigKey) {
+          summary.unhealable++;
+          summary.unhealedDetails.push({ orderId, orderNumber, etDate, reason: 'no matching R2 object' });
+          continue;
+        }
+
+        // Patch only the photo/signature key fields. Do NOT touch anything else —
+        // no emails, no Shopify tag writes, no notifications.
+        if (foundPhotoKey) data.photoR2Key = foundPhotoKey;
+        if (foundSigKey) data.signatureR2Key = foundSigKey;
+        await pool.query(
+          'UPDATE kv_store SET value=$1, updated_at=NOW() WHERE key=$2',
+          [JSON.stringify(data), row.key]
+        );
+        summary.healed++;
+        summary.healedDetails.push({ orderId, orderNumber, photoR2Key: foundPhotoKey, signatureR2Key: foundSigKey });
+      }
+
+      res.json(summary);
+    } catch (e: any) {
+      console.error('heal-orphan-photos error:', e?.stack || e?.message || e);
+      res.status(500).json({ error: String(e?.message || e), summary });
     }
   });
 
