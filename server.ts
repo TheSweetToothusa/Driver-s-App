@@ -428,7 +428,7 @@ async function sendEmail(to: string, subject: string, body: string, attachmentBa
     const mailOptions: any = {
       from: `"The Sweet Tooth" <${SMTP_USER}>`,
       to: to,
-      bcc: 'orders@thesweettooth.com',
+      bcc: ['orders@thesweettooth.com', 'raiver72@gmail.com'],
       subject: subject,
       text: body
     };
