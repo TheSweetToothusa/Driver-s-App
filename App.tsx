@@ -2594,7 +2594,13 @@ const OrdersView: React.FC<OrdersViewProps> = ({
               grouped[dateKey].push(order);
             });
             
-            return Object.entries(grouped).map(([dateKey, orders]) => {
+            return Object.entries(grouped)
+              .sort(([a], [b]) => {
+                if (a === 'unscheduled') return 1;
+                if (b === 'unscheduled') return -1;
+                return b.localeCompare(a);
+              })
+              .map(([dateKey, orders]) => {
               const d = dateKey !== 'unscheduled' ? new Date(dateKey + 'T12:00:00') : null;
               const isToday = dateKey === adminToday;
               const dayLabel = d ? d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).toUpperCase() : 'UNSCHEDULED';
