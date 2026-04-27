@@ -2,6 +2,8 @@
 
 Read this entire file before doing anything. It contains everything you need to work on this project.
 
+> **🚨 IF SOMETHING IS BROKEN AND MIKEY IS IN A RUSH:** Stop reading this file and open `INFRASTRUCTURE.md` in this same repo. It tells you exactly which service hosts what (Render = app, Neon = database, Cloudflare = photos, Gmail = email) and which dashboard to check for which error. Do NOT theorize about which provider is broken — `INFRASTRUCTURE.md` has the answer.
+
 ---
 
 ## ⚠️ FIRST ACTIONS — DO THESE BEFORE READING ANYTHING ELSE ⚠️
