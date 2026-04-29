@@ -1966,6 +1966,21 @@ Thank you for choosing The Sweet Tooth!`;
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
+  // Generate manual order number in MMDD-NN format (e.g., M-0429-01)
+  // Counts existing manual orders for today and increments the sequence
+  async function generateManualOrderNumber(): Promise<string> {
+    const now = new Date();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    const datePrefix = `${mm}${dd}`;
+    const existing = await dbGet('manual_orders') || [];
+    const todayCount = existing.filter((o: any) =>
+      typeof o.orderNumber === 'string' && o.orderNumber.startsWith(`M-${datePrefix}-`)
+    ).length;
+    const seq = String(todayCount + 1).padStart(2, '0');
+    return `M-${datePrefix}-${seq}`;
+  }
+
   app.post('/api/manual-orders', async (req, res) => {
     try {
       const orders = await dbGet('manual_orders') || [];
@@ -1973,7 +1988,7 @@ Thank you for choosing The Sweet Tooth!`;
       const id = `manual_${Date.now()}`;
       const order = {
         id,
-        orderNumber: req.body.orderNumber || `M-${Date.now().toString().slice(-5)}`,
+        orderNumber: req.body.orderNumber || await generateManualOrderNumber(),
         isManual: true,
         customer: {
           name: req.body.recipientName || '',
