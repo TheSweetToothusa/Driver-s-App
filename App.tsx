@@ -3339,42 +3339,47 @@ const ScheduleView: React.FC<{
 
   // Filter deliveries
   const filtered = useMemo(() => {
+    const isSearching = search.trim().length > 0;
     return deliveries.filter(d => {
-      // Driver filter - STRICT isolation for non-admins
+      // Driver isolation — ALWAYS enforced, even during search (non-admins only see their own orders)
       if (!isAdmin) {
-        // Drivers only see orders assigned to THEM
         if (d.driverId !== currentUserId) return false;
-      } else if (driverFilter !== 'ALL') {
+      } else if (!isSearching && driverFilter !== 'ALL') {
+        // Driver dropdown filter only applies when NOT searching
         if (d.driverId !== driverFilter) return false;
       }
-      // Date range filter
-      if (dateFrom || dateTo) {
-        const orderDate = (d.deliveryDate || d.completedAt || '').split('T')[0];
-        // If order has no date, skip the date filter (show it)
-        if (orderDate) {
-          if (dateFrom && orderDate < dateFrom) return false;
-          if (dateTo && orderDate > dateTo) return false;
+      // Date and status filters are skipped entirely when a search is active
+      if (!isSearching) {
+        // Date range filter
+        if (dateFrom || dateTo) {
+          const orderDate = (d.deliveryDate || d.completedAt || '').split('T')[0];
+          if (orderDate) {
+            if (dateFrom && orderDate < dateFrom) return false;
+            if (dateTo && orderDate > dateTo) return false;
+          }
         }
+        // Status filter — skip when date range is active (show all statuses)
+        if (!(dateFrom || dateTo)) {
+          if (statusFilter === 'OPEN' && !OPEN_STATUSES.includes(d.status)) return false;
+          if (statusFilter === 'DONE' && !DONE_STATUSES.includes(d.status)) return false;
+        }
+        return true;
       }
-      // Status filter — skip when date range is active (show all statuses)
-      if (!(dateFrom || dateTo)) {
-        if (statusFilter === 'OPEN' && !OPEN_STATUSES.includes(d.status)) return false;
-        if (statusFilter === 'DONE' && !DONE_STATUSES.includes(d.status)) return false;
-      }
-      // Search
-      if (search.trim()) {
-        const q = search.toLowerCase();
-        return (
-          (d.giftReceiverName || '').toLowerCase().includes(q) ||
-          (d.customer?.name || '').toLowerCase().includes(q) ||
-          (d.orderNumber || '').toLowerCase().includes(q) ||
-          (d.address?.city || '').toLowerCase().includes(q) ||
-          (d.address?.zip || '').toLowerCase().includes(q) ||
-          (d.address?.street || '').toLowerCase().includes(q) ||
-          (d.driverName || '').toLowerCase().includes(q)
-        );
-      }
-      return true;
+      // Search active — match against many fields, ignore date/status filters
+      const q = search.toLowerCase();
+      return (
+        (d.giftReceiverName || '').toLowerCase().includes(q) ||
+        (d.customer?.name || '').toLowerCase().includes(q) ||
+        (d.customer?.phone || '').toLowerCase().includes(q) ||
+        (d.giftSenderName || '').toLowerCase().includes(q) ||
+        (d.giftSenderPhone || '').toLowerCase().includes(q) ||
+        (d.orderNumber || '').toLowerCase().includes(q) ||
+        (d.address?.city || '').toLowerCase().includes(q) ||
+        (d.address?.zip || '').toLowerCase().includes(q) ||
+        (d.address?.street || '').toLowerCase().includes(q) ||
+        (d.driverName || '').toLowerCase().includes(q) ||
+        (d.status || '').toLowerCase().includes(q)
+      );
     });
   }, [deliveries, driverFilter, statusFilter, search, isAdmin, currentUserId, dateFrom, dateTo]);
 
