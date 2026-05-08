@@ -293,7 +293,7 @@ async function initDB() {
   const existing = await dbGet('users');
   if (!existing) {
     await dbSet('users', [
-      { id: "super_admin", name: "Mike", pin: "1979", role: "SUPER_ADMIN", isActive: true, failedAttempts: 0, createdAt: new Date().toISOString() },
+      { id: "mike_b", name: "Mike", pin: "1979", role: "SUPER_ADMIN", isActive: true, failedAttempts: 0, createdAt: new Date().toISOString() },
       { id: "manager_1", name: "Katie", pin: "4070", role: "MANAGER", phone: "3059944070", isActive: true, failedAttempts: 0, createdAt: new Date().toISOString() }
     ]);
     console.log('Default users seeded');
@@ -301,7 +301,15 @@ async function initDB() {
     // Always ensure core accounts are unlocked and have correct PINs
     const users = existing;
     let changed = false;
-    const mikey = users.find((u: any) => u.id === 'super_admin');
+    // One-shot rename: SUPER_ADMIN's id "super_admin" collided with the role string,
+    // which polluted st_driver: tags during reassignment. Migrate to "mike_b".
+    const legacySuper = users.find((u: any) => u.id === 'super_admin');
+    if (legacySuper && !users.find((u: any) => u.id === 'mike_b')) {
+      legacySuper.id = 'mike_b';
+      changed = true;
+      console.log('Renamed user id super_admin → mike_b');
+    }
+    const mikey = users.find((u: any) => u.id === 'mike_b');
     const katie = users.find((u: any) => u.id === 'manager_1');
     if (mikey && mikey.name !== 'Mike') {
       mikey.name = 'Mike'; changed = true;
@@ -335,7 +343,7 @@ async function initDB() {
 
 if (!fs.existsSync(USERS_PATH)) {
   fs.writeFileSync(USERS_PATH, JSON.stringify([
-    { id: "super_admin", name: "Mike", pin: "1979", role: "SUPER_ADMIN", isActive: true, failedAttempts: 0, createdAt: new Date().toISOString() },
+    { id: "mike_b", name: "Mike", pin: "1979", role: "SUPER_ADMIN", isActive: true, failedAttempts: 0, createdAt: new Date().toISOString() },
     { id: "manager_1", name: "Katie", pin: "4070", role: "MANAGER", phone: "3059944070", isActive: true, failedAttempts: 0, createdAt: new Date().toISOString() }
   ], null, 2));
 }
@@ -2179,13 +2187,15 @@ Thank you for choosing The Sweet Tooth!`;
   // One-time migration: rename "Mikey" to "Mike" in all POD records and Shopify tags
   app.post('/api/admin/migrate-mikey-to-mike', async (_req, res) => {
     try {
-      // 1. Fix all pod: keys in PostgreSQL
+      // 1. Fix all pod: keys in PostgreSQL — driverName Mikey→Mike AND driverId super_admin→mike_b
       const podRows = await pool.query("SELECT key, value FROM kv_store WHERE key LIKE 'pod:%'");
       let podFixed = 0;
       for (const row of podRows.rows) {
         const data = JSON.parse(row.value);
-        if (data.driverName === 'Mikey') {
-          data.driverName = 'Mike';
+        let rowChanged = false;
+        if (data.driverName === 'Mikey') { data.driverName = 'Mike'; rowChanged = true; }
+        if (data.driverId === 'super_admin') { data.driverId = 'mike_b'; rowChanged = true; }
+        if (rowChanged) {
           await pool.query('UPDATE kv_store SET value=$1 WHERE key=$2', [JSON.stringify(data), row.key]);
           podFixed++;
         }
@@ -2199,33 +2209,43 @@ Thank you for choosing The Sweet Tooth!`;
         let changed = false;
         for (const o of manualOrders) {
           if (o.driverName === 'Mikey') { o.driverName = 'Mike'; changed = true; manualFixed++; }
-          if (o.driverId === 'super_admin' && o.driverName !== 'Mike') { o.driverName = 'Mike'; changed = true; manualFixed++; }
+          if (o.driverId === 'super_admin') { o.driverId = 'mike_b'; changed = true; manualFixed++; }
         }
         if (changed) await setKV('manual_orders', JSON.stringify(manualOrders));
       }
 
-      // 3. Fix Shopify tags: find all orders with st_drivername:Mikey and update to Mike
+      // 3. Fix Shopify tags: drivername Mikey→Mike AND st_driver:super_admin → st_driver:mike_b
       let shopifyFixed = 0;
       try {
-        const shopifyRes = await fetch(
-          `https://${process.env.SHOPIFY_STORE_DOMAIN}/admin/api/2025-01/orders.json?tag=st_drivername:Mikey&status=any&limit=250`,
-          { headers: { 'X-Shopify-Access-Token': process.env.SHOPIFY_ACCESS_TOKEN || '' } }
-        );
-        const shopifyData = await shopifyRes.json() as { orders?: any[] };
-        const orders = shopifyData.orders || [];
-        for (const order of orders) {
-          const currentTags: string = order.tags || '';
-          const newTags = currentTags
-            .split(',')
-            .map((t: string) => t.trim())
-            .map((t: string) => t === 'st_drivername:Mikey' ? 'st_drivername:Mike' : t)
-            .join(', ');
-          await fetch(
-            `https://${process.env.SHOPIFY_STORE_DOMAIN}/admin/api/2025-01/orders/${order.id}.json`,
-            { method: 'PUT', headers: { 'X-Shopify-Access-Token': process.env.SHOPIFY_ACCESS_TOKEN || '', 'Content-Type': 'application/json' },
-              body: JSON.stringify({ order: { id: order.id, tags: newTags } }) }
+        const queries = [
+          `tag=st_drivername:Mikey`,
+          `tag=st_driver:super_admin`,
+        ];
+        const seen = new Set<string>();
+        for (const q of queries) {
+          const shopifyRes = await fetch(
+            `https://${process.env.SHOPIFY_STORE_DOMAIN}/admin/api/2025-01/orders.json?${q}&status=any&limit=250`,
+            { headers: { 'X-Shopify-Access-Token': process.env.SHOPIFY_ACCESS_TOKEN || '' } }
           );
-          shopifyFixed++;
+          const shopifyData = await shopifyRes.json() as { orders?: any[] };
+          const orders = shopifyData.orders || [];
+          for (const order of orders) {
+            if (seen.has(String(order.id))) continue;
+            seen.add(String(order.id));
+            const currentTags: string = order.tags || '';
+            const newTags = currentTags
+              .split(',')
+              .map((t: string) => t.trim())
+              .map((t: string) => t === 'st_drivername:Mikey' ? 'st_drivername:Mike' : t)
+              .map((t: string) => t === 'st_driver:super_admin' ? 'st_driver:mike_b' : t)
+              .join(', ');
+            await fetch(
+              `https://${process.env.SHOPIFY_STORE_DOMAIN}/admin/api/2025-01/orders/${order.id}.json`,
+              { method: 'PUT', headers: { 'X-Shopify-Access-Token': process.env.SHOPIFY_ACCESS_TOKEN || '', 'Content-Type': 'application/json' },
+                body: JSON.stringify({ order: { id: order.id, tags: newTags } }) }
+            );
+            shopifyFixed++;
+          }
         }
       } catch (shopifyErr) {
         console.error('Shopify tag migration error (non-fatal):', shopifyErr);
