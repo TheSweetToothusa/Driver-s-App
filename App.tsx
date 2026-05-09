@@ -2459,32 +2459,36 @@ const OrdersView: React.FC<OrdersViewProps> = ({
     const todayFiltered = sorted;
 
     const filtered = todayFiltered.filter(d => {
-      // Driver filter
+      const isSearching = search.trim().length > 0;
+      // Driver filter — always applies (admin still expects driver scoping when set)
       if (ordersDriverFilter !== 'ALL' && d.driverId !== ordersDriverFilter) return false;
-      // Date range filter
-      if (dateFrom || dateTo) {
-        const orderDate = (d.deliveryDate || d.completedAt || '').split('T')[0];
-        // If order has no date, skip the date filter (show it)
-        if (orderDate) {
-          if (dateFrom && orderDate < dateFrom) return false;
-          if (dateTo && orderDate > dateTo) return false;
+      // Date and status filters are skipped entirely when a search is active,
+      // so any order can be found by typing its number/name regardless of state.
+      if (!isSearching) {
+        if (dateFrom || dateTo) {
+          const orderDate = (d.deliveryDate || d.completedAt || '').split('T')[0];
+          if (orderDate) {
+            if (dateFrom && orderDate < dateFrom) return false;
+            if (dateTo && orderDate > dateTo) return false;
+          }
         }
+        if (statusFilter === 'OPEN' && !OPEN_STATUSES.includes(d.status)) return false;
+        if (statusFilter === 'CLOSED' && !CLOSED_STATUSES.includes(d.status)) return false;
+        return true;
       }
-      // Status filter — always applies
-      if (statusFilter === 'OPEN' && !OPEN_STATUSES.includes(d.status)) return false;
-      if (statusFilter === 'CLOSED' && !CLOSED_STATUSES.includes(d.status)) return false;
-      // Text search
-      if (!search) return true;
       const q = search.toLowerCase();
       const statusLabel = STATUSES_FOR_DROPDOWN.find(s => s.value === d.status)?.label?.toLowerCase() || '';
       return (
         d.orderNumber?.toLowerCase().includes(q) ||
         d.customer?.name?.toLowerCase().includes(q) ||
+        d.customer?.phone?.toLowerCase().includes(q) ||
         d.address?.street?.toLowerCase().includes(q) ||
         d.address?.city?.toLowerCase().includes(q) ||
         d.address?.zip?.toLowerCase().includes(q) ||
         d.giftReceiverName?.toLowerCase().includes(q) ||
         d.giftSenderName?.toLowerCase().includes(q) ||
+        d.giftSenderPhone?.toLowerCase().includes(q) ||
+        d.driverName?.toLowerCase().includes(q) ||
         statusLabel.includes(q)
       );
     });
