@@ -408,6 +408,90 @@ function nextBusinessDay(from: Date): string {
   return d.toISOString().split('T')[0];
 }
 
+// Fetch Shopify Local Delivery instructions + phone for a batch of orders.
+// Local Delivery stores instructions on FulfillmentOrder.deliveryMethod.additionalInformation,
+// which requires the `read_assigned_fulfillment_orders` and
+// `read_merchant_managed_fulfillment_orders` scopes on the custom app token.
+// Falls back to order metafields under the `shopify_local_delivery` namespace.
+// Returns Map<numericOrderId, { instructions, phone }>.
+async function fetchLocalDeliveryInfo(
+  orderIds: string[]
+): Promise<Map<string, { instructions: string; phone: string }>> {
+  const result = new Map<string, { instructions: string; phone: string }>();
+  if (!orderIds.length || !SHOPIFY_STORE_URL || !SHOPIFY_ACCESS_TOKEN) return result;
+
+  const ids = orderIds.map((id) => `gid://shopify/Order/${id}`);
+  const query = `
+    query($ids: [ID!]!) {
+      nodes(ids: $ids) {
+        ... on Order {
+          legacyResourceId
+          fulfillmentOrders(first: 5) {
+            edges { node {
+              deliveryMethod {
+                methodType
+                additionalInformation { instructions phone }
+              }
+            }}
+          }
+          metafields(first: 20, namespace: "shopify_local_delivery") {
+            edges { node { key value } }
+          }
+        }
+      }
+    }`;
+
+  try {
+    const resp = await fetch(`https://${SHOPIFY_STORE_URL}/admin/api/2025-01/graphql.json`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN,
+      },
+      body: JSON.stringify({ query, variables: { ids } }),
+    });
+    if (!resp.ok) {
+      console.error('Shopify GraphQL FO fetch failed:', resp.status, await resp.text());
+      return result;
+    }
+    const json: any = await resp.json();
+    if (json.errors) {
+      console.error('Shopify GraphQL FO errors:', JSON.stringify(json.errors));
+      return result;
+    }
+    for (const node of json.data?.nodes || []) {
+      if (!node?.legacyResourceId) continue;
+      let instructions = '';
+      let phone = '';
+      for (const edge of node.fulfillmentOrders?.edges || []) {
+        const ai = edge?.node?.deliveryMethod?.additionalInformation;
+        if (ai?.instructions || ai?.phone) {
+          instructions = ai.instructions || instructions;
+          phone = ai.phone || phone;
+          if (instructions && phone) break;
+        }
+      }
+      // Metafield fallback (only if FO didn't yield instructions/phone)
+      for (const edge of node.metafields?.edges || []) {
+        const k = (edge?.node?.key || '').toLowerCase();
+        const v = edge?.node?.value || '';
+        if (!instructions && (k === 'instructions' || k === 'delivery_instructions' || k === 'note')) {
+          instructions = v;
+        }
+        if (!phone && (k === 'phone' || k === 'delivery_phone' || k === 'recipient_phone')) {
+          phone = v;
+        }
+      }
+      if (instructions || phone) {
+        result.set(String(node.legacyResourceId), { instructions, phone });
+      }
+    }
+  } catch (e) {
+    console.error('Shopify GraphQL FO fetch error:', e);
+  }
+  return result;
+}
+
 async function sendEmail(to: string, subject: string, body: string, attachmentBase64?: string, attachmentFilename?: string): Promise<boolean> {
   // Configurable SMTP - works with any provider
   const SMTP_HOST = process.env.SMTP_HOST || 'smtp.gmail.com';
@@ -640,6 +724,22 @@ async function startServer() {
       console.log(`Shopify: ${allOrders.length} total, ${(filtered.length > 0 ? filtered : allOrders).length} local delivery`);
 
       const ordersToProcess = ordersWithTags.length > 0 ? ordersWithTags : (filtered.length > 0 ? filtered : allOrders);
+
+      // Enrich with Local Delivery instructions + phone from FulfillmentOrders.
+      // Customer instructions live on FO.deliveryMethod.additionalInformation, not note_attributes.
+      try {
+        const orderIds = ordersToProcess.map((o: any) => String(o.id));
+        const localInfo = await fetchLocalDeliveryInfo(orderIds);
+        for (const o of ordersToProcess) {
+          const info = localInfo.get(String(o.id));
+          if (info) {
+            if (info.instructions) o._delivery_instructions = info.instructions;
+            if (info.phone) o._delivery_phone = info.phone;
+          }
+        }
+      } catch (err) {
+        console.error('Local delivery info enrichment failed (non-fatal):', err);
+      }
 
       // podData is already lightweight (no photos) from readPodDataLight()
       res.json({ orders: ordersToProcess, podData });

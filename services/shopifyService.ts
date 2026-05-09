@@ -128,7 +128,7 @@ const mapShopifyOrder = (order: any): Delivery => {
     orderNumber: order.name,
     customer: {
       name: `${shipping.first_name || ''} ${shipping.last_name || ''}`.trim() || 'Recipient',
-      phone: shipping.phone || '',
+      phone: shipping.phone || order._delivery_phone || '',
       email: buyer.email || ''
     },
     address: {

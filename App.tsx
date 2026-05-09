@@ -1663,6 +1663,11 @@ const OrderDetail: React.FC<{
           <div style={{ background: '#FEF3C7', padding: '12px 16px', borderLeft: '3px solid #F59E0B' }}>
             <p style={{ fontSize: 10, fontWeight: 700, color: '#92400E', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>Delivery Instructions</p>
             <p style={{ fontSize: 14, fontWeight: 600, color: '#78350F' }}>{order.deliveryInstructions}</p>
+            {order.customer?.phone && (
+              <a href={`tel:${order.customer.phone}`} style={{ display: 'inline-block', marginTop: 6, fontSize: 13, fontWeight: 700, color: '#92400E', textDecoration: 'underline' }}>
+                📞 {order.customer.phone}
+              </a>
+            )}
           </div>
         )}
 
