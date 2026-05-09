@@ -32,8 +32,15 @@ export const getDeliveries = async (): Promise<Delivery[]> => {
           if (pod.notes && !pod.driverNotes) pod.driverNotes = pod.notes;
           // Also normalize completedAt from status tag if missing
           if (!pod.completedAt && delivery.completedAt) pod.completedAt = delivery.completedAt;
-          // Merge POD data into delivery (status, timestamps, notes, flags)
-          const merged = { ...delivery, ...pod };
+          // Merge POD data into delivery (status, timestamps, notes, flags).
+          // CRITICAL: drop null/undefined pod fields before spreading — a partial pod
+          // record (e.g. only adminNotes set) would otherwise overwrite a real
+          // mapped status with null and the order would disappear from every filter.
+          const podClean: Record<string, any> = {};
+          for (const [k, v] of Object.entries(pod)) {
+            if (v !== null && v !== undefined) podClean[k] = v;
+          }
+          const merged = { ...delivery, ...podClean };
           // Debug: log first few DELIVERED orders
           if (pod.status === 'DELIVERED' && orders.indexOf(order) < 3) {
             console.log(`[DEBUG] Order ${delivery.orderNumber}: delivery.status=${delivery.status}, pod.status=${pod.status}, merged.status=${merged.status}`);
