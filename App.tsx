@@ -854,11 +854,13 @@ interface RescheduleModalProps {
   failureReason: FailureReason;
   driverNotes: string;
   photo: string | null;
-  onAutoReschedule: () => void;
-  onManualReschedule: () => void;
+  onAutoReschedule: () => void | Promise<void>;
+  onManualReschedule: () => void | Promise<void>;
+  onCancel: () => void;
 }
 
-const RescheduleModal: React.FC<RescheduleModalProps> = ({ order, failureReason, driverNotes, photo, onAutoReschedule, onManualReschedule }) => {
+const RescheduleModal: React.FC<RescheduleModalProps> = ({ order, failureReason, driverNotes, photo, onAutoReschedule, onManualReschedule, onCancel }) => {
+  const [working, setWorking] = useState<'auto' | 'manual' | null>(null);
   const tomorrow = (() => {
     const d = new Date();
     d.setDate(d.getDate() + 1);
@@ -866,9 +868,38 @@ const RescheduleModal: React.FC<RescheduleModalProps> = ({ order, failureReason,
     return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
   })();
 
+  const runAuto = async () => {
+    if (working) return;
+    setWorking('auto');
+    try { await onAutoReschedule(); } catch { setWorking(null); }
+  };
+  const runManual = async () => {
+    if (working) return;
+    setWorking('manual');
+    try { await onManualReschedule(); } catch { setWorking(null); }
+  };
+
   return (
-    <div className="fixed inset-0 bg-black/80 z-[250] flex items-center justify-center p-5">
-      <div className="w-full max-w-sm bg-white rounded-[36px] p-7 shadow-2xl animate-in zoom-in-95 space-y-5">
+    <div
+      className="fixed inset-0 bg-black/80 z-[250] flex items-center justify-center p-5"
+      style={{ touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent' }}
+      onClick={() => { if (!working) onCancel(); }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        className="w-full max-w-sm bg-white rounded-[36px] p-7 shadow-2xl space-y-5 relative"
+      >
+        {/* Close button — always available so the driver isn't trapped */}
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={!!working}
+          aria-label="Close"
+          className="absolute top-3 right-3 w-9 h-9 rounded-full bg-stone-100 flex items-center justify-center active:bg-stone-200 disabled:opacity-40"
+        >
+          <X size={18} className="text-stone-500" />
+        </button>
+
         <div className="text-center">
           <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <RotateCcw size={28} className="text-amber-600" />
@@ -884,17 +915,21 @@ const RescheduleModal: React.FC<RescheduleModalProps> = ({ order, failureReason,
         </div>
 
         <button
-          onClick={onAutoReschedule}
-          className="w-full py-6 bg-black text-white rounded-[28px] font-black uppercase tracking-widest text-sm flex items-center justify-center gap-3 active:scale-95 transition-all shadow-lg"
+          type="button"
+          onClick={runAuto}
+          disabled={!!working}
+          className="w-full py-6 bg-black text-white rounded-[28px] font-black uppercase tracking-widest text-sm flex items-center justify-center gap-3 shadow-lg disabled:opacity-70"
         >
-          <Calendar size={20} /> YES — Reschedule for {tomorrow}
+          {working === 'auto' ? 'Rescheduling…' : <><Calendar size={20} /> YES — Reschedule for {tomorrow}</>}
         </button>
 
         <button
-          onClick={onManualReschedule}
-          className="w-full py-5 bg-stone-100 text-stone-700 rounded-[28px] font-black uppercase text-sm flex items-center justify-center gap-2 active:scale-95 transition-all"
+          type="button"
+          onClick={runManual}
+          disabled={!!working}
+          className="w-full py-5 bg-stone-100 text-stone-700 rounded-[28px] font-black uppercase text-sm flex items-center justify-center gap-2 disabled:opacity-70"
         >
-          <Inbox size={18} /> No — Send to Katie's Queue
+          {working === 'manual' ? 'Saving…' : <><Inbox size={18} /> No — Send to Katie's Queue</>}
         </button>
       </div>
     </div>
@@ -1168,16 +1203,27 @@ const OrderDetail: React.FC<{
   };
 
   const handleAutoReschedule = async () => {
-    const res = await fetch('/api/reschedule/auto', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ order: { ...order, ...pendingFailure } }) });
-    const data = await res.json();
-    if (data.rescheduledOrder) onAddDelivery({ ...data.rescheduledOrder, attemptNumber: 2, originalDeliveryId: order.id });
-    // Mark original as FAILED (1st attempt) with attemptNumber=1
+    // Strip the base64 photo from the payload — the endpoint discards it and a
+    // multi-MB body over cellular makes the modal feel frozen.
+    const { confirmationPhoto: _cp, ...orderNoPhoto } = order as any;
+    const { photo: _p, ...failureNoPhoto } = (pendingFailure || {}) as any;
+    try {
+      const res = await fetch('/api/reschedule/auto', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ order: { ...orderNoPhoto, ...failureNoPhoto } }) });
+      const data = await res.json();
+      if (data.rescheduledOrder) onAddDelivery({ ...data.rescheduledOrder, attemptNumber: 2, originalDeliveryId: order.id });
+    } catch (err) {
+      console.error('Auto-reschedule failed:', err);
+    }
     onUpdate(order.id, { status: DeliveryStatus.FAILED, attemptNumber: 1 });
     setShowReschedule(false);
   };
 
   const handleManualReschedule = async () => {
-    await fetch('/api/reschedule/pending', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ order, failureReason: pendingFailure?.reason, driverNotes: pendingFailure?.notes, photo: pendingFailure?.photo }) });
+    try {
+      await fetch('/api/reschedule/pending', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ order, failureReason: pendingFailure?.reason, driverNotes: pendingFailure?.notes, photo: pendingFailure?.photo }) });
+    } catch (err) {
+      console.error('Manual reschedule failed:', err);
+    }
     onUpdate(order.id, { status: DeliveryStatus.PENDING_RESCHEDULE });
     setShowReschedule(false);
   };
@@ -2330,6 +2376,7 @@ const OrderDetail: React.FC<{
           photo={pendingFailure.photo}
           onAutoReschedule={handleAutoReschedule}
           onManualReschedule={handleManualReschedule}
+          onCancel={() => setShowReschedule(false)}
         />
       )}
 
