@@ -36,6 +36,10 @@ const STATUSES_FOR_DROPDOWN = [
 ];
 const formatTime = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 const formatDate = (iso: string) => new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+// Local YYYY-MM-DD (NOT UTC). Order delivery dates are local calendar dates ("May 12" → "2026-05-12"),
+// so today/tomorrow must also be local — otherwise late-evening Miami time (UTC offset) buckets orders wrong.
+const localDateStr = (d: Date = new Date()) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 // POST /api/pod with retry — blocking until it succeeds or exhausts retries.
 // Retries on network error or 5xx (including 503 from backend when DB is unreachable).
@@ -2439,7 +2443,7 @@ const OrdersView: React.FC<OrdersViewProps> = ({
   deliveries, isAdmin, currentUser, allUsers, isSameDayWindow,
   pendingCount, inTransitCount, deliveredTodayCount, onSelectOrder, onUpdateOrder
 }) => {
-  const today = new Date().toISOString().split('T')[0];
+  const today = localDateStr();
   const [driverDate, setDriverDate] = useState(today);
   const [activeTab, setActiveTab] = useState<'active' | 'done'>('active');
   const [search, setSearch] = useState('');
@@ -2492,7 +2496,7 @@ const OrdersView: React.FC<OrdersViewProps> = ({
     });
     const unassignedCount = deliveries.filter(d => !d.driverId || d.status === DeliveryStatus.PENDING).length;
 
-    const adminToday = new Date().toISOString().split('T')[0];
+    const adminToday = localDateStr();
 
     const CLOSED_STATUSES = [DeliveryStatus.DELIVERED, DeliveryStatus.CLOSED];
     const OPEN_STATUSES = [DeliveryStatus.PENDING, DeliveryStatus.SCHEDULED, DeliveryStatus.ASSIGNED, DeliveryStatus.IN_TRANSIT, DeliveryStatus.SECOND_ATTEMPT, DeliveryStatus.FAILED, DeliveryStatus.PENDING_RESCHEDULE];
@@ -3349,8 +3353,8 @@ const ScheduleView: React.FC<{
   onUpdateOrder: (id: string, updates: Partial<Delivery>) => void;
 }> = ({ deliveries, role, currentUserId, allUsers, onSelectOrder, onUpdateOrder }) => {
   const isAdmin = role === 'SUPER_ADMIN' || role === 'MANAGER';
-  const todayStr = new Date().toISOString().split('T')[0];
-  const tomorrowStr = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+  const todayStr = localDateStr();
+  const tomorrowStr = localDateStr(new Date(Date.now() + 86400000));
 
   const [search, setSearch] = useState('');
   const [driverFilter, setDriverFilter] = useState('ALL');
@@ -5877,8 +5881,8 @@ interface DriverHomeProps {
 }
 
 const DriverHomeView: React.FC<DriverHomeProps> = ({ currentUser, deliveries, onSelectOrder }) => {
-  const todayStr = new Date().toISOString().split('T')[0];
-  const tomorrowStr = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+  const todayStr = localDateStr();
+  const tomorrowStr = localDateStr(new Date(Date.now() + 86400000));
   const [selectedDate, setSelectedDate] = useState(todayStr);
   const isAdmin = currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'MANAGER';
   const isDriver = currentUser.role === 'DRIVER';
@@ -7017,7 +7021,7 @@ export default function App() {
   }
 
   // Stats for orders tab header
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = localDateStr();
   const OPEN_STATUSES_BADGE = [DeliveryStatus.PENDING, DeliveryStatus.SCHEDULED, DeliveryStatus.ASSIGNED, DeliveryStatus.IN_TRANSIT, DeliveryStatus.SECOND_ATTEMPT, DeliveryStatus.FAILED, DeliveryStatus.PENDING_RESCHEDULE];
   const activeOrders = visibleDeliveries.filter(d => OPEN_STATUSES_BADGE.includes(d.status));
   const pendingCount = visibleDeliveries.filter(d => d.status === DeliveryStatus.PENDING || d.status === DeliveryStatus.ASSIGNED).length;
