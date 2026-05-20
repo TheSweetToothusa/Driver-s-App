@@ -28,6 +28,21 @@ const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY || '';
 const SENDGRID_FROM_EMAIL = process.env.SENDGRID_FROM_EMAIL || 'noreply@thesweettooth.com';
 const KATIE_PHONE = '305-994-4070';
 
+// Load the email-header logo once at startup; we attach it inline (cid:brand-logo)
+// on every branded HTML email so it renders even when external images are blocked.
+const EMAIL_LOGO_PATH = path.join(__dirname, 'assets', 'email-logo.png');
+let EMAIL_LOGO_BASE64: string | null = null;
+try {
+  if (fs.existsSync(EMAIL_LOGO_PATH)) {
+    EMAIL_LOGO_BASE64 = fs.readFileSync(EMAIL_LOGO_PATH).toString('base64');
+    console.log(`📨 Loaded email logo (${Math.round(EMAIL_LOGO_BASE64.length / 1024)}KB)`);
+  } else {
+    console.warn(`📨 Email logo not found at ${EMAIL_LOGO_PATH} — emails will fall back to text wordmark`);
+  }
+} catch (e: any) {
+  console.warn(`📨 Failed to load email logo: ${e?.message || e}`);
+}
+
 // --- PostgreSQL pool (persistent across deploys) ---
 const pool = process.env.DATABASE_URL ? new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -492,20 +507,28 @@ async function fetchLocalDeliveryInfo(
   return result;
 }
 
-async function sendEmail(to: string, subject: string, body: string, attachmentBase64?: string, attachmentFilename?: string): Promise<boolean> {
+async function sendEmail(
+  to: string,
+  subject: string,
+  body: string,
+  attachmentBase64?: string,
+  attachmentFilename?: string,
+  htmlBody?: string,
+  inlineCid?: string
+): Promise<boolean> {
   // Configurable SMTP - works with any provider
   const SMTP_HOST = process.env.SMTP_HOST || 'smtp.gmail.com';
   const SMTP_PORT = parseInt(process.env.SMTP_PORT || '587');
   const SMTP_USER = process.env.SMTP_USER || 'orders@thesweettooth.com';
   const SMTP_PASS = process.env.SMTP_PASS || '';
-  
+
   if (!SMTP_PASS) {
     console.log('❌ SMTP_PASS not configured');
     return false;
   }
-  
+
   console.log(`📧 Attempting to send email via ${SMTP_HOST}:${SMTP_PORT} as ${SMTP_USER}`);
-  
+
   try {
     const transporter = nodemailer.createTransport({
       host: SMTP_HOST,
@@ -516,7 +539,7 @@ async function sendEmail(to: string, subject: string, body: string, attachmentBa
         pass: SMTP_PASS
       }
     });
-    
+
     const mailOptions: any = {
       from: `"The Sweet Tooth" <${SMTP_USER}>`,
       to: to,
@@ -524,25 +547,311 @@ async function sendEmail(to: string, subject: string, body: string, attachmentBa
       subject: subject,
       text: body
     };
-    
+
+    if (htmlBody) {
+      mailOptions.html = htmlBody;
+    }
+
+    const attachments: any[] = [];
+
     // Attach POD photo if provided
     if (attachmentBase64 && attachmentFilename) {
       // Strip data URL prefix if present
       const base64Data = attachmentBase64.replace(/^data:image\/\w+;base64,/, '');
-      mailOptions.attachments = [{
+      const attachment: any = {
         filename: attachmentFilename,
         content: base64Data,
         encoding: 'base64'
-      }];
-      console.log(`📎 Attaching photo: ${attachmentFilename}`);
+      };
+      // When inlineCid is set, the attachment is referenced from the HTML body
+      // via <img src="cid:<inlineCid>">. We also mark Content-Disposition: inline
+      // explicitly — without this, Gmail in particular will sometimes show the
+      // image in the bottom "One attachment" tray instead of where the HTML
+      // places it.
+      if (inlineCid) {
+        attachment.cid = inlineCid;
+        attachment.contentDisposition = 'inline';
+      }
+      attachments.push(attachment);
+      console.log(`📎 Attaching photo: ${attachmentFilename}${inlineCid ? ` (inline cid:${inlineCid})` : ''}`);
     }
-    
+
+    // Auto-attach the brand logo inline whenever we're sending HTML. The HTML
+    // template references it as <img src="cid:brand-logo">.
+    if (htmlBody && EMAIL_LOGO_BASE64) {
+      attachments.push({
+        filename: 'sweet-tooth-logo.png',
+        content: EMAIL_LOGO_BASE64,
+        encoding: 'base64',
+        cid: 'brand-logo',
+        contentDisposition: 'inline'
+      });
+    }
+
+    if (attachments.length > 0) {
+      mailOptions.attachments = attachments;
+    }
+
     await transporter.sendMail(mailOptions);
     console.log(`✅ Email sent to ${to}`);
     return true;
   } catch (err: any) {
     console.log(`❌ SMTP error: ${err.message || err}`);
     return false;
+  }
+}
+
+// Public base URL of this app — used in outbound email links (review stars, etc.).
+// Prefers APP_BASE_URL, then Render's RENDER_EXTERNAL_URL, then the request's host.
+function getAppBaseUrl(req?: { protocol?: string; get?: (h: string) => string | undefined }): string {
+  const envUrl = process.env.APP_BASE_URL || process.env.RENDER_EXTERNAL_URL || '';
+  if (envUrl) return envUrl.replace(/\/$/, '');
+  if (req && req.protocol && typeof req.get === 'function') {
+    const host = req.get('host');
+    if (host) return `${req.protocol}://${host}`;
+  }
+  return '';
+}
+
+function escapeHtmlForEmail(s: string): string {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function firstNameOf(full: string): string {
+  return String(full || '').trim().split(/\s+/)[0] || '';
+}
+
+function buildDeliveryConfirmationEmail(opts: {
+  variant: 'gift' | 'self';
+  receiverName: string;
+  deliveryTime: string;
+  orderId: string;
+  orderNumber?: string;
+  baseUrl: string;
+  hasPhoto: boolean;
+}): { subject: string; text: string; html: string } {
+  const { variant, receiverName, deliveryTime, orderId, orderNumber, baseUrl, hasPhoto } = opts;
+  const isGift = variant === 'gift';
+  const displayId = String(orderNumber || orderId);
+  const firstName = firstNameOf(receiverName) || receiverName || 'your recipient';
+  const safeFirstName = escapeHtmlForEmail(firstName);
+  const safeTime = escapeHtmlForEmail(deliveryTime);
+  const safeDisplayId = escapeHtmlForEmail(displayId);
+  const orderSlug = encodeURIComponent(String(orderId));
+
+  const subject = isGift
+    ? `🎁 ${firstName} just got your gift — how was your experience?`
+    : `Your Sweet Tooth order has arrived — enjoy!`;
+
+  // Header: dark charcoal with the brand wordmark embedded as cid:brand-logo.
+  // If the logo failed to load at startup, fall back to gold text so the
+  // header still looks intentional.
+  const headerInner = EMAIL_LOGO_BASE64
+    ? `<img src="cid:brand-logo" alt="The Sweet Tooth" width="240" style="display:block;width:240px;max-width:80%;height:auto;margin:0 auto;border:0;outline:none;text-decoration:none;">`
+    : `<div style="font-family:Georgia,'Times New Roman',serif;font-size:28px;font-weight:700;color:#D4AF37;letter-spacing:0.5px;">The Sweet Tooth</div>`;
+
+  const heroHtml = isGift ? `
+        <tr>
+          <td style="padding:40px 32px 8px 32px;text-align:center;">
+            <div style="font-size:24px;font-weight:600;color:#2a2a2a;line-height:1.3;">A sweet moment, just delivered.</div>
+            <div style="font-size:16px;color:#666;margin-top:14px;line-height:1.6;">
+              ${safeFirstName} just received your gift on<br>
+              <strong style="color:#2a2a2a;">${safeTime}</strong>.
+            </div>
+            <div style="font-size:16px;color:#666;margin-top:14px;line-height:1.6;">
+              Thank you for trusting us with something that mattered to you.
+            </div>
+          </td>
+        </tr>` : `
+        <tr>
+          <td style="padding:40px 32px 8px 32px;text-align:center;">
+            <div style="font-size:24px;font-weight:600;color:#2a2a2a;line-height:1.3;">Your order has arrived.</div>
+            <div style="font-size:16px;color:#666;margin-top:14px;line-height:1.6;">
+              Delivered on <strong style="color:#2a2a2a;">${safeTime}</strong>.
+            </div>
+            <div style="font-size:16px;color:#666;margin-top:14px;line-height:1.6;">
+              Thank you for choosing us. We hope you love every bite.
+            </div>
+          </td>
+        </tr>`;
+
+  const photoRow = hasPhoto ? `
+        <tr>
+          <td style="padding:24px 32px 16px 32px;text-align:center;">
+            <img src="cid:proof-photo" alt="Proof of delivery" style="max-width:100%;height:auto;border-radius:8px;border:1px solid #eee;">
+            <div style="font-size:12px;color:#999;margin-top:8px;font-style:italic;">Delivered with care.</div>
+          </td>
+        </tr>` : '';
+
+  const askHeading = isGift ? 'How was your experience?' : 'How did we do?';
+  const subCopy = isGift
+    ? `From ordering to delivery — we'd love to know how we did. Tap a star to share your experience.`
+    : `Tap a star to share your experience. Your words help others find us.`;
+
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${isGift ? 'Your gift has been delivered' : 'Your order has been delivered'}</title>
+</head>
+<body style="margin:0;padding:0;background-color:#faf7f2;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#2a2a2a;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#faf7f2;">
+  <tr>
+    <td align="center" style="padding:32px 16px;">
+      <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background-color:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.04);">
+
+        <tr>
+          <td align="center" style="background-color:#2a2a2a;padding:32px 24px;">
+            ${headerInner}
+          </td>
+        </tr>
+${heroHtml}${photoRow}
+        <tr>
+          <td style="padding:16px 32px 8px 32px;"><div style="border-top:1px solid #eee;"></div></td>
+        </tr>
+
+        <tr>
+          <td style="padding:24px 32px 0 32px;text-align:center;">
+            <div style="font-size:20px;font-weight:600;color:#2a2a2a;">${askHeading}</div>
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding:20px 32px 8px 32px;text-align:center;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center">
+              <tr>
+                <td style="padding:0 8px;"><a href="${baseUrl}/review/${orderSlug}/1" style="display:inline-block;font-size:36px;text-decoration:none;line-height:1;">⭐</a></td>
+                <td style="padding:0 8px;"><a href="${baseUrl}/review/${orderSlug}/2" style="display:inline-block;font-size:36px;text-decoration:none;line-height:1;">⭐</a></td>
+                <td style="padding:0 8px;"><a href="${baseUrl}/review/${orderSlug}/3" style="display:inline-block;font-size:36px;text-decoration:none;line-height:1;">⭐</a></td>
+                <td style="padding:0 8px;"><a href="${baseUrl}/review/${orderSlug}/4" style="display:inline-block;font-size:36px;text-decoration:none;line-height:1;">⭐</a></td>
+                <td style="padding:0 8px;"><a href="${baseUrl}/review/${orderSlug}/5" style="display:inline-block;font-size:36px;text-decoration:none;line-height:1;">⭐</a></td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding:8px 40px 32px 40px;text-align:center;">
+            <div style="font-size:14px;color:#666;line-height:1.6;">${subCopy}</div>
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding:0 32px 24px 32px;text-align:center;">
+            <div style="font-size:11px;color:#bbb;">Order #${safeDisplayId}</div>
+          </td>
+        </tr>
+
+        <tr>
+          <td style="background-color:#2a2a2a;padding:24px 32px;text-align:center;">
+            <div style="font-family:Georgia,'Times New Roman',serif;font-size:18px;color:#D4AF37;font-weight:700;margin-bottom:8px;">The Sweet Tooth</div>
+            <div style="font-size:12px;color:#bbb;line-height:1.6;">
+              18435 NE 19th Ave, North Miami Beach, FL 33179<br>
+              <a href="https://thesweettooth.com" style="color:#D4AF37;text-decoration:none;">thesweettooth.com</a>
+            </div>
+          </td>
+        </tr>
+
+      </table>
+    </td>
+  </tr>
+</table>
+</body>
+</html>`;
+
+  const textGift = `A sweet moment, just delivered.
+
+${firstName} just received your gift on ${deliveryTime}.
+
+Thank you for trusting us with something that mattered to you.
+
+${hasPhoto ? 'The proof-of-delivery photo is attached.\n\n' : ''}How was your experience?
+From ordering to delivery, we'd love to know how we did.
+
+1 star:  ${baseUrl}/review/${orderSlug}/1
+2 stars: ${baseUrl}/review/${orderSlug}/2
+3 stars: ${baseUrl}/review/${orderSlug}/3
+4 stars: ${baseUrl}/review/${orderSlug}/4
+5 stars: ${baseUrl}/review/${orderSlug}/5
+
+Order #${displayId}
+
+The Sweet Tooth
+18435 NE 19th Ave, North Miami Beach, FL 33179
+thesweettooth.com`;
+
+  const textSelf = `Your order has arrived.
+
+Delivered on ${deliveryTime}.
+
+Thank you for choosing us. We hope you love every bite.
+
+${hasPhoto ? 'The proof-of-delivery photo is attached.\n\n' : ''}How did we do?
+Tap a star to share your experience. Your words help others find us.
+
+1 star:  ${baseUrl}/review/${orderSlug}/1
+2 stars: ${baseUrl}/review/${orderSlug}/2
+3 stars: ${baseUrl}/review/${orderSlug}/3
+4 stars: ${baseUrl}/review/${orderSlug}/4
+5 stars: ${baseUrl}/review/${orderSlug}/5
+
+Order #${displayId}
+
+The Sweet Tooth
+18435 NE 19th Ave, North Miami Beach, FL 33179
+thesweettooth.com`;
+
+  return { subject, text: isGift ? textGift : textSelf, html };
+}
+
+// Decide whether an order is a gift (shipping ≠ billing address) by fetching
+// the order from Shopify. Safe fallback: default to gift on any uncertainty
+// (it's ~95% of orders and the gift copy reads fine when ambiguous).
+async function detectGiftFromShopify(orderId: string): Promise<{ isGift: boolean; shippingRecipientName: string | null }> {
+  const fallback = { isGift: true, shippingRecipientName: null as string | null };
+  if (!SHOPIFY_STORE_URL || !SHOPIFY_ACCESS_TOKEN || !orderId) return fallback;
+
+  try {
+    const resp = await fetch(
+      `https://${SHOPIFY_STORE_URL}/admin/api/2025-01/orders/${orderId}.json`,
+      { headers: { 'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN } }
+    );
+    if (!resp.ok) return fallback;
+    const data: any = await resp.json();
+    const order = data?.order;
+    if (!order) return fallback;
+
+    const norm = (a: any): string | null => {
+      if (!a) return null;
+      const street = String(a.address1 || '').toLowerCase().replace(/\s+/g, ' ').trim();
+      const city = String(a.city || '').toLowerCase().trim();
+      const zip = String(a.zip || '').replace(/\D/g, '').trim();
+      if (!street || !zip) return null;
+      return `${street}|${city}|${zip}`;
+    };
+
+    const shipping = order.shipping_address || null;
+    const billing = order.billing_address || null;
+    const shippingRecipientName = shipping
+      ? (shipping.first_name || shipping.name || null)
+      : null;
+
+    const shipNorm = norm(shipping);
+    const billNorm = norm(billing);
+
+    // Per spec: if billing missing → default to gift
+    if (!billNorm || !shipNorm) return { isGift: true, shippingRecipientName };
+
+    return { isGift: shipNorm !== billNorm, shippingRecipientName };
+  } catch (e: any) {
+    console.warn(`detectGiftFromShopify failed for ${orderId}: ${e?.message || e}`);
+    return fallback;
   }
 }
 
@@ -1314,16 +1623,20 @@ async function startServer() {
 
       // Idempotency: if we already sent a successful delivery confirmation for
       // this order, skip — prevents duplicate emails when the frontend retries.
-      // Audit trail lives in email_log:{orderNumber}.
+      // Audit trail lives in email_log:{orderNumber}. We match on every subject
+      // pattern we've ever used so older sends still count as already-sent.
       let alreadySentPodEmail = false;
       if (status === 'DELIVERED' && customerEmail) {
         try {
           const logKey = `email_log:${String(orderNumber || orderId)}`;
           const existingLog: any = await getKV(logKey);
           if (existingLog && Array.isArray(existingLog.sends)) {
-            alreadySentPodEmail = existingLog.sends.some((s: any) =>
-              s && s.success === true && typeof s.subject === 'string' && s.subject.includes('has been delivered')
-            );
+            alreadySentPodEmail = existingLog.sends.some((s: any) => {
+              if (!s || s.success !== true || typeof s.subject !== 'string') return false;
+              return s.subject.includes('just got your gift')
+                || s.subject.includes('has been delivered')
+                || s.subject.includes('Your Sweet Tooth order has arrived');
+            });
           }
         } catch (e: any) {
           // Log check failed — err on the side of NOT sending a dup. The frontend
@@ -1343,27 +1656,49 @@ async function startServer() {
       }
       if (status === 'DELIVERED' && customerEmail && SMTP_PASS && !alreadySentPodEmail) {
         try {
-          const deliveryTime = new Date(completedAt || Date.now()).toLocaleString('en-US', { 
+          const deliveryTime = new Date(completedAt || Date.now()).toLocaleString('en-US', {
             timeZone: 'America/New_York',
             weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
-            hour: 'numeric', minute: '2-digit', hour12: true 
+            hour: 'numeric', minute: '2-digit', hour12: true
           });
-          
-          const receiverName = giftReceiverName || 'the recipient';
-          
-          const subject = `Your Sweet Tooth gift has been delivered! (Order ${orderNumber || orderId})`;
-          const body = `Good news! Your gift to ${receiverName} has been delivered.
 
-Delivered: ${deliveryTime}
+          // Detect gift vs self-purchase. Manual orders aren't in Shopify, so
+          // default to gift for those. Shopify-backed orders get the real
+          // address comparison via detectGiftFromShopify.
+          let isGift = true;
+          let shippingRecipientName: string | null = null;
+          if (!isManual) {
+            const detected = await detectGiftFromShopify(String(orderId));
+            isGift = detected.isGift;
+            shippingRecipientName = detected.shippingRecipientName;
+          }
 
-${photo ? 'Please see attached proof of delivery photo.' : 'Proof of delivery photo is available upon request.'}
+          const receiverName = giftReceiverName || shippingRecipientName || 'the recipient';
+          const baseUrl = getAppBaseUrl(req);
+          const hasPhoto = !!photo;
 
-Thank you for choosing The Sweet Tooth!`;
+          const { subject, text, html } = buildDeliveryConfirmationEmail({
+            variant: isGift ? 'gift' : 'self',
+            receiverName,
+            deliveryTime,
+            orderId: String(orderId),
+            orderNumber,
+            baseUrl,
+            hasPhoto
+          });
 
-          const emailSent = await sendEmail(customerEmail, subject, body, photo || undefined, photo ? `delivery-${orderId}.jpg` : undefined);
+          const emailSent = await sendEmail(
+            customerEmail,
+            subject,
+            text,
+            hasPhoto ? photo : undefined,
+            hasPhoto ? `delivery-${orderId}.jpg` : undefined,
+            html,
+            hasPhoto ? 'proof-photo' : undefined
+          );
           await logEmailSend(String(orderNumber || orderId), customerEmail, subject, emailSent);
           if (emailSent) {
-            console.log(`✅ Auto-sent delivery confirmation to ${customerEmail} for order ${orderId}${photo ? ' (with photo)' : ''}`);
+            console.log(`✅ Auto-sent delivery confirmation to ${customerEmail} for order ${orderId}${hasPhoto ? ' (with photo)' : ''}`);
           } else {
             console.log(`⚠️ Failed to auto-send confirmation to ${customerEmail} for order ${orderId}`);
           }
@@ -1611,28 +1946,85 @@ Thank you for choosing The Sweet Tooth!`;
     }
     
     const results: { orderId: string; email: string; sent: boolean }[] = [];
-    
+    const baseUrl = getAppBaseUrl(req);
+
     for (const o of orders) {
       // Fetch the POD photo for this order
       const podData = await readPodOrder(o.orderId);
       const photo = podData?.confirmationPhoto || podData?.photo || null;
-      
-      const subject = "Your Sweet Tooth gift has been delivered!";
-      const body = `Good news! Your gift to ${o.receiverName || 'the recipient'} has been delivered.
+      const hasPhoto = !!photo;
 
-Delivered: ${o.deliveryTime || 'today'}
+      const detected = await detectGiftFromShopify(String(o.orderId));
+      const receiverName = o.receiverName || detected.shippingRecipientName || 'the recipient';
 
-${photo ? 'Please see attached proof of delivery photo.' : 'Proof of delivery photo is available upon request.'}
+      const { subject, text, html } = buildDeliveryConfirmationEmail({
+        variant: detected.isGift ? 'gift' : 'self',
+        receiverName,
+        deliveryTime: o.deliveryTime || 'today',
+        orderId: String(o.orderId),
+        orderNumber: o.orderNumber,
+        baseUrl,
+        hasPhoto
+      });
 
-Thank you for choosing The Sweet Tooth!`;
-      
-      const sent = await sendEmail(o.email, subject, body, photo || undefined, photo ? `delivery-${o.orderId}.jpg` : undefined);
+      const sent = await sendEmail(
+        o.email,
+        subject,
+        text,
+        hasPhoto ? photo : undefined,
+        hasPhoto ? `delivery-${o.orderId}.jpg` : undefined,
+        html,
+        hasPhoto ? 'proof-photo' : undefined
+      );
       results.push({ orderId: o.orderId, email: o.email, sent });
-      console.log(sent ? `✅ Bulk POD sent to ${o.email}${photo ? ' (with photo)' : ''}` : `❌ Failed to send to ${o.email}`);
+      console.log(sent ? `✅ Bulk POD sent to ${o.email}${hasPhoto ? ' (with photo)' : ''}` : `❌ Failed to send to ${o.email}`);
     }
     
     const sentCount = results.filter(r => r.sent).length;
     res.json({ success: true, sent: sentCount, total: orders.length, results });
+  });
+
+  // ── REVIEW STAR-RATING REDIRECT ─────────────────────────────────────────────
+  // Star links in the POD email hit this route. 4-5 stars → Google review.
+  // 1-3 stars → mailto to Mikey for direct feedback. Every click is logged so
+  // we can see in the KV store who tapped what.
+  app.get("/review/:orderId/:stars", async (req, res) => {
+    const orderId = String(req.params.orderId || '');
+    const starsRaw = parseInt(String(req.params.stars || ''), 10);
+    const stars = Number.isFinite(starsRaw) ? Math.max(1, Math.min(5, starsRaw)) : 0;
+
+    if (!orderId || stars < 1) {
+      return res.status(400).send('Invalid review link.');
+    }
+
+    // Fire-and-forget log to the same KV store used for delivery audit trail.
+    // Never block the redirect on log failures — the customer-facing UX matters more.
+    try {
+      const logKey = `review_clicks:${orderId}`;
+      const existing: any = (await getKV(logKey)) || { clicks: [] };
+      if (!Array.isArray(existing.clicks)) existing.clicks = [];
+      existing.clicks.push({
+        timestamp: new Date().toISOString(),
+        stars,
+        ip: req.ip || req.headers['x-forwarded-for'] || null,
+        userAgent: req.headers['user-agent'] || null
+      });
+      if (existing.clicks.length > 50) existing.clicks = existing.clicks.slice(-50);
+      await setKV(logKey, existing);
+      console.log(`⭐ Review click logged: order ${orderId}, ${stars} stars`);
+    } catch (e: any) {
+      console.error('review click log failed (non-fatal):', e?.message || e);
+    }
+
+    // Only 5-star taps go to Google — protects the public review average.
+    // 1-4 stars route to Mikey's inbox so he can address it privately.
+    if (stars >= 5) {
+      return res.redirect(302, 'https://g.page/r/CYK42rbwqajQEAE/review');
+    }
+
+    const subject = encodeURIComponent(`Order #${orderId} Feedback`);
+    const body = encodeURIComponent(`Hi, I wanted to share some feedback about order #${orderId}.\n\n`);
+    return res.redirect(302, `mailto:raiver72@gmail.com?subject=${subject}&body=${body}`);
   });
 
   // ── GEOCODING (free via OpenStreetMap Nominatim) ────────────────────────────
