@@ -115,9 +115,13 @@ const mapShopifyOrder = (order: any): Delivery => {
       properties: (item.properties || []).filter((p: any) => p.value && p.value !== 'null' && !p.name.startsWith('_') && !p.name.toLowerCase().includes('delivery fee')),
     }));
 
-  // Look up fee from ZIP-based rate table; fall back to Shopify shipping price
+  // Trust Shopify's actual shipping line (reflects manual price adjustments).
+  // Fall back to ZIP-based rate table only when the order has no shipping line.
   const zipCode = (order.shipping_address?.zip || '').toString().trim().slice(0, 5);
-  const shippingPrice = DELIVERY_FEES[zipCode] ?? parseFloat(order.shipping_lines?.[0]?.price || '0');
+  const shopifyShippingPrice = order.shipping_lines?.[0]?.price;
+  const shippingPrice = shopifyShippingPrice != null
+    ? parseFloat(shopifyShippingPrice)
+    : (DELIVERY_FEES[zipCode] ?? 0);
 
   // Try multiple attribute keys for delivery date
   const rawDate = attributes['delivery date'] 
