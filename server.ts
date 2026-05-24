@@ -690,8 +690,8 @@ function buildDeliveryConfirmationEmail(opts: {
 
   const askHeading = isGift ? 'How was your experience?' : 'How did we do?';
   const subCopy = isGift
-    ? `From ordering to delivery — we'd love to know how we did. Tap a star to share your experience.`
-    : `Tap a star to share your experience. Your words help others find us.`;
+    ? `From ordering to delivery — we'd love to know how we did.`
+    : `Your words help others find us.`;
 
   const html = `<!DOCTYPE html>
 <html>
@@ -723,21 +723,51 @@ ${heroHtml}${photoRow}
         </tr>
 
         <tr>
-          <td style="padding:20px 32px 8px 32px;text-align:center;">
-            <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center">
+          <td style="padding:14px 32px 4px 32px;text-align:center;">
+            <div style="font-size:13px;font-weight:700;letter-spacing:1.2px;color:#D4AF37;text-transform:uppercase;">👇 Tap a star below to rate 👇</div>
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding:14px 24px 8px 24px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:separate;border-spacing:6px 0;">
               <tr>
-                <td style="padding:0 8px;"><a href="${baseUrl}/review/${orderSlug}/1" style="display:inline-block;font-size:36px;text-decoration:none;line-height:1;">⭐</a></td>
-                <td style="padding:0 8px;"><a href="${baseUrl}/review/${orderSlug}/2" style="display:inline-block;font-size:36px;text-decoration:none;line-height:1;">⭐</a></td>
-                <td style="padding:0 8px;"><a href="${baseUrl}/review/${orderSlug}/3" style="display:inline-block;font-size:36px;text-decoration:none;line-height:1;">⭐</a></td>
-                <td style="padding:0 8px;"><a href="${baseUrl}/review/${orderSlug}/4" style="display:inline-block;font-size:36px;text-decoration:none;line-height:1;">⭐</a></td>
-                <td style="padding:0 8px;"><a href="${baseUrl}/review/${orderSlug}/5" style="display:inline-block;font-size:36px;text-decoration:none;line-height:1;">⭐</a></td>
+                <td width="20%" align="center" valign="middle" bgcolor="#fff8e1" style="width:20%;background-color:#fff8e1;border:2px solid #D4AF37;border-radius:10px;mso-padding-alt:18px 0;">
+                  <a href="${baseUrl}/review/${orderSlug}/1" style="display:block;padding:18px 0;font-size:34px;text-decoration:none;line-height:1;color:#D4AF37;">⭐</a>
+                </td>
+                <td width="20%" align="center" valign="middle" bgcolor="#fff8e1" style="width:20%;background-color:#fff8e1;border:2px solid #D4AF37;border-radius:10px;mso-padding-alt:18px 0;">
+                  <a href="${baseUrl}/review/${orderSlug}/2" style="display:block;padding:18px 0;font-size:34px;text-decoration:none;line-height:1;color:#D4AF37;">⭐</a>
+                </td>
+                <td width="20%" align="center" valign="middle" bgcolor="#fff8e1" style="width:20%;background-color:#fff8e1;border:2px solid #D4AF37;border-radius:10px;mso-padding-alt:18px 0;">
+                  <a href="${baseUrl}/review/${orderSlug}/3" style="display:block;padding:18px 0;font-size:34px;text-decoration:none;line-height:1;color:#D4AF37;">⭐</a>
+                </td>
+                <td width="20%" align="center" valign="middle" bgcolor="#fff8e1" style="width:20%;background-color:#fff8e1;border:2px solid #D4AF37;border-radius:10px;mso-padding-alt:18px 0;">
+                  <a href="${baseUrl}/review/${orderSlug}/4" style="display:block;padding:18px 0;font-size:34px;text-decoration:none;line-height:1;color:#D4AF37;">⭐</a>
+                </td>
+                <td width="20%" align="center" valign="middle" bgcolor="#fff8e1" style="width:20%;background-color:#fff8e1;border:2px solid #D4AF37;border-radius:10px;mso-padding-alt:18px 0;">
+                  <a href="${baseUrl}/review/${orderSlug}/5" style="display:block;padding:18px 0;font-size:34px;text-decoration:none;line-height:1;color:#D4AF37;">⭐</a>
+                </td>
               </tr>
             </table>
           </td>
         </tr>
 
         <tr>
-          <td style="padding:8px 40px 32px 40px;text-align:center;">
+          <td style="padding:6px 32px 6px 32px;text-align:center;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td width="20%" align="center" style="width:20%;font-size:11px;color:#999;">Poor</td>
+                <td width="20%" align="center" style="width:20%;font-size:11px;color:#999;">Fair</td>
+                <td width="20%" align="center" style="width:20%;font-size:11px;color:#999;">OK</td>
+                <td width="20%" align="center" style="width:20%;font-size:11px;color:#999;">Good</td>
+                <td width="20%" align="center" style="width:20%;font-size:11px;color:#999;">Amazing</td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding:14px 40px 32px 40px;text-align:center;">
             <div style="font-size:14px;color:#666;line-height:1.6;">${subCopy}</div>
           </td>
         </tr>
@@ -2017,14 +2047,46 @@ async function startServer() {
     }
 
     // Only 5-star taps go to Google — protects the public review average.
-    // 1-4 stars route to Mikey's inbox so he can address it privately.
+    // 1-4 stars send Mikey an email from the server (mailto: redirects are
+    // unreliable — desktop email clients without a default mail handler
+    // just show a blank page) and render an in-app thank-you so the
+    // customer always sees a response.
     if (stars >= 5) {
       return res.redirect(302, 'https://g.page/r/CYK42rbwqajQEAE/review');
     }
 
-    const subject = encodeURIComponent(`Order #${orderId} Feedback`);
-    const body = encodeURIComponent(`Hi, I wanted to share some feedback about order #${orderId}.\n\n`);
-    return res.redirect(302, `mailto:raiver72@gmail.com?subject=${subject}&body=${body}`);
+    const ratingLabel = ['', 'Poor (1★)', 'Fair (2★)', 'OK (3★)', 'Good (4★)'][stars] || `${stars}★`;
+    const alertSubject = `⚠️ ${ratingLabel} rating — Order #${orderId}`;
+    const alertBody = `A customer just rated Order #${orderId} ${stars} star${stars === 1 ? '' : 's'}.
+
+Rating: ${ratingLabel}
+Order: #${orderId}
+Logged at: ${new Date().toISOString()}
+
+Reach out to the customer directly to learn more and make it right.`;
+    // Fire-and-forget — never block the customer's response on SMTP.
+    sendEmail('raiver72@gmail.com', alertSubject, alertBody).catch((e) => {
+      console.error('low-rating alert email failed:', e?.message || e);
+    });
+
+    res.status(200).type('html').send(`<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Thanks for your feedback</title>
+</head>
+<body style="margin:0;padding:0;background:#faf7f2;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#2a2a2a;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#faf7f2;min-height:100vh;">
+  <tr><td align="center" valign="middle" style="padding:48px 16px;">
+    <table role="presentation" width="500" cellpadding="0" cellspacing="0" border="0" style="max-width:500px;width:100%;background:#fff;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.06);">
+      <tr><td align="center" style="background:#2a2a2a;padding:24px;font-family:Georgia,'Times New Roman',serif;font-size:22px;color:#D4AF37;font-weight:700;">The Sweet Tooth</td></tr>
+      <tr><td align="center" style="padding:40px 32px 16px 32px;font-size:22px;font-weight:600;">Thank you for letting us know.</td></tr>
+      <tr><td align="center" style="padding:0 32px 16px 32px;font-size:16px;color:#666;line-height:1.6;">We've passed your feedback straight to the owner. Someone will reach out personally to make this right.</td></tr>
+      <tr><td align="center" style="padding:16px 32px 40px 32px;font-size:13px;color:#999;">Order #${escapeHtmlForEmail(orderId)}</td></tr>
+    </table>
+  </td></tr>
+</table>
+</body></html>`);
   });
 
   // ── GEOCODING (free via OpenStreetMap Nominatim) ────────────────────────────
