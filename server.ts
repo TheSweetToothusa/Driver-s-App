@@ -663,9 +663,6 @@ function buildDeliveryConfirmationEmail(opts: {
               ${safeFirstName} just received your gift on<br>
               <strong style="color:#2a2a2a;">${safeTime}</strong>.
             </div>
-            <div style="font-size:16px;color:#666;margin-top:14px;line-height:1.6;">
-              Thank you for trusting us with something that mattered to you.
-            </div>
           </td>
         </tr>` : `
         <tr>
@@ -798,8 +795,6 @@ ${heroHtml}${photoRow}
   const textGift = `A sweet moment, just delivered.
 
 ${firstName} just received your gift on ${deliveryTime}.
-
-Thank you for trusting us with something that mattered to you.
 
 ${hasPhoto ? 'The proof-of-delivery photo is attached.\n\n' : ''}How was your experience?
 From ordering to delivery, we'd love to know how we did.
