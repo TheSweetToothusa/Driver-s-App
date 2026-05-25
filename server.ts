@@ -643,17 +643,20 @@ function buildDeliveryConfirmationEmail(opts: {
   const safeTime = escapeHtmlForEmail(deliveryTime);
   const safeDisplayId = escapeHtmlForEmail(displayId);
   const orderSlug = encodeURIComponent(String(orderId));
+  // The customer-facing order number rides along on review links so the
+  // thank-you page can display the friendly number, not the internal ID.
+  const orderNumberQS = orderNumber ? `?n=${encodeURIComponent(String(orderNumber))}` : '';
 
   const subject = isGift
     ? `🎁 ${firstName} just got your gift — how was your experience?`
     : `Your Sweet Tooth order has arrived — enjoy!`;
 
   // Header: dark charcoal with the brand wordmark embedded as cid:brand-logo.
-  // If the logo failed to load at startup, fall back to gold text so the
-  // header still looks intentional.
+  // If the logo failed to load at startup, fall back to pink text in the
+  // brand's primary color so the header still looks on-brand.
   const headerInner = EMAIL_LOGO_BASE64
     ? `<img src="cid:brand-logo" alt="The Sweet Tooth" width="240" style="display:block;width:240px;max-width:80%;height:auto;margin:0 auto;border:0;outline:none;text-decoration:none;">`
-    : `<div style="font-family:Georgia,'Times New Roman',serif;font-size:28px;font-weight:700;color:#D4AF37;letter-spacing:0.5px;">The Sweet Tooth</div>`;
+    : `<div style="font-family:Georgia,'Times New Roman',serif;font-size:28px;font-weight:700;color:#FF6B9D;letter-spacing:0.5px;">The Sweet Tooth</div>`;
 
   const heroHtml = isGift ? `
         <tr>
@@ -721,7 +724,7 @@ ${heroHtml}${photoRow}
 
         <tr>
           <td style="padding:14px 32px 4px 32px;text-align:center;">
-            <div style="font-size:13px;font-weight:700;letter-spacing:1.2px;color:#D4AF37;text-transform:uppercase;">👇 Tap a star below to rate 👇</div>
+            <div style="font-size:13px;font-weight:700;letter-spacing:1.2px;color:#FF6B9D;text-transform:uppercase;">👇 Tap a star below to rate 👇</div>
           </td>
         </tr>
 
@@ -729,20 +732,20 @@ ${heroHtml}${photoRow}
           <td style="padding:14px 24px 8px 24px;">
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:separate;border-spacing:6px 0;">
               <tr>
-                <td width="20%" align="center" valign="middle" bgcolor="#fff8e1" style="width:20%;background-color:#fff8e1;border:2px solid #D4AF37;border-radius:10px;mso-padding-alt:18px 0;">
-                  <a href="${baseUrl}/review/${orderSlug}/1" style="display:block;padding:18px 0;font-size:34px;text-decoration:none;line-height:1;color:#D4AF37;">⭐</a>
+                <td width="20%" align="center" valign="middle" bgcolor="#FCE4EC" style="width:20%;background-color:#FCE4EC;border:2px solid #FF6B9D;border-radius:10px;mso-padding-alt:18px 0;">
+                  <a href="${baseUrl}/review/${orderSlug}/1${orderNumberQS}" style="display:block;padding:18px 0;font-size:34px;text-decoration:none;line-height:1;color:#FF6B9D;">⭐</a>
                 </td>
-                <td width="20%" align="center" valign="middle" bgcolor="#fff8e1" style="width:20%;background-color:#fff8e1;border:2px solid #D4AF37;border-radius:10px;mso-padding-alt:18px 0;">
-                  <a href="${baseUrl}/review/${orderSlug}/2" style="display:block;padding:18px 0;font-size:34px;text-decoration:none;line-height:1;color:#D4AF37;">⭐</a>
+                <td width="20%" align="center" valign="middle" bgcolor="#FCE4EC" style="width:20%;background-color:#FCE4EC;border:2px solid #FF6B9D;border-radius:10px;mso-padding-alt:18px 0;">
+                  <a href="${baseUrl}/review/${orderSlug}/2${orderNumberQS}" style="display:block;padding:18px 0;font-size:34px;text-decoration:none;line-height:1;color:#FF6B9D;">⭐</a>
                 </td>
-                <td width="20%" align="center" valign="middle" bgcolor="#fff8e1" style="width:20%;background-color:#fff8e1;border:2px solid #D4AF37;border-radius:10px;mso-padding-alt:18px 0;">
-                  <a href="${baseUrl}/review/${orderSlug}/3" style="display:block;padding:18px 0;font-size:34px;text-decoration:none;line-height:1;color:#D4AF37;">⭐</a>
+                <td width="20%" align="center" valign="middle" bgcolor="#FCE4EC" style="width:20%;background-color:#FCE4EC;border:2px solid #FF6B9D;border-radius:10px;mso-padding-alt:18px 0;">
+                  <a href="${baseUrl}/review/${orderSlug}/3${orderNumberQS}" style="display:block;padding:18px 0;font-size:34px;text-decoration:none;line-height:1;color:#FF6B9D;">⭐</a>
                 </td>
-                <td width="20%" align="center" valign="middle" bgcolor="#fff8e1" style="width:20%;background-color:#fff8e1;border:2px solid #D4AF37;border-radius:10px;mso-padding-alt:18px 0;">
-                  <a href="${baseUrl}/review/${orderSlug}/4" style="display:block;padding:18px 0;font-size:34px;text-decoration:none;line-height:1;color:#D4AF37;">⭐</a>
+                <td width="20%" align="center" valign="middle" bgcolor="#FCE4EC" style="width:20%;background-color:#FCE4EC;border:2px solid #FF6B9D;border-radius:10px;mso-padding-alt:18px 0;">
+                  <a href="${baseUrl}/review/${orderSlug}/4${orderNumberQS}" style="display:block;padding:18px 0;font-size:34px;text-decoration:none;line-height:1;color:#FF6B9D;">⭐</a>
                 </td>
-                <td width="20%" align="center" valign="middle" bgcolor="#fff8e1" style="width:20%;background-color:#fff8e1;border:2px solid #D4AF37;border-radius:10px;mso-padding-alt:18px 0;">
-                  <a href="${baseUrl}/review/${orderSlug}/5" style="display:block;padding:18px 0;font-size:34px;text-decoration:none;line-height:1;color:#D4AF37;">⭐</a>
+                <td width="20%" align="center" valign="middle" bgcolor="#FCE4EC" style="width:20%;background-color:#FCE4EC;border:2px solid #FF6B9D;border-radius:10px;mso-padding-alt:18px 0;">
+                  <a href="${baseUrl}/review/${orderSlug}/5${orderNumberQS}" style="display:block;padding:18px 0;font-size:34px;text-decoration:none;line-height:1;color:#FF6B9D;">⭐</a>
                 </td>
               </tr>
             </table>
@@ -777,10 +780,10 @@ ${heroHtml}${photoRow}
 
         <tr>
           <td style="background-color:#2a2a2a;padding:24px 32px;text-align:center;">
-            <div style="font-family:Georgia,'Times New Roman',serif;font-size:18px;color:#D4AF37;font-weight:700;margin-bottom:8px;">The Sweet Tooth</div>
+            <div style="font-family:Georgia,'Times New Roman',serif;font-size:18px;color:#FF6B9D;font-weight:700;margin-bottom:8px;">The Sweet Tooth</div>
             <div style="font-size:12px;color:#bbb;line-height:1.6;">
               18435 NE 19th Ave, North Miami Beach, FL 33179<br>
-              <a href="https://thesweettooth.com" style="color:#D4AF37;text-decoration:none;">thesweettooth.com</a>
+              <a href="https://thesweettooth.com" style="color:#FF6B9D;text-decoration:none;">thesweettooth.com</a>
             </div>
           </td>
         </tr>
@@ -920,6 +923,7 @@ async function startServer() {
   const app = express();
   const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000;
   app.use(express.json({ limit: '10mb' })); // Reduced from 50mb to prevent memory spikes
+  app.use(express.urlencoded({ extended: true, limit: '100kb' })); // form posts from the review feedback page
   
   // Log memory usage every 5 minutes
   setInterval(() => {
@@ -2041,43 +2045,101 @@ async function startServer() {
       console.error('review click log failed (non-fatal):', e?.message || e);
     }
 
+    // Customer-facing order number, if provided via ?n=… on the link.
+    // Falls back to the internal Shopify ID only if no friendly number
+    // was passed — never invent one.
+    const queryOrderNumber = String(req.query.n || '').trim();
+    const displayOrderNumber = queryOrderNumber || '';
+
     // Only 5-star taps go to Google — protects the public review average.
-    // 1-4 stars send Mikey an email from the server (mailto: redirects are
-    // unreliable — desktop email clients without a default mail handler
-    // just show a blank page) and render an in-app thank-you so the
-    // customer always sees a response.
     if (stars >= 5) {
       return res.redirect(302, 'https://g.page/r/CYK42rbwqajQEAE/review');
     }
 
+    // 1-4 stars: render a feedback form so the customer can actually leave
+    // a message. The form posts to /review/:orderId/:stars (same route, POST
+    // handler below) which emails the rating + message to Mikey.
     const ratingLabel = ['', 'Poor (1★)', 'Fair (2★)', 'OK (3★)', 'Good (4★)'][stars] || `${stars}★`;
-    const alertSubject = `⚠️ ${ratingLabel} rating — Order #${orderId}`;
-    const alertBody = `A customer just rated Order #${orderId} ${stars} star${stars === 1 ? '' : 's'}.
-
-Rating: ${ratingLabel}
-Order: #${orderId}
-Logged at: ${new Date().toISOString()}
-
-Reach out to the customer directly to learn more and make it right.`;
-    // Fire-and-forget — never block the customer's response on SMTP.
-    sendEmail('raiver72@gmail.com', alertSubject, alertBody).catch((e) => {
-      console.error('low-rating alert email failed:', e?.message || e);
-    });
+    const orderLine = displayOrderNumber
+      ? `<div style="font-size:13px;color:#999;margin-top:24px;">Order #${escapeHtmlForEmail(displayOrderNumber)}</div>`
+      : '';
 
     res.status(200).type('html').send(`<!DOCTYPE html>
 <html><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Thanks for your feedback</title>
+<title>Share your feedback</title>
+</head>
+<body style="margin:0;padding:0;background:#faf7f2;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#2a2a2a;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#faf7f2;min-height:100vh;">
+  <tr><td align="center" valign="middle" style="padding:32px 16px;">
+    <table role="presentation" width="540" cellpadding="0" cellspacing="0" border="0" style="max-width:540px;width:100%;background:#fff;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,0.06);overflow:hidden;">
+      <tr><td align="center" style="background:#2a2a2a;padding:24px;font-family:Georgia,'Times New Roman',serif;font-size:22px;color:#FF6B9D;font-weight:700;">The Sweet Tooth</td></tr>
+      <tr><td align="center" style="padding:36px 32px 8px 32px;font-size:22px;font-weight:600;">Thanks for the ${ratingLabel} rating.</td></tr>
+      <tr><td align="center" style="padding:0 32px 24px 32px;font-size:16px;color:#666;line-height:1.6;">Tell us what we could have done better.</td></tr>
+      <tr><td style="padding:0 32px 32px 32px;">
+        <form method="POST" action="/review/${encodeURIComponent(orderId)}/${stars}" style="margin:0;">
+          ${displayOrderNumber ? `<input type="hidden" name="n" value="${escapeHtmlForEmail(displayOrderNumber)}">` : ''}
+          <textarea name="message" rows="6" required placeholder="Type your message here…" style="width:100%;box-sizing:border-box;font:16px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#2a2a2a;padding:14px;border:1px solid #ddd;border-radius:8px;resize:vertical;"></textarea>
+          <input type="email" name="email" placeholder="Your email (optional, so we can reply)" style="width:100%;box-sizing:border-box;font:16px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#2a2a2a;padding:12px 14px;border:1px solid #ddd;border-radius:8px;margin-top:10px;">
+          <button type="submit" style="display:block;width:100%;background:#FF6B9D;color:#fff;font-size:16px;font-weight:700;letter-spacing:0.4px;border:0;border-radius:8px;padding:14px;margin-top:14px;cursor:pointer;">Send Feedback</button>
+        </form>
+        <div align="center">${orderLine}</div>
+      </td></tr>
+    </table>
+  </td></tr>
+</table>
+</body></html>`);
+  });
+
+  // Receives the form submission from the 1-4 star feedback page.
+  app.post("/review/:orderId/:stars", async (req, res) => {
+    const orderId = String(req.params.orderId || '');
+    const starsRaw = parseInt(String(req.params.stars || ''), 10);
+    const stars = Number.isFinite(starsRaw) ? Math.max(1, Math.min(4, starsRaw)) : 0;
+    const message = String(req.body?.message || '').trim();
+    const customerEmail = String(req.body?.email || '').trim();
+    const queryOrderNumber = String(req.body?.n || req.query?.n || '').trim();
+
+    if (!orderId || stars < 1) {
+      return res.status(400).send('Invalid review submission.');
+    }
+
+    const ratingLabel = ['', 'Poor (1★)', 'Fair (2★)', 'OK (3★)', 'Good (4★)'][stars] || `${stars}★`;
+    const displayId = queryOrderNumber || orderId;
+    const alertSubject = `${ratingLabel} rating — Order #${displayId}`;
+    const alertBody = [
+      `Rating: ${ratingLabel}`,
+      `Order: #${displayId}`,
+      `Internal ID: ${orderId}`,
+      customerEmail ? `Customer email: ${customerEmail}` : `Customer email: (not provided)`,
+      `Submitted: ${new Date().toISOString()}`,
+      '',
+      'Customer message:',
+      message || '(no message)'
+    ].join('\n');
+    sendEmail('raiver72@gmail.com', alertSubject, alertBody).catch((e) => {
+      console.error('low-rating feedback email failed:', e?.message || e);
+    });
+
+    const orderLine = queryOrderNumber
+      ? `<div style="font-size:13px;color:#999;margin-top:24px;">Order #${escapeHtmlForEmail(queryOrderNumber)}</div>`
+      : '';
+
+    res.status(200).type('html').send(`<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Thanks</title>
 </head>
 <body style="margin:0;padding:0;background:#faf7f2;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#2a2a2a;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#faf7f2;min-height:100vh;">
   <tr><td align="center" valign="middle" style="padding:48px 16px;">
-    <table role="presentation" width="500" cellpadding="0" cellspacing="0" border="0" style="max-width:500px;width:100%;background:#fff;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.06);">
-      <tr><td align="center" style="background:#2a2a2a;padding:24px;font-family:Georgia,'Times New Roman',serif;font-size:22px;color:#D4AF37;font-weight:700;">The Sweet Tooth</td></tr>
-      <tr><td align="center" style="padding:40px 32px 16px 32px;font-size:22px;font-weight:600;">Thank you for letting us know.</td></tr>
-      <tr><td align="center" style="padding:0 32px 16px 32px;font-size:16px;color:#666;line-height:1.6;">We've passed your feedback straight to the owner. Someone will reach out personally to make this right.</td></tr>
-      <tr><td align="center" style="padding:16px 32px 40px 32px;font-size:13px;color:#999;">Order #${escapeHtmlForEmail(orderId)}</td></tr>
+    <table role="presentation" width="500" cellpadding="0" cellspacing="0" border="0" style="max-width:500px;width:100%;background:#fff;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,0.06);overflow:hidden;">
+      <tr><td align="center" style="background:#2a2a2a;padding:24px;font-family:Georgia,'Times New Roman',serif;font-size:22px;color:#FF6B9D;font-weight:700;">The Sweet Tooth</td></tr>
+      <tr><td align="center" style="padding:40px 32px 16px 32px;font-size:22px;font-weight:600;">Thanks — got it.</td></tr>
+      <tr><td align="center" style="padding:0 32px 24px 32px;font-size:16px;color:#666;line-height:1.6;">Your message has been received.</td></tr>
+      <tr><td align="center" style="padding:0 32px 40px 32px;">${orderLine}</td></tr>
     </table>
   </td></tr>
 </table>
