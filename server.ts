@@ -652,11 +652,11 @@ function buildDeliveryConfirmationEmail(opts: {
     : `Your Sweet Tooth order has arrived — enjoy!`;
 
   // Header: dark charcoal with the brand wordmark embedded as cid:brand-logo.
-  // If the logo failed to load at startup, fall back to pink text in the
-  // brand's primary color so the header still looks on-brand.
+  // If the logo failed to load at startup, fall back to plain white text — no
+  // fabricated typeface or color. The real logo is the source of truth.
   const headerInner = EMAIL_LOGO_BASE64
     ? `<img src="cid:brand-logo" alt="The Sweet Tooth" width="240" style="display:block;width:240px;max-width:80%;height:auto;margin:0 auto;border:0;outline:none;text-decoration:none;">`
-    : `<div style="font-family:Georgia,'Times New Roman',serif;font-size:28px;font-weight:700;color:#FF6B9D;letter-spacing:0.5px;">The Sweet Tooth</div>`;
+    : `<div style="font-size:22px;font-weight:700;color:#ffffff;">The Sweet Tooth</div>`;
 
   const heroHtml = isGift ? `
         <tr>
@@ -724,7 +724,7 @@ ${heroHtml}${photoRow}
 
         <tr>
           <td style="padding:14px 32px 4px 32px;text-align:center;">
-            <div style="font-size:13px;font-weight:700;letter-spacing:1.2px;color:#FF6B9D;text-transform:uppercase;">👇 Tap a star below to rate 👇</div>
+            <div style="font-size:13px;font-weight:700;letter-spacing:1.2px;color:#D4AF37;text-transform:uppercase;">👇 Tap a star below to rate 👇</div>
           </td>
         </tr>
 
@@ -732,20 +732,20 @@ ${heroHtml}${photoRow}
           <td style="padding:14px 24px 8px 24px;">
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:separate;border-spacing:6px 0;">
               <tr>
-                <td width="20%" align="center" valign="middle" bgcolor="#FCE4EC" style="width:20%;background-color:#FCE4EC;border:2px solid #FF6B9D;border-radius:10px;mso-padding-alt:18px 0;">
-                  <a href="${baseUrl}/review/${orderSlug}/1${orderNumberQS}" style="display:block;padding:18px 0;font-size:34px;text-decoration:none;line-height:1;color:#FF6B9D;">⭐</a>
+                <td width="20%" align="center" valign="middle" bgcolor="#FFF8E1" style="width:20%;background-color:#FFF8E1;border:2px solid #D4AF37;border-radius:10px;mso-padding-alt:18px 0;">
+                  <a href="${baseUrl}/review/${orderSlug}/1${orderNumberQS}" style="display:block;padding:18px 0;font-size:34px;text-decoration:none;line-height:1;color:#D4AF37;">⭐</a>
                 </td>
-                <td width="20%" align="center" valign="middle" bgcolor="#FCE4EC" style="width:20%;background-color:#FCE4EC;border:2px solid #FF6B9D;border-radius:10px;mso-padding-alt:18px 0;">
-                  <a href="${baseUrl}/review/${orderSlug}/2${orderNumberQS}" style="display:block;padding:18px 0;font-size:34px;text-decoration:none;line-height:1;color:#FF6B9D;">⭐</a>
+                <td width="20%" align="center" valign="middle" bgcolor="#FFF8E1" style="width:20%;background-color:#FFF8E1;border:2px solid #D4AF37;border-radius:10px;mso-padding-alt:18px 0;">
+                  <a href="${baseUrl}/review/${orderSlug}/2${orderNumberQS}" style="display:block;padding:18px 0;font-size:34px;text-decoration:none;line-height:1;color:#D4AF37;">⭐</a>
                 </td>
-                <td width="20%" align="center" valign="middle" bgcolor="#FCE4EC" style="width:20%;background-color:#FCE4EC;border:2px solid #FF6B9D;border-radius:10px;mso-padding-alt:18px 0;">
-                  <a href="${baseUrl}/review/${orderSlug}/3${orderNumberQS}" style="display:block;padding:18px 0;font-size:34px;text-decoration:none;line-height:1;color:#FF6B9D;">⭐</a>
+                <td width="20%" align="center" valign="middle" bgcolor="#FFF8E1" style="width:20%;background-color:#FFF8E1;border:2px solid #D4AF37;border-radius:10px;mso-padding-alt:18px 0;">
+                  <a href="${baseUrl}/review/${orderSlug}/3${orderNumberQS}" style="display:block;padding:18px 0;font-size:34px;text-decoration:none;line-height:1;color:#D4AF37;">⭐</a>
                 </td>
-                <td width="20%" align="center" valign="middle" bgcolor="#FCE4EC" style="width:20%;background-color:#FCE4EC;border:2px solid #FF6B9D;border-radius:10px;mso-padding-alt:18px 0;">
-                  <a href="${baseUrl}/review/${orderSlug}/4${orderNumberQS}" style="display:block;padding:18px 0;font-size:34px;text-decoration:none;line-height:1;color:#FF6B9D;">⭐</a>
+                <td width="20%" align="center" valign="middle" bgcolor="#FFF8E1" style="width:20%;background-color:#FFF8E1;border:2px solid #D4AF37;border-radius:10px;mso-padding-alt:18px 0;">
+                  <a href="${baseUrl}/review/${orderSlug}/4${orderNumberQS}" style="display:block;padding:18px 0;font-size:34px;text-decoration:none;line-height:1;color:#D4AF37;">⭐</a>
                 </td>
-                <td width="20%" align="center" valign="middle" bgcolor="#FCE4EC" style="width:20%;background-color:#FCE4EC;border:2px solid #FF6B9D;border-radius:10px;mso-padding-alt:18px 0;">
-                  <a href="${baseUrl}/review/${orderSlug}/5${orderNumberQS}" style="display:block;padding:18px 0;font-size:34px;text-decoration:none;line-height:1;color:#FF6B9D;">⭐</a>
+                <td width="20%" align="center" valign="middle" bgcolor="#FFF8E1" style="width:20%;background-color:#FFF8E1;border:2px solid #D4AF37;border-radius:10px;mso-padding-alt:18px 0;">
+                  <a href="${baseUrl}/review/${orderSlug}/5${orderNumberQS}" style="display:block;padding:18px 0;font-size:34px;text-decoration:none;line-height:1;color:#D4AF37;">⭐</a>
                 </td>
               </tr>
             </table>
@@ -780,10 +780,10 @@ ${heroHtml}${photoRow}
 
         <tr>
           <td style="background-color:#2a2a2a;padding:24px 32px;text-align:center;">
-            <div style="font-family:Georgia,'Times New Roman',serif;font-size:18px;color:#FF6B9D;font-weight:700;margin-bottom:8px;">The Sweet Tooth</div>
-            <div style="font-size:12px;color:#bbb;line-height:1.6;">
+            <div style="font-size:12px;color:#ffffff;line-height:1.6;">
+              The Sweet Tooth<br>
               18435 NE 19th Ave, North Miami Beach, FL 33179<br>
-              <a href="https://thesweettooth.com" style="color:#FF6B9D;text-decoration:none;">thesweettooth.com</a>
+              <a href="https://thesweettooth.com" style="color:#ffffff;text-decoration:none;">thesweettooth.com</a>
             </div>
           </td>
         </tr>
@@ -924,6 +924,18 @@ async function startServer() {
   const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000;
   app.use(express.json({ limit: '10mb' })); // Reduced from 50mb to prevent memory spikes
   app.use(express.urlencoded({ extended: true, limit: '100kb' })); // form posts from the review feedback page
+
+  // Serve the brand logo PNG so HTML pages outside of email (thank-you, feedback
+  // form) can reference the real logo via /brand/logo.png instead of fabricating
+  // a text wordmark. Cached aggressively since it never changes per release.
+  app.get('/brand/logo.png', (_req, res) => {
+    if (!fs.existsSync(EMAIL_LOGO_PATH)) {
+      return res.status(404).send('logo not found');
+    }
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.sendFile(EMAIL_LOGO_PATH);
+  });
   
   // Log memory usage every 5 minutes
   setInterval(() => {
@@ -2074,7 +2086,7 @@ async function startServer() {
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#faf7f2;min-height:100vh;">
   <tr><td align="center" valign="middle" style="padding:32px 16px;">
     <table role="presentation" width="540" cellpadding="0" cellspacing="0" border="0" style="max-width:540px;width:100%;background:#fff;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,0.06);overflow:hidden;">
-      <tr><td align="center" style="background:#2a2a2a;padding:24px;font-family:Georgia,'Times New Roman',serif;font-size:22px;color:#FF6B9D;font-weight:700;">The Sweet Tooth</td></tr>
+      <tr><td align="center" style="background:#2a2a2a;padding:28px 24px;"><img src="/brand/logo.png" alt="The Sweet Tooth" width="220" style="display:block;width:220px;max-width:80%;height:auto;margin:0 auto;border:0;"></td></tr>
       <tr><td align="center" style="padding:36px 32px 8px 32px;font-size:22px;font-weight:600;">Thanks for the ${ratingLabel} rating.</td></tr>
       <tr><td align="center" style="padding:0 32px 24px 32px;font-size:16px;color:#666;line-height:1.6;">Tell us what we could have done better.</td></tr>
       <tr><td style="padding:0 32px 32px 32px;">
@@ -2082,7 +2094,7 @@ async function startServer() {
           ${displayOrderNumber ? `<input type="hidden" name="n" value="${escapeHtmlForEmail(displayOrderNumber)}">` : ''}
           <textarea name="message" rows="6" required placeholder="Type your message here…" style="width:100%;box-sizing:border-box;font:16px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#2a2a2a;padding:14px;border:1px solid #ddd;border-radius:8px;resize:vertical;"></textarea>
           <input type="email" name="email" placeholder="Your email (optional, so we can reply)" style="width:100%;box-sizing:border-box;font:16px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#2a2a2a;padding:12px 14px;border:1px solid #ddd;border-radius:8px;margin-top:10px;">
-          <button type="submit" style="display:block;width:100%;background:#FF6B9D;color:#fff;font-size:16px;font-weight:700;letter-spacing:0.4px;border:0;border-radius:8px;padding:14px;margin-top:14px;cursor:pointer;">Send Feedback</button>
+          <button type="submit" style="display:block;width:100%;background:#2a2a2a;color:#fff;font-size:16px;font-weight:700;letter-spacing:0.4px;border:0;border-radius:8px;padding:14px;margin-top:14px;cursor:pointer;">Send Feedback</button>
         </form>
         <div align="center">${orderLine}</div>
       </td></tr>
@@ -2136,7 +2148,7 @@ async function startServer() {
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#faf7f2;min-height:100vh;">
   <tr><td align="center" valign="middle" style="padding:48px 16px;">
     <table role="presentation" width="500" cellpadding="0" cellspacing="0" border="0" style="max-width:500px;width:100%;background:#fff;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,0.06);overflow:hidden;">
-      <tr><td align="center" style="background:#2a2a2a;padding:24px;font-family:Georgia,'Times New Roman',serif;font-size:22px;color:#FF6B9D;font-weight:700;">The Sweet Tooth</td></tr>
+      <tr><td align="center" style="background:#2a2a2a;padding:28px 24px;"><img src="/brand/logo.png" alt="The Sweet Tooth" width="220" style="display:block;width:220px;max-width:80%;height:auto;margin:0 auto;border:0;"></td></tr>
       <tr><td align="center" style="padding:40px 32px 16px 32px;font-size:22px;font-weight:600;">Thanks — got it.</td></tr>
       <tr><td align="center" style="padding:0 32px 24px 32px;font-size:16px;color:#666;line-height:1.6;">Your message has been received.</td></tr>
       <tr><td align="center" style="padding:0 32px 40px 32px;">${orderLine}</td></tr>
