@@ -2026,9 +2026,64 @@ async function startServer() {
   });
 
   // ── REVIEW STAR-RATING REDIRECT ─────────────────────────────────────────────
-  // Star links in the POD email hit this route. 4-5 stars → Google review.
-  // 1-3 stars → mailto to Mikey for direct feedback. Every click is logged so
-  // we can see in the KV store who tapped what.
+  // Star links in the POD email hit this route. 5★ → Google review. 1-4★ →
+  // in-app feedback form that emails Mikey on submit. Every click is logged
+  // in KV so we can see who tapped what.
+  //
+  // First-click-wins lockout: once a customer COMPLETES the review (5★ Google
+  // redirect, or a 1-4★ form submit), any further clicks on that order's
+  // links — for 30 days — show a "we already have your rating" page and do
+  // nothing else (no second Google redirect, no duplicate alert email).
+  const REVIEW_LOCK_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
+  type ReviewClick = { timestamp: string; stars: number; completed?: boolean; type?: string; ip?: string | null; userAgent?: string | null };
+  async function hasCompletedReviewWithinWindow(orderId: string): Promise<ReviewClick | null> {
+    try {
+      const logKey = `review_clicks:${orderId}`;
+      const existing: any = (await getKV(logKey)) || { clicks: [] };
+      const clicks: ReviewClick[] = Array.isArray(existing.clicks) ? existing.clicks : [];
+      const now = Date.now();
+      const completed = clicks.find((c) => c?.completed === true && (now - new Date(c.timestamp).getTime()) < REVIEW_LOCK_WINDOW_MS);
+      return completed || null;
+    } catch (e: any) {
+      console.error('review lock check failed (non-fatal, allowing):', e?.message || e);
+      return null;
+    }
+  }
+  async function logReviewClick(orderId: string, entry: ReviewClick) {
+    try {
+      const logKey = `review_clicks:${orderId}`;
+      const existing: any = (await getKV(logKey)) || { clicks: [] };
+      if (!Array.isArray(existing.clicks)) existing.clicks = [];
+      existing.clicks.push(entry);
+      if (existing.clicks.length > 50) existing.clicks = existing.clicks.slice(-50);
+      await setKV(logKey, existing);
+    } catch (e: any) {
+      console.error('review click log failed (non-fatal):', e?.message || e);
+    }
+  }
+  function renderAlreadyRatedPage(displayOrderNumber: string): string {
+    const orderLine = displayOrderNumber
+      ? `<div style="font-size:13px;color:#999;margin-top:24px;">Order #${escapeHtmlForEmail(displayOrderNumber)}</div>`
+      : '';
+    return `<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Thanks</title>
+</head>
+<body style="margin:0;padding:0;background:#faf7f2;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#2a2a2a;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#faf7f2;min-height:100vh;">
+  <tr><td align="center" valign="middle" style="padding:48px 16px;">
+    <table role="presentation" width="500" cellpadding="0" cellspacing="0" border="0" style="max-width:500px;width:100%;background:#fff;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,0.06);overflow:hidden;">
+      <tr><td align="center" style="background:#2a2a2a;padding:28px 24px;"><img src="/brand/logo.png" alt="The Sweet Tooth" width="220" style="display:block;width:220px;max-width:80%;height:auto;margin:0 auto;border:0;"></td></tr>
+      <tr><td align="center" style="padding:40px 32px 16px 32px;font-size:22px;font-weight:600;">Thanks — we already have your rating.</td></tr>
+      <tr><td align="center" style="padding:0 32px 40px 32px;">${orderLine}</td></tr>
+    </table>
+  </td></tr>
+</table>
+</body></html>`;
+  }
+
   app.get("/review/:orderId/:stars", async (req, res) => {
     const orderId = String(req.params.orderId || '');
     const starsRaw = parseInt(String(req.params.stars || ''), 10);
@@ -2038,30 +2093,31 @@ async function startServer() {
       return res.status(400).send('Invalid review link.');
     }
 
-    // Fire-and-forget log to the same KV store used for delivery audit trail.
-    // Never block the redirect on log failures — the customer-facing UX matters more.
-    try {
-      const logKey = `review_clicks:${orderId}`;
-      const existing: any = (await getKV(logKey)) || { clicks: [] };
-      if (!Array.isArray(existing.clicks)) existing.clicks = [];
-      existing.clicks.push({
-        timestamp: new Date().toISOString(),
-        stars,
-        ip: req.ip || req.headers['x-forwarded-for'] || null,
-        userAgent: req.headers['user-agent'] || null
-      });
-      if (existing.clicks.length > 50) existing.clicks = existing.clicks.slice(-50);
-      await setKV(logKey, existing);
-      console.log(`⭐ Review click logged: order ${orderId}, ${stars} stars`);
-    } catch (e: any) {
-      console.error('review click log failed (non-fatal):', e?.message || e);
-    }
-
     // Customer-facing order number, if provided via ?n=… on the link.
-    // Falls back to the internal Shopify ID only if no friendly number
-    // was passed — never invent one.
     const queryOrderNumber = String(req.query.n || '').trim();
     const displayOrderNumber = queryOrderNumber || '';
+
+    // First-click-wins: if this order already completed a review in the last
+    // 30 days, short-circuit. Nothing fires — no Google redirect, no form,
+    // no alert email — just a friendly "we already have your rating" page.
+    const priorCompleted = await hasCompletedReviewWithinWindow(orderId);
+    if (priorCompleted) {
+      console.log(`⭐ Review already completed for order ${orderId} (${priorCompleted.stars}★ at ${priorCompleted.timestamp}) — showing lock page`);
+      return res.status(200).type('html').send(renderAlreadyRatedPage(displayOrderNumber));
+    }
+
+    // Log this click. 5★ is a completion (Google redirect is the submission).
+    // 1-4★ is NOT yet a completion — it just opens the form; the POST below
+    // is what marks completion.
+    await logReviewClick(orderId, {
+      timestamp: new Date().toISOString(),
+      stars,
+      completed: stars >= 5,
+      type: stars >= 5 ? 'google-redirect' : 'form-shown',
+      ip: req.ip || (req.headers['x-forwarded-for'] as string) || null,
+      userAgent: (req.headers['user-agent'] as string) || null
+    });
+    console.log(`⭐ Review click logged: order ${orderId}, ${stars} stars`);
 
     // Only 5-star taps go to Google — protects the public review average.
     if (stars >= 5) {
@@ -2116,6 +2172,25 @@ async function startServer() {
     if (!orderId || stars < 1) {
       return res.status(400).send('Invalid review submission.');
     }
+
+    // First-click-wins lock: if a prior submission already marked this order
+    // completed (e.g. customer hit submit twice, or rated then refreshed),
+    // just render the lock page. Mikey doesn't get a duplicate email.
+    const priorCompleted = await hasCompletedReviewWithinWindow(orderId);
+    if (priorCompleted) {
+      console.log(`⭐ Review POST blocked — order ${orderId} already completed (${priorCompleted.stars}★ at ${priorCompleted.timestamp})`);
+      return res.status(200).type('html').send(renderAlreadyRatedPage(queryOrderNumber));
+    }
+
+    // Mark this submission as the completed review for the order.
+    await logReviewClick(orderId, {
+      timestamp: new Date().toISOString(),
+      stars,
+      completed: true,
+      type: 'feedback-submitted',
+      ip: req.ip || (req.headers['x-forwarded-for'] as string) || null,
+      userAgent: (req.headers['user-agent'] as string) || null
+    });
 
     const ratingLabel = ['', 'Poor (1★)', 'Fair (2★)', 'OK (3★)', 'Good (4★)'][stars] || `${stars}★`;
     const displayId = queryOrderNumber || orderId;
