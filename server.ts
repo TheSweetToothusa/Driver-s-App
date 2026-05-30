@@ -1584,10 +1584,13 @@ async function startServer() {
       };
       const podSaved = await writePodOrder(orderId, updated);
       if (!podSaved) {
-        // DB write failed. Do NOT abort — the driver did their job and the gift sender
-        // still needs to be notified. The file fallback in writePodOrder captured the
-        // record on this server instance; the photo is also on the driver's phone.
-        console.error(`⚠️ POD DB write failed for ${orderId} — continuing with Shopify tag + customer email anyway`);
+        // The DB write failed (the file fallback doesn't survive Render deploys, so it
+        // does NOT count as persisted). Return 503 so the frontend retry loop tries again
+        // and ultimately shows the driver an error instead of a false green checkmark.
+        // Bail before Shopify tags / email — never mark a delivery DELIVERED or notify the
+        // customer for proof that wasn't actually saved.
+        console.error(`⚠️ POD DB write failed for ${orderId} — returning 503 so the driver retries instead of seeing a false success`);
+        return res.status(503).json({ error: 'Could not save delivery — please retry' });
       }
 
       // For manual orders (stored in DB only) — update the manual_orders record directly
