@@ -925,6 +925,179 @@ async function startServer() {
   app.use(express.json({ limit: '10mb' })); // Reduced from 50mb to prevent memory spikes
   app.use(express.urlencoded({ extended: true, limit: '100kb' })); // form posts from the review feedback page
 
+  // ───────────────────────────────────────────────────────────────────────
+  // STOREFRONT CHAT (public) — powers the customer chat widget on thesweettooth.com
+  //   POST /api/storefront/track  -> secure order status (reads st_ tags)
+  //   POST /api/storefront/chat   -> general Q&A via Claude
+  // CORS-limited to the storefront. The Shopify token never leaves the server.
+  // ───────────────────────────────────────────────────────────────────────
+  const SF_ORIGINS = [
+    'https://thesweettooth.com',
+    'https://www.thesweettooth.com',
+    'https://thesweettoothfl.myshopify.com',
+  ];
+  app.use('/api/storefront', (req: any, res: any, next: any) => {
+    const origin = req.headers.origin;
+    if (SF_ORIGINS.includes(origin)) res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    if (req.method === 'OPTIONS') return res.sendStatus(204);
+    next();
+  });
+
+  const SF_API = `https://${SHOPIFY_STORE_URL}/admin/api/2025-01`;
+  const sfDigits = (s: string) => (s || '').replace(/\D/g, '');
+
+  async function sfFetchOrder(orderNumber: string) {
+    const name = String(orderNumber || '').trim().replace(/^#/, '').trim();
+    if (!name) return null;
+    const r = await fetch(`${SF_API}/orders.json?name=${encodeURIComponent(name)}&status=any`, {
+      headers: { 'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN },
+    });
+    const data: any = await r.json();
+    const orders = data.orders || [];
+    return orders.find((o: any) => (o.name || '').replace(/^#/, '') === name) || orders[0] || null;
+  }
+
+  function sfContactMatches(order: any, contact: string) {
+    if (!contact) return false;
+    contact = contact.trim();
+    if (contact.includes('@')) {
+      const emails = [order.email, order.customer?.email].filter(Boolean).map((e: string) => e.toLowerCase());
+      return emails.includes(contact.toLowerCase());
+    }
+    const target = sfDigits(contact);
+    if (target.length < 7) return false;
+    const t10 = target.slice(-10);
+    const phones = [order.phone, order.customer?.phone, order.shipping_address?.phone, order.billing_address?.phone];
+    return phones.some((p: string) => p && sfDigits(p).slice(-10) === t10);
+  }
+
+  const sfTag = (order: any, prefix: string) => {
+    const t = (order.tags || '').split(',').map((x: string) => x.trim())
+      .find((x: string) => x.toLowerCase().startsWith(prefix.toLowerCase()));
+    return t ? t.slice(prefix.length) : '';
+  };
+  const sfAttr = (order: any, name: string) => {
+    const a = (order.note_attributes || []).find((x: any) => x.name === name);
+    return a ? a.value : '';
+  };
+
+  function sfBuildStatus(order: any) {
+    const name = order.name || '';
+    const status = (sfTag(order, 'st_status:') || '').toUpperCase();
+    const driver = sfTag(order, 'st_drivername:') || 'Katie';
+    const ddStr = sfAttr(order, 'Delivery Date');
+    const dday = sfAttr(order, 'Delivery Day');
+    const method = (sfAttr(order, 'Delivery Method') || '').toLowerCase();
+    const isLocal = method.includes('deliver') || (order.tags || '').toLowerCase().includes('local delivery');
+    const phoneClause = `text your driver ${driver} directly at ${KATIE_PHONE}`;
+
+    if (status === 'DELIVERED' || status === 'COMPLETE') {
+      let when = dday ? ` on ${dday}` : '';
+      const comp = sfTag(order, 'st_completed:');
+      if (comp) {
+        try {
+          const [d, tRaw] = comp.replace(/Z$/, '').split('T');
+          const dt = new Date(`${d}T${tRaw.replace(/-/g, ':')}Z`);
+          when = ` on ${dt.toLocaleDateString('en-US', { weekday: 'long', timeZone: 'America/New_York' })}` +
+                 ` at ${dt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York' })}`;
+        } catch {}
+      }
+      return `Good news — order ${name} was delivered${when}! 📦✅ A delivery confirmation with a timestamped ` +
+             `photo was emailed to you. If you don't see it, check your spam folder or let us know and we'll resend it.`;
+    }
+
+    if (['OUT', 'ROUTE', 'TRANSIT', 'WAY'].some((k) => status.includes(k))) {
+      return `Your order ${name} is on the way today with ${driver}! 🚗 It will arrive before 5 PM. ` +
+             `If you need anything, you can ${phoneClause}.`;
+    }
+
+    const parsed = ddStr ? new Date(ddStr) : null;
+    if (isLocal && parsed && !isNaN(parsed.getTime())) {
+      const ddYmd = `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}-${String(parsed.getDate()).padStart(2, '0')}`;
+      const todayYmd = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+      const pretty = parsed.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+      if (ddYmd === todayYmd) {
+        return `Your order ${name} is scheduled for delivery today (${pretty})! 🎉 It will arrive before 5 PM. ` +
+               `If you need anything sooner or have a special request, you can ${phoneClause}.`;
+      }
+      if (ddYmd > todayYmd) {
+        return `Your order ${name} is scheduled for delivery on ${pretty}, before 5 PM. If you need anything, you can ${phoneClause}.`;
+      }
+      return `Your order ${name} was scheduled for ${pretty}. If it hasn't arrived, you can ${phoneClause} and we'll check on it right away.`;
+    }
+
+    if (!isLocal) {
+      for (const f of (order.fulfillments || [])) {
+        if (f.tracking_number) {
+          const url = (f.tracking_urls && f.tracking_urls[0]) || f.tracking_url;
+          return `Your order ${name} has shipped via UPS 2-day (temperature controlled). ` +
+                 `Tracking number: ${f.tracking_number}.${url ? ' Track it here: ' + url : ''}`;
+        }
+      }
+      return `Your order ${name} is being prepared and ships via UPS 2-day (temperature controlled). ` +
+             `You'll get a tracking email as soon as it's on its way.`;
+    }
+
+    return `Your order ${name} is confirmed and being prepared for local delivery. ` +
+           `You'll get your scheduled delivery day shortly. If you need anything, you can ${phoneClause}.`;
+  }
+
+  app.post('/api/storefront/track', async (req: any, res: any) => {
+    try {
+      const order = (req.body.order || '').trim();
+      const contact = (req.body.contact || '').trim();
+      if (!order) return res.json({ status: 'needs_contact', reply: "Sure! What's your order number? You can find it in your confirmation email (it looks like #35955)." });
+      const o = await sfFetchOrder(order);
+      if (!o) return res.json({ status: 'not_found', reply: "I couldn't find an order with that number. 🤔 Double-check it against your confirmation email — or share the email or phone number you used at checkout and I'll look it up that way." });
+      if (!contact) return res.json({ status: 'needs_contact', reply: "Got it! To pull up your order securely, what's the email or phone number you used at checkout?" });
+      if (!sfContactMatches(o, contact)) return res.json({ status: 'mismatch', reply: "Hmm, that email/phone doesn't match this order number. Please use the exact email or phone from your checkout — or send either one on its own and I'll find the order for you." });
+      return res.json({ status: 'ok', reply: sfBuildStatus(o) });
+    } catch (e) {
+      console.error('storefront/track error', e);
+      return res.json({ status: 'error', reply: "Sorry, I hit a snag looking that up. Please try again in a moment, or reach our team and we'll help right away." });
+    }
+  });
+
+  const SF_ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY || '';
+  const SF_SYSTEM = `You are the friendly chat assistant for The Sweet Tooth, a kosher chocolate and ` +
+    `dessert gift-basket shop in Miami. Be warm, concise, and helpful.\n\n` +
+    `FACTS (never contradict, never invent beyond these):\n` +
+    `- Shipping is UPS only, 2-day, temperature-controlled. Never say USPS or "2-3 days".\n` +
+    `- We are kosher (Kosher Miami certified). Spell it "parve", not "pareve".\n` +
+    `- Same-day local delivery cutoff is 2 PM.\n` +
+    `- Local deliveries arrive before 5 PM; the driver sets the route unless a specific time was requested.\n` +
+    `- We deliver locally in the Miami area and ship nationwide via UPS.\n\n` +
+    `RULES:\n` +
+    `- If the customer asks about THEIR order status, tracking, "where is my order", delivery time, or ` +
+    `"did it arrive", do NOT guess. Reply exactly: "TRACK_ORDER" and nothing else.\n` +
+    `- If you don't know something or it needs a person, say you'll connect them with the team.\n` +
+    `- Keep answers to 1-3 short sentences. No phone numbers (the order-lookup flow handles the driver line).`;
+
+  app.post('/api/storefront/chat', async (req: any, res: any) => {
+    try {
+      const message = (req.body.message || '').trim();
+      const history = req.body.history || [];
+      if (!message) return res.json({ reply: 'Hi! How can I help — order status, ingredients, delivery, or something else?' });
+      if (!SF_ANTHROPIC_KEY) return res.json({ reply: 'Thanks for your message! Our team will jump in shortly.' });
+      const msgs = history.slice(-8).map((h: any) => ({ role: h.role === 'assistant' ? 'assistant' : 'user', content: String(h.content || '') }));
+      msgs.push({ role: 'user', content: message });
+      const r = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-api-key': SF_ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
+        body: JSON.stringify({ model: process.env.CHAT_MODEL || 'claude-haiku-4-5-20251001', max_tokens: 300, system: SF_SYSTEM, messages: msgs }),
+      });
+      const data: any = await r.json();
+      const reply = (data.content || []).filter((b: any) => b.type === 'text').map((b: any) => b.text).join('').trim();
+      if (reply === 'TRACK_ORDER') return res.json({ reply: "I can help track that! What's your order number?", action: 'track' });
+      return res.json({ reply: reply || 'Thanks for your message! Our team will follow up shortly.' });
+    } catch (e) {
+      console.error('storefront/chat error', e);
+      return res.json({ reply: 'Thanks for your message! Let me connect you with our team.' });
+    }
+  });
+
   // Serve the brand logo PNG so HTML pages outside of email (thank-you, feedback
   // form) can reference the real logo via /brand/logo.png instead of fabricating
   // a text wordmark. Cached aggressively since it never changes per release.
@@ -1161,11 +1334,46 @@ async function startServer() {
           body: JSON.stringify({ order: { id: orderId, tags: tagsList.join(', ') } })
         });
         console.log(`Synced status ${status} to Shopify for order ${orderId}`);
+
+        // Also mark the Shopify order Fulfilled so it stops showing "Unfulfilled"
+        // (the chat tracker + Shopify reports read the real fulfillment status).
+        // Best-effort: never blocks the driver's delivery update. notify_customer
+        // is false so the customer doesn't get a confusing "shipped" email.
+        if (status === 'DELIVERED') {
+          try {
+            const foResp = await fetch(`https://${SHOPIFY_STORE_URL}/admin/api/2025-01/orders/${orderId}/fulfillment_orders.json`, {
+              headers: { 'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN }
+            });
+            const foData = await foResp.json();
+            const openFOs = (foData.fulfillment_orders || []).filter(
+              (fo: any) => ['open', 'in_progress', 'scheduled'].includes(fo.status)
+            );
+            for (const fo of openFOs) {
+              const fulResp = await fetch(`https://${SHOPIFY_STORE_URL}/admin/api/2025-01/fulfillments.json`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN },
+                body: JSON.stringify({
+                  fulfillment: {
+                    notify_customer: false,
+                    line_items_by_fulfillment_order: [{ fulfillment_order_id: fo.id }]
+                  }
+                })
+              });
+              if (fulResp.ok) {
+                console.log(`Marked order ${orderId} Fulfilled in Shopify`);
+              } else {
+                console.error(`Fulfillment failed for order ${orderId} (FO ${fo.id}):`, await fulResp.text());
+              }
+            }
+          } catch (err) {
+            console.error('Failed to fulfill order in Shopify:', err);
+          }
+        }
       } catch (err) {
         console.error('Failed to sync status to Shopify:', err);
       }
     }
-    
+
     res.json({ success: true, status });
   });
 
