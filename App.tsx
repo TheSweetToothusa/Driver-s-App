@@ -974,6 +974,11 @@ const OrderDetail: React.FC<{
   const cameraRef = useRef<HTMLInputElement>(null);
   const isAdmin = role === 'SUPER_ADMIN' || role === 'MANAGER';
   const isCompleted = order.status === DeliveryStatus.DELIVERED || order.status === DeliveryStatus.FAILED || order.status === DeliveryStatus.PENDING_RESCHEDULE || order.status === DeliveryStatus.SECOND_ATTEMPT;
+  // Admin-only delivery-time override. Empty = use the current moment (normal behavior,
+  // unchanged for drivers). When set (datetime-local string), it's painted onto the photo
+  // stamp AND saved as completedAt, so a delivery logged late still shows its true time.
+  const [customTime, setCustomTime] = useState('');
+  const [rawPhoto, setRawPhoto] = useState<string | null>(null);
 
   // When opening a delivered order, fetch fresh POD data from DB
   useEffect(() => {
@@ -995,37 +1000,58 @@ const OrderDetail: React.FC<{
     }
   }, [order.id, isCompleted]);
 
+  // The effective delivery moment: the admin override if set, otherwise now.
+  const effectiveDeliveryDate = () => (customTime ? new Date(customTime) : new Date());
+
+  // Paint the standard Sweet Tooth timestamp bar onto a raw image at the given time.
+  // Identical bar/format to the original flow — only the time value can differ.
+  const stampPhotoWith = (rawDataUrl: string, when: Date): Promise<string> => new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d')!;
+      ctx.drawImage(img, 0, 0);
+      const barH = Math.max(48, img.height * 0.07);
+      ctx.fillStyle = 'rgba(0,0,0,0.62)';
+      ctx.fillRect(0, img.height - barH, img.width, barH);
+      const fontSize = Math.max(22, img.width * 0.038);
+      ctx.font = `bold ${fontSize}px Arial, sans-serif`;
+      ctx.fillStyle = '#ffffff';
+      ctx.textBaseline = 'middle';
+      const stamp = when.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) +
+        ' ' + when.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      ctx.fillText('📍 The Sweet Tooth  ·  ' + stamp, img.width * 0.025, img.height - barH / 2);
+      resolve(canvas.toDataURL('image/jpeg', 0.92));
+    };
+    img.src = rawDataUrl;
+  });
+
   const handlePhoto = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]; if (!f) return;
-    const now = new Date();
-    const stamp = now.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) +
-      ' ' + now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     const r = new FileReader();
-    r.onloadend = () => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        canvas.width = img.width;
-        canvas.height = img.height;
-        const ctx = canvas.getContext('2d')!;
-        ctx.drawImage(img, 0, 0);
-        // Stamp bar at bottom
-        const barH = Math.max(48, img.height * 0.07);
-        ctx.fillStyle = 'rgba(0,0,0,0.62)';
-        ctx.fillRect(0, img.height - barH, img.width, barH);
-        // Timestamp text
-        const fontSize = Math.max(22, img.width * 0.038);
-        ctx.font = `bold ${fontSize}px Arial, sans-serif`;
-        ctx.fillStyle = '#ffffff';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('📍 The Sweet Tooth  ·  ' + stamp, img.width * 0.025, img.height - barH / 2);
-        const stamped = canvas.toDataURL('image/jpeg', 0.92);
-        setPhotoData(stamped);
-        setPhotoTimestamp(now.toISOString());
-      };
-      img.src = r.result as string;
+    r.onloadend = async () => {
+      const raw = r.result as string;
+      setRawPhoto(raw);
+      const when = effectiveDeliveryDate();
+      const stamped = await stampPhotoWith(raw, when);
+      setPhotoData(stamped);
+      setPhotoTimestamp(when.toISOString());
     };
     r.readAsDataURL(f);
+  };
+
+  // Admin changed the delivery-time override — re-paint the existing photo so the
+  // stamp on it always matches the time that will be saved.
+  const applyCustomTime = async (val: string) => {
+    setCustomTime(val);
+    if (rawPhoto) {
+      const when = val ? new Date(val) : new Date();
+      const stamped = await stampPhotoWith(rawPhoto, when);
+      setPhotoData(stamped);
+      setPhotoTimestamp(when.toISOString());
+    }
   };
 
   const [lightboxPhoto, setLightboxPhoto] = useState<string | null>(null);
@@ -1063,7 +1089,9 @@ const OrderDetail: React.FC<{
 
   const handleComplete = async () => {
     if (isSavingPOD) return; // prevent double-submit
-    const now = new Date().toISOString();
+    const submittedAt = new Date().toISOString();
+    // completedAt is the actual delivery moment — the admin override if set, else now.
+    const now = customTime ? new Date(customTime).toISOString() : submittedAt;
     const isManualOrder = (order as any).isManual;
 
     // Save POD FIRST with retry, then mark delivered. If POD fails after all
@@ -1096,7 +1124,7 @@ const OrderDetail: React.FC<{
     }
 
     // POD persisted — now safe to update Shopify tag and local state.
-    const updates: Partial<Delivery> = { status: DeliveryStatus.DELIVERED, confirmationPhoto: photoData || undefined, confirmationSignature: sigData || undefined, driverNotes: driverNote, completedAt: now, submittedAt: now };
+    const updates: Partial<Delivery> = { status: DeliveryStatus.DELIVERED, confirmationPhoto: photoData || undefined, confirmationSignature: sigData || undefined, driverNotes: driverNote, completedAt: now, submittedAt };
     onUpdate(order.id, updates);
 
     try {
@@ -1711,7 +1739,7 @@ const OrderDetail: React.FC<{
         {/* ── DELIVERY INSTRUCTIONS — Subtle but visible ── */}
         {order.deliveryInstructions && (
           <div style={{ background: '#FEF3C7', padding: '12px 16px', borderLeft: '3px solid #F59E0B' }}>
-            <p style={{ fontSize: 10, fontWeight: 700, color: '#92400E', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>Delivery Instructions</p>
+            <p style={{ fontSize: 10, fontWeight: 700, color: '#92400E', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>⚠ Special Instructions</p>
             <p style={{ fontSize: 14, fontWeight: 600, color: '#78350F' }}>{order.deliveryInstructions}</p>
             {order.customer?.phone && (
               <a href={`tel:${order.customer.phone}`} style={{ display: 'inline-block', marginTop: 6, fontSize: 13, fontWeight: 700, color: '#92400E', textDecoration: 'underline' }}>
@@ -1944,6 +1972,27 @@ const OrderDetail: React.FC<{
                   </div>
                 )}
               </div>
+
+              {/* Delivery-time override — admins only. Defaults to now (left blank);
+                  set it to backdate a delivery logged after the fact. */}
+              {isAdmin && (
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>
+                    Delivery time <span style={{ textTransform: 'none', fontWeight: 500 }}>— leave blank for now</span>
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={customTime}
+                    onChange={e => applyCustomTime(e.target.value)}
+                    style={{ width: '100%', background: '#F9FAFB', border: '1px solid #E5E7EB', borderRadius: 8, padding: '12px', fontSize: 14, outline: 'none', color: '#374151' }}
+                  />
+                  {customTime && (
+                    <p style={{ fontSize: 11, color: '#6B7280', marginTop: 6 }}>
+                      Photo stamp &amp; record will show {new Date(customTime).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}
+                    </p>
+                  )}
+                </div>
+              )}
 
               {/* Driver Note */}
               <textarea

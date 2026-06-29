@@ -93,6 +93,57 @@ function parseDeliveryDate(raw: string | undefined): string {
   return ''; // Still no date — return empty, never fake it
 }
 
+// Shopify's free-text order `note` often bundles several labeled sections, e.g.
+//   Special Instructions: ...
+//   Please deliver before 1pm or after 4pm
+//   Gift Message: ...
+//   Delivery Date: ...
+// Drivers never see Shopify, so ANY instruction buried in the note MUST be
+// surfaced. The office uses "Special Instructions" and "Delivery Instructions"
+// interchangeably, so capture BOTH section types (everything from that label up
+// to the next non-instruction section) and leave gift message / date / etc. out.
+function parseNoteInstructions(note: string): string {
+  if (!note) return '';
+  // Labels whose content IS a driver instruction — start capturing here.
+  const startLabels = ['special instructions', 'delivery instructions'];
+  // Labels that begin a NON-instruction section — stop capturing here.
+  const stopLabels = ['gift message', 'gift sender', 'gift receiver', 'gift wrap',
+    'delivery date', 'delivery day', 'delivery method', 'order total', 'occasion',
+    'basket builder', 'customer timezone'];
+  const out: string[] = [];
+  let capturing = false;
+  for (const line of note.split('\n')) {
+    const lower = line.toLowerCase().trim();
+    if (startLabels.some(l => lower.startsWith(l))) {
+      capturing = true;
+      const rest = line.includes(':') ? line.slice(line.indexOf(':') + 1).trim() : '';
+      if (rest) out.push(rest);
+      continue;
+    }
+    if (stopLabels.some(l => lower.startsWith(l))) { capturing = false; continue; }
+    if (capturing) out.push(line);
+  }
+  return out.join('\n').trim();
+}
+
+// Merge instruction text from several sources into one block, dropping blank and
+// duplicate lines so the same instruction never shows twice (e.g. when it lives
+// in both the Local Delivery field and the order note).
+function dedupeInstructionLines(parts: (string | undefined)[]): string {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const part of parts) {
+    for (const raw of (part || '').split('\n')) {
+      const line = raw.trim();
+      const key = line.toLowerCase();
+      if (!line || seen.has(key)) continue;
+      seen.add(key);
+      out.push(line);
+    }
+  }
+  return out.join('\n');
+}
+
 const mapShopifyOrder = (order: any): Delivery => {
   const shipping = order.shipping_address || {};
   const buyer = order.customer || {};
@@ -154,7 +205,18 @@ const mapShopifyOrder = (order: any): Delivery => {
     items: filteredItems,
     deliveryFee: shippingPrice,
     orderTotal: parseFloat(order.total_price || order.subtotal_price || "0"),
-    deliveryInstructions: order._delivery_instructions || attributes['delivery instructions'] || attributes['delivery_instructions'] || attributes['deliveryinstructions'] || attributes['instructions'] || attributes['special instructions'] || attributes['special_instructions'] || '',
+    // Surface EVERY instruction the office may have written, under ANY label, from
+    // ANY field: Shopify Local Delivery, "Delivery Instructions"/"Special
+    // Instructions" note-attributes, AND those same labels inside the free-text
+    // note. Drivers can't see Shopify, so hiding any one of them is the exact
+    // failure we must avoid (e.g. order #36015's "deliver before 1pm").
+    deliveryInstructions: dedupeInstructionLines([
+      order._delivery_instructions,
+      attributes['delivery instructions'], attributes['delivery_instructions'], attributes['deliveryinstructions'],
+      attributes['special instructions'], attributes['special_instructions'],
+      attributes['instructions'],
+      parseNoteInstructions(order.note || ''),
+    ]),
     // Status priority: 1) Shopify cancelled, 2) our st_ tag, 3) Shopify fulfilled, 4) PENDING
     status: order.cancelled_at ? 'CANCELLED' as DeliveryStatus :
       (order._st_status as DeliveryStatus) ||
