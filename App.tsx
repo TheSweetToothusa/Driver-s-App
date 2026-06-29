@@ -5250,7 +5250,9 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
     await fetch('/api/config/fee-history', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ history: newHistory }) });
   };
 
-  const drivers = allUsers.filter(u => u.role === 'DRIVER' || u.role === 'MANAGER');
+  // Include SUPER_ADMIN so the owner (Mike) appears in the Team Management roster,
+  // matching the delivery-assignment dropdown where the owner is already assignable.
+  const drivers = allUsers.filter(u => u.role === 'DRIVER' || u.role === 'MANAGER' || u.role === 'SUPER_ADMIN');
   const currentDefaultDriver = allUsers.find(u => u.id === defaultDriverId) || allUsers.find(u => u.name === 'Katie');
 
   // Handlers
