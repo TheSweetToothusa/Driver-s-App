@@ -979,6 +979,10 @@ const OrderDetail: React.FC<{
   // stamp AND saved as completedAt, so a delivery logged late still shows its true time.
   const [customTime, setCustomTime] = useState('');
   const [rawPhoto, setRawPhoto] = useState<string | null>(null);
+  // Admins can re-open the proof-of-delivery capture on an already-delivered order
+  // (e.g. to add a photo that was missed and email the customer) without the
+  // status-toggle dance. Reveals the same capture card used for normal deliveries.
+  const [recaptureMode, setRecaptureMode] = useState(false);
 
   // When opening a delivered order, fetch fresh POD data from DB
   useEffect(() => {
@@ -1934,7 +1938,7 @@ const OrderDetail: React.FC<{
         )}
 
         {/* ── ZONE 3: PROOF OF DELIVERY — Matching card style ── */}
-        {!isCompleted && (
+        {(!isCompleted || recaptureMode) && (
           <div style={{ padding: '0 16px', marginTop: 16 }}>
             <input type="file" accept="image/*" ref={fileRef} onChange={handlePhoto} className="hidden" />
             <input type="file" accept="image/*" capture="environment" ref={cameraRef} onChange={handlePhoto} className="hidden" />
@@ -2107,6 +2111,19 @@ const OrderDetail: React.FC<{
             )}
 
             {/* Admin actions */}
+            {role === 'SUPER_ADMIN' && order.status === DeliveryStatus.DELIVERED && !recaptureMode && (
+              <button
+                onClick={() => setRecaptureMode(true)}
+                style={{ width: '100%', padding: '14px', borderRadius: 12, border: '1px solid #E5E7EB', background: '#F9FAFB', color: '#374151', fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, cursor: 'pointer' }}
+              >
+                <Camera size={16} /> Add / re-send proof of delivery
+              </button>
+            )}
+            {recaptureMode && (
+              <p style={{ fontSize: 12, color: '#6B7280', textAlign: 'center', marginTop: 4 }}>
+                Scroll down to add the photo and set the delivery time, then tap Mark Delivered.
+              </p>
+            )}
 
           </div>
           );
