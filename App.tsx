@@ -637,7 +637,7 @@ const OrderCard: React.FC<{ order: Delivery; role: AppRole; onTap: () => void; i
               className="flex-1 bg-stone-50 border border-stone-200 rounded-lg px-2 py-1.5 text-xs font-bold outline-none text-stone-700"
             >
               <option value="">👤 {order.driverName || 'Assign driver...'}</option>
-              {allUsers?.filter(u => (u.role === 'DRIVER' || u.role === 'MANAGER') && u.isActive).map(u => (
+              {allUsers?.filter(u => (u.role === 'DRIVER' || u.role === 'MANAGER' || u.role === 'SUPER_ADMIN') && u.isActive).map(u => (
                 <option key={u.id} value={u.id}>{u.name}</option>
               ))}
             </select>
@@ -2503,7 +2503,7 @@ const OrdersView: React.FC<OrdersViewProps> = ({
 
     const uniqueOrderDrivers = [
       { id: 'ALL', name: 'All Drivers' },
-      ...allUsers.filter(u => (u.role === 'DRIVER' || u.role === 'MANAGER') && u.isActive).map(u => ({ id: u.id, name: u.name }))
+      ...allUsers.filter(u => (u.role === 'DRIVER' || u.role === 'MANAGER' || u.role === 'SUPER_ADMIN') && u.isActive).map(u => ({ id: u.id, name: u.name }))
     ];
 
     // All orders — filtered by Open/Closed status toggle
@@ -2849,7 +2849,7 @@ const OrdersView: React.FC<OrdersViewProps> = ({
                 setManualForm(f => ({ ...f, driverId: e.target.value, driverName: u?.name || '' }));
               }} className="w-full border border-stone-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-black bg-white">
                 <option value="">— Select Driver —</option>
-                {allUsers.filter(u => (u.role === 'DRIVER' || u.role === 'MANAGER') && u.isActive).map(u => (
+                {allUsers.filter(u => (u.role === 'DRIVER' || u.role === 'MANAGER' || u.role === 'SUPER_ADMIN') && u.isActive).map(u => (
                   <option key={u.id} value={u.id}>{u.name}</option>
                 ))}
               </select>
@@ -3390,7 +3390,7 @@ const ScheduleView: React.FC<{
   };
 
   const activeDrivers = useMemo(() =>
-    allUsers.filter(u => (u.role === 'DRIVER' || u.role === 'MANAGER') && u.isActive),
+    allUsers.filter(u => (u.role === 'DRIVER' || u.role === 'MANAGER' || u.role === 'SUPER_ADMIN') && u.isActive),
     [allUsers]
   );
 
@@ -5332,7 +5332,7 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
         </div>
         <select value={defaultDriverId} onChange={e => setDefaultDriverId(e.target.value)}
           className="bg-stone-50 border border-stone-200 rounded-xl px-2 py-1.5 text-sm font-bold outline-none max-w-[100px]">
-          {allUsers.filter(u => (u.role === 'DRIVER' || u.role === 'MANAGER') && u.isActive).map(u => (
+          {allUsers.filter(u => (u.role === 'DRIVER' || u.role === 'MANAGER' || u.role === 'SUPER_ADMIN') && u.isActive).map(u => (
             <option key={u.id} value={u.id}>{u.name}</option>
           ))}
         </select>
@@ -5607,7 +5607,7 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
                     <select value={feeDriverFilter} onChange={e => setFeeDriverFilter(e.target.value)}
                       className="w-full bg-white border-2 border-stone-200 rounded-xl px-4 py-3 text-base font-bold outline-none focus:border-emerald-500">
                       <option value="ALL">🚗 All Drivers</option>
-                      {allUsers.filter(u => (u.role === 'DRIVER' || u.role === 'MANAGER') && u.isActive).map(u => (
+                      {allUsers.filter(u => (u.role === 'DRIVER' || u.role === 'MANAGER' || u.role === 'SUPER_ADMIN') && u.isActive).map(u => (
                         <option key={u.id} value={u.id}>👤 {u.name}</option>
                       ))}
                     </select>
@@ -5701,7 +5701,7 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
                     }}
                       className="w-full bg-white border-2 border-stone-200 rounded-xl px-4 py-4 text-lg font-bold outline-none focus:border-emerald-500">
                       <option value="">-- Select a Driver --</option>
-                      {allUsers.filter(u => (u.role === 'DRIVER' || u.role === 'MANAGER') && u.isActive).map(u => (
+                      {allUsers.filter(u => (u.role === 'DRIVER' || u.role === 'MANAGER' || u.role === 'SUPER_ADMIN') && u.isActive).map(u => (
                         <option key={u.id} value={u.id}>{u.name}</option>
                       ))}
                     </select>
@@ -6242,7 +6242,7 @@ const BulkProjectsView: React.FC<{
   };
 
   // Computed
-  const drivers = useMemo(() => allUsers.filter(u => (u.role === 'DRIVER' || u.role === 'MANAGER') && u.isActive), [allUsers]);
+  const drivers = useMemo(() => allUsers.filter(u => (u.role === 'DRIVER' || u.role === 'MANAGER' || u.role === 'SUPER_ADMIN') && u.isActive), [allUsers]);
 
   const stats = useMemo(() => {
     const nonClosed = orders.filter(o => o.status !== 'CLOSED');
@@ -7173,7 +7173,7 @@ export default function App() {
                 onChange={e => { const u = allUsers.find(u => u.id === e.target.value); setGlobalManualForm(f => ({ ...f, driverId: e.target.value, driverName: u?.name || '' })); }}
                 className="w-full border-2 border-stone-200 rounded-xl px-4 py-3 text-sm font-black outline-none focus:border-black bg-white">
                 <option value="">— Select Driver —</option>
-                {allUsers.filter(u => (u.role === 'DRIVER' || u.role === 'MANAGER') && u.isActive).map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                {allUsers.filter(u => (u.role === 'DRIVER' || u.role === 'MANAGER' || u.role === 'SUPER_ADMIN') && u.isActive).map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
               </select>
 
               {globalManualError && <p className="text-sm font-black text-red-600 text-center bg-red-50 rounded-xl py-3">{globalManualError}</p>}

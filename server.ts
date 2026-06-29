@@ -324,6 +324,13 @@ async function initDB() {
       changed = true;
       console.log('Renamed user id super_admin → mike_b');
     }
+    // One-shot cleanup: remove demo seed drivers. "driver_mike" collided by name
+    // with the real owner (mike_b) and made the "Viewing: Mike" filter resolve to
+    // the wrong account, so Mike's deliveries appeared empty.
+    for (const demoId of ['driver_mike', 'driver_smith']) {
+      const i = users.findIndex((u: any) => u.id === demoId);
+      if (i !== -1) { users.splice(i, 1); changed = true; console.log(`Removed demo driver ${demoId}`); }
+    }
     const mikey = users.find((u: any) => u.id === 'mike_b');
     const katie = users.find((u: any) => u.id === 'manager_1');
     if (mikey && mikey.name !== 'Mike') {
@@ -2331,7 +2338,22 @@ async function startServer() {
     console.log(`⭐ Review click logged: order ${orderId}, ${stars} stars`);
 
     // Only 5-star taps go to Google — protects the public review average.
+    // Alert Mikey first (fire-and-forget) so every 5★ is visible, then redirect.
     if (stars >= 5) {
+      const displayId = displayOrderNumber || orderId;
+      sendEmail(
+        'raiver72@gmail.com',
+        `5★ rating — Order #${displayId}`,
+        [
+          `Rating: Excellent (5★)`,
+          `Order: #${displayId}`,
+          `Internal ID: ${orderId}`,
+          `Sent to Google: yes`,
+          `Clicked: ${new Date().toISOString()}`,
+        ].join('\n')
+      ).catch((e) => {
+        console.error('5-star alert email failed (non-fatal):', e?.message || e);
+      });
       return res.redirect(302, 'https://g.page/r/CYK42rbwqajQEAE/review');
     }
 
@@ -2872,6 +2894,54 @@ async function startServer() {
     }
 
     res.json(result);
+  });
+
+  // ── REVIEW LOG (read-only: see who tapped which star for an order) ───────────
+  // Accepts the customer-facing order number (e.g. 35785) OR the internal
+  // Shopify order ID. The review_clicks KV key uses the internal ID, so we
+  // resolve the friendly number via Shopify first, then read the log.
+  app.get('/api/debug/review-log/:order', async (req, res) => {
+    const raw = String(req.params.order || '').replace(/^#+/, '').trim();
+    const result: any = { input: raw };
+    try {
+      const candidateIds: string[] = [];
+      if (/^\d{10,}$/.test(raw)) candidateIds.push(raw); // already looks like an internal Shopify id
+
+      // Resolve order number -> internal Shopify order id.
+      try {
+        const url = `https://${SHOPIFY_STORE_URL}/admin/api/2025-01/orders.json?name=${encodeURIComponent(raw)}&status=any&limit=5`;
+        const resp = await fetch(url, { headers: { 'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN, 'Content-Type': 'application/json' } });
+        const data = await resp.json();
+        const order = data.orders?.[0];
+        if (order) {
+          result.resolvedOrderName = order.name;
+          result.resolvedOrderId = String(order.id);
+          candidateIds.push(String(order.id));
+        }
+      } catch (e: any) { result.shopifyLookupError = String(e?.message || e); }
+
+      result.logs = [];
+      for (const id of [...new Set(candidateIds)]) {
+        const log: any = await getKV(`review_clicks:${id}`);
+        if (log) result.logs.push({ orderId: id, ...log });
+      }
+
+      const allClicks = result.logs.flatMap((l: any) => Array.isArray(l.clicks) ? l.clicks : []);
+      const completed = allClicks.find((c: any) => c?.completed === true);
+      result.summary = {
+        totalClicks: allClicks.length,
+        completed: completed
+          ? { stars: completed.stars, type: completed.type, timestamp: completed.timestamp }
+          : null,
+        whereItWent: completed
+          ? (completed.stars >= 5
+              ? 'Redirected to Google review page — no internal record kept. Check your Google Business reviews.'
+              : '1-4★ feedback was emailed to raiver72@gmail.com. Check that inbox (and spam).')
+          : 'No completed review found for this order.'
+      };
+
+      res.json(result);
+    } catch (e: any) { res.status(500).json({ error: String(e?.message || e) }); }
   });
 
   // ── MANUAL ORDERS ───────────────────────────────────────────────────────────
