@@ -5437,7 +5437,9 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
           ═══════════════════════════════════════════════════════════════════ */}
       {activeNav === null && (
         <>
-          <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+          {/* No overflow-hidden: the row action menus (Delete, etc.) must be able to
+              extend past the card edge instead of being clipped. */}
+          <div className="bg-white rounded-2xl shadow-sm">
             <div className="px-4 py-3 border-b border-stone-100">
               <p className="text-[10px] font-black uppercase text-stone-500 tracking-wider">Team Management</p>
             </div>
