@@ -1190,6 +1190,24 @@ async function startServer() {
     res.json({ success: true });
   });
 
+  app.delete("/api/users/:id", async (req, res) => {
+    const users = await readUsersDB();
+    const idx = users.findIndex((u: any) => u.id === req.params.id);
+    if (idx === -1) return res.status(404).json({ error: "Not found" });
+    // Guard: never delete the configured default driver — auto-assign relies on it
+    // ("All orders default to Katie — never show Not Assigned").
+    try {
+      const dd = await getKV('default_driver');
+      const defaultId = dd ? JSON.parse(dd).driverId : null;
+      if (defaultId && users[idx].id === defaultId) {
+        return res.status(409).json({ error: "This driver is the default driver. Set a different default driver first, then delete." });
+      }
+    } catch { /* if config unreadable, fall through and allow delete */ }
+    const removed = users.splice(idx, 1)[0];
+    await writeUsers(users);
+    res.json({ success: true, id: removed.id });
+  });
+
   // ── HEALTH CHECK (keeps server warm) ───────────────────────────────────────
   app.get("/api/health", (_req, res) => {
     const mem = getMemoryMB();

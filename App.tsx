@@ -5331,6 +5331,19 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
     alert('PIN reset!');
   };
 
+  const handleDeleteDriver = async (user: UserAccount) => {
+    setDriverMenuOpen(null);
+    // Optimistically remove immediately — no confirmation, gone for good.
+    setAllUsers(prev => prev.filter(u => u.id !== user.id));
+    const res = await fetch(`/api/users/${user.id}`, { method: 'DELETE' });
+    if (!res.ok) {
+      // Delete was blocked (e.g. default driver) — restore the row so the list stays truthful.
+      const data = await res.json().catch(() => ({}));
+      alert(data.error || 'Could not remove this driver.');
+      setAllUsers(prev => prev.some(u => u.id === user.id) ? prev : [...prev, user]);
+    }
+  };
+
   const handleZipLookup = () => {
     const fee = DELIVERY_FEES[feeZip];
     setFeeResult(fee !== undefined ? fee : -1);
@@ -5465,6 +5478,12 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
                             className="w-full px-4 py-2 text-left text-sm font-medium text-stone-700">
                             Change PIN
                           </button>
+                          {u.id !== currentUser.id && (
+                            <button onClick={() => handleDeleteDriver(u)}
+                              className="w-full px-4 py-2 text-left text-sm font-medium text-red-600 border-t border-stone-100">
+                              Delete
+                            </button>
+                          )}
                         </div>
                       )}
                     </div>
