@@ -221,6 +221,14 @@ Before every push:
 3. `git add -A && git commit -m "..." && git push origin main`
 4. Tell Mikey: "Deploy via Render Dashboard → Manual Deploy → Deploy Latest Commit"
 
+**After every deploy (MANDATORY — the July 2026 memory-limit outage happened because no one ever checked):**
+5. `curl -s https://driver-s-app.onrender.com/api/health` — confirm `status: ok` and memory `rss` is roughly 100–160 MB. If rss ≥ 300 MB, something deployed is leaking or hoarding memory — investigate before ending the session. The instance dies at 512 MB.
+
+**Memory rules (this app runs on a 512 MB Render instance):**
+- Never store images/base64 blobs in the database — photos go to Cloudflare, only the filename/key goes in Postgres
+- Never import dev-only dependencies (vite, etc.) statically in server.ts — they load into production memory; use dynamic import inside the dev-only block
+- Anything that accumulates (photos, logs, queues) needs retention or bounds AT WRITE TIME — a daily 7-day photo retention sweep lives in server.ts (`cleanupOldPodPhotos`); do not remove it
+
 ---
 
 ## Current Known Issues / Pending Work
