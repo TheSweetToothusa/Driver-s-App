@@ -1,5 +1,4 @@
 import express from "express";
-import { createServer as createViteServer } from "vite";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -7,7 +6,7 @@ import { config } from "dotenv";
 import pkg from 'pg';
 const { Pool } = pkg;
 import nodemailer from 'nodemailer';
-import { S3Client, PutObjectCommand, GetObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, GetObjectCommand, HeadObjectCommand, ListObjectsV2Command, DeleteObjectsCommand } from '@aws-sdk/client-s3';
 
 config({ path: '.env.local' });
 
@@ -138,6 +137,71 @@ async function r2KeyExists(key: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+// --- Photo retention: delivery photos are only kept for 7 days ---
+// Runs daily (and once on boot). Two jobs:
+//   1. Delete Cloudflare objects older than the cutoff (the key embeds the
+//      date: photos/2026-04-27/35416.jpg).
+//   2. Strip photo/signature data from old pod:* rows directly in SQL — the
+//      legacy base64 blobs (2-3 MB each) never enter Node memory. Those blobs
+//      are what pushed the Render instance over its memory limit.
+// Delivery metadata (who/when/notes) is kept forever; only images are removed.
+const POD_PHOTO_RETENTION_DAYS = 7;
+
+async function cleanupOldPodPhotos(): Promise<{ r2Deleted: number; dbRowsStripped: number; errors: string[] }> {
+  const summary = { r2Deleted: 0, dbRowsStripped: 0, errors: [] as string[] };
+  const cutoffMs = Date.now() - POD_PHOTO_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+  const cutoffDate = new Date(cutoffMs).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }); // YYYY-MM-DD
+  const cutoffIso = new Date(cutoffMs).toISOString();
+
+  if (R2) {
+    for (const prefix of ['photos/', 'signatures/']) {
+      try {
+        let token: string | undefined;
+        do {
+          const page = await R2.send(new ListObjectsV2Command({ Bucket: R2_BUCKET, Prefix: prefix, ContinuationToken: token }));
+          const oldKeys = (page.Contents || [])
+            .map(o => o.Key || '')
+            .filter(k => {
+              const m = k.match(/^[a-z]+\/(\d{4}-\d{2}-\d{2})\//);
+              return !!m && m[1] < cutoffDate;
+            });
+          if (oldKeys.length > 0) {
+            await R2.send(new DeleteObjectsCommand({
+              Bucket: R2_BUCKET,
+              Delete: { Objects: oldKeys.map(Key => ({ Key })), Quiet: true },
+            }));
+            summary.r2Deleted += oldKeys.length;
+          }
+          token = page.IsTruncated ? page.NextContinuationToken : undefined;
+        } while (token);
+      } catch (e: any) {
+        summary.errors.push(`Cloudflare ${prefix}: ${e?.message || e}`);
+      }
+    }
+  }
+
+  if (pool) {
+    try {
+      const r = await pool.query(
+        `UPDATE kv_store
+         SET value = (value::jsonb - 'photo' - 'confirmationPhoto' - 'signature' - 'confirmationSignature' - 'photoR2Key' - 'signatureR2Key')::text,
+             updated_at = NOW()
+         WHERE key LIKE 'pod:%'
+           AND (value::jsonb ->> 'completedAt') ~ '^\\d{4}-\\d{2}-\\d{2}'
+           AND (value::jsonb ->> 'completedAt') < $1
+           AND value::jsonb ?| array['photo','confirmationPhoto','signature','confirmationSignature','photoR2Key','signatureR2Key']`,
+        [cutoffIso]
+      );
+      summary.dbRowsStripped = r.rowCount || 0;
+    } catch (e: any) {
+      summary.errors.push(`DB: ${e?.message || e}`);
+    }
+  }
+
+  console.log(`🧹 Photo retention (${POD_PHOTO_RETENTION_DAYS}d): ${summary.r2Deleted} Cloudflare files deleted, ${summary.dbRowsStripped} DB rows stripped${summary.errors.length ? ' — errors: ' + summary.errors.join('; ') : ''}`);
+  return summary;
 }
 
 // --- File paths (fallback if no DB) ---
@@ -931,6 +995,10 @@ async function startServer() {
   const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000;
   app.use(express.json({ limit: '10mb' })); // Reduced from 50mb to prevent memory spikes
   app.use(express.urlencoded({ extended: true, limit: '100kb' })); // form posts from the review feedback page
+
+  // Photo retention: sweep once shortly after boot, then every 24 hours.
+  setTimeout(() => { cleanupOldPodPhotos().catch(e => console.error('photo cleanup error:', e)); }, 30_000);
+  setInterval(() => { cleanupOldPodPhotos().catch(e => console.error('photo cleanup error:', e)); }, 24 * 60 * 60 * 1000);
 
   // ───────────────────────────────────────────────────────────────────────
   // STOREFRONT CHAT (public) — powers the customer chat widget on thesweettooth.com
@@ -3059,6 +3127,16 @@ async function startServer() {
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
+  // Manual trigger for the 7-day photo retention sweep (same job that runs
+  // daily). Returns counts so you can see what it removed.
+  app.post('/api/admin/cleanup-old-photos', async (_req, res) => {
+    try {
+      res.json(await cleanupOldPodPhotos());
+    } catch (e: any) {
+      res.status(500).json({ error: String(e?.message || e) });
+    }
+  });
+
   // One-shot recovery: find POD records that are missing photoR2Key/signatureR2Key
   // but whose photo DID make it to Cloudflare (the DB write failed after the R2
   // upload succeeded). For each orphan, probe the expected R2 keys and patch the
@@ -3179,6 +3257,9 @@ async function startServer() {
   // ── STATIC / VITE ───────────────────────────────────────────────────────────
 
   if (process.env.NODE_ENV !== "production") {
+    // Vite is dev-only — dynamic import keeps the whole build toolchain out of
+    // production memory (it was ~40+ MB of permanent baseline on Render).
+    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({ server: { middlewareMode: true }, appType: "spa" });
     app.use(vite.middlewares);
   // One-time migration: rename "Mikey" to "Mike" in all POD records and Shopify tags
