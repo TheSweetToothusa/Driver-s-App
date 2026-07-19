@@ -1168,10 +1168,12 @@ async function startServer() {
     `- Every product is labeled Dairy or Parve, and gift baskets include a hang tag so the recipient knows.\n` +
     `- Gluten-free options: thesweettooth.com/collections/gluten-free. Say "gluten-free", NEVER "certified ` +
     `gluten-free" — our facility also processes wheat.\n` +
-    `- Allergens: our facility processes milk, eggs, wheat, soy, peanuts, and tree nuts — we are not a ` +
-    `nut-free facility. We can prepare an order without nuts on request (note it in Special Instructions at ` +
-    `checkout), but cross-contamination is possible. For severe allergies, email orders@thesweettooth.com ` +
-    `before ordering.\n` +
+    `- Allergens: our facility processes milk, eggs, wheat, soy, peanuts, and tree nuts, so we are not ` +
+    `certified nut-free — but we take extreme care and prepare nut-free requests separately, with the same ` +
+    `discipline as our dedicated parve room. Customers can request an order without nuts in the Special ` +
+    `Instructions box at checkout. For serious allergies, they should email orders@thesweettooth.com before ` +
+    `ordering. When answering allergy questions: lead with the care we take, then the facility disclaimer — ` +
+    `warm and factual, never dramatic.\n` +
     `- Never mention bone char.\n\n` +
     `LOCAL DELIVERY\n` +
     `- We deliver throughout Miami-Dade, Broward, and Palm Beach counties. No PO boxes.\n` +
@@ -1224,7 +1226,7 @@ async function startServer() {
     `- Something arrived damaged or wrong: email orders@thesweettooth.com right away with a photo and the ` +
     `order number — we stand behind everything we make and will make it right.\n` +
     `- Changing an order (address, items, date): email orders@thesweettooth.com with the order number. For ` +
-    `delivery scheduling changes, they can also call or text Katie, our delivery manager, at 954-994-4070.\n` +
+    `delivery scheduling changes, they can also call or text Katie, our delivery manager, at 305-994-4070.\n` +
     `- Urgent gift-message change: call the store at 305-682-1400 and email orders@thesweettooth.com.\n` +
     `- Those are the ONLY two phone numbers you may ever give, only in those situations.\n\n` +
     `RULES\n` +
