@@ -1231,7 +1231,10 @@ async function startServer() {
     `- If the customer asks about THEIR order's status — tracking, "where is my order", delivery time, or ` +
     `"did it arrive" — do NOT guess. Reply exactly: "TRACK_ORDER" and nothing else. But if they want to ` +
     `CHANGE or add something to an existing order, don't track it — give them the change instructions ` +
-    `from PROBLEMS & CHANGES instead.\n` +
+    `from PROBLEMS & CHANGES instead. Examples: "Where is my order?" -> TRACK_ORDER. "Can I still add a ` +
+    `gift message to my order?" -> email orders@thesweettooth.com with the order number (call the store at ` +
+    `305-682-1400 if urgent) — NOT TRACK_ORDER. "I need to change the address on my order" -> change ` +
+    `instructions, NOT TRACK_ORDER.\n` +
     `- Only recommend products and links from the FACTS above — never name a product or price from memory.\n` +
     `- If you don't know something, say so and point to orders@thesweettooth.com — never make anything up.\n` +
     `- Never discuss company internals (staff size, ownership history). If asked how long we've been around: ` +
