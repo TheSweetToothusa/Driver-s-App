@@ -1148,6 +1148,26 @@ async function startServer() {
            `You'll get your scheduled delivery day shortly. If you need anything, you can ${phoneClause}.`;
   }
 
+  // Build the /track response; when the order is delivered and a POD photo exists,
+  // offer to resend the confirmation email (the widget switches into resend mode).
+  async function sfTrackResponse(o: any, prefix = '') {
+    const reply = prefix + sfBuildStatus(o);
+    const status = (sfTag(o, 'st_status:') || '').toUpperCase();
+    if (status === 'DELIVERED' || status === 'COMPLETE') {
+      try {
+        const pod = await readPodOrder(String(o.id));
+        if (pod && (pod.photoR2Key || pod.photo)) {
+          return {
+            status: 'ok',
+            reply: reply + " Didn't get the confirmation? Type the best email address right here and I'll resend it with the photo now.",
+            canResend: true,
+          };
+        }
+      } catch {}
+    }
+    return { status: 'ok', reply };
+  }
+
   app.post('/api/storefront/track', async (req: any, res: any) => {
     try {
       const order = (req.body.order || '').trim();
@@ -1158,7 +1178,7 @@ async function startServer() {
         const matches = await sfFindByContact(order);
         if (!matches.length) return res.json({ status: 'not_found', reply: `I couldn't find a recent order under that ${order.includes('@') ? 'email' : 'phone number'}. 🤔 Double-check it matches what you used at checkout — or text our delivery manager Katie at ${KATIE_PHONE} and she'll track it down for you.` });
         const prefix = matches.length > 1 ? `I found ${matches.length} recent orders under that contact — here's the latest. ` : '';
-        return res.json({ status: 'ok', reply: prefix + sfBuildStatus(matches[0]) });
+        return res.json(await sfTrackResponse(matches[0], prefix));
       }
       const o = await sfFetchOrder(order);
       if (!o) {
@@ -1167,17 +1187,105 @@ async function startServer() {
           const matches = await sfFindByContact(contact);
           if (matches.length) {
             const prefix = matches.length > 1 ? `That order number didn't match, but I found ${matches.length} recent orders under your contact — here's the latest. ` : "That order number didn't match, but I found your order by contact. ";
-            return res.json({ status: 'ok', reply: prefix + sfBuildStatus(matches[0]) });
+            return res.json(await sfTrackResponse(matches[0], prefix));
           }
         }
         return res.json({ status: 'not_found', reply: "I couldn't find an order with that number. 🤔 Double-check it against your confirmation email — or share the email or phone number you used at checkout and I'll look it up that way." });
       }
       if (!contact) return res.json({ status: 'needs_contact', reply: "Got it! To pull up your order securely, what's the email or phone number you used at checkout?" });
       if (!sfContactMatches(o, contact)) return res.json({ status: 'mismatch', reply: "Hmm, that email/phone doesn't match this order number. Please use the exact email or phone from your checkout — or send either one on its own and I'll find the order for you." });
-      return res.json({ status: 'ok', reply: sfBuildStatus(o) });
+      return res.json(await sfTrackResponse(o));
     } catch (e) {
       console.error('storefront/track error', e);
       return res.json({ status: 'error', reply: "Sorry, I hit a snag looking that up. Please try again in a moment, or reach our team and we'll help right away." });
+    }
+  });
+
+  // ── Customer self-serve: resend the delivery confirmation email (with POD photo) ──
+  // Memory-safe by design: one resend at a time (sfResendBusy), one photo buffered
+  // transiently (~2-3 MB), max 5 sends/day per order via email_log timestamps.
+  let sfResendBusy = false;
+  app.post('/api/storefront/resend-pod', async (req: any, res: any) => {
+    try {
+      const order = (req.body.order || '').trim();
+      const contact = (req.body.contact || '').trim();
+      const email = (req.body.email || '').trim();
+      if (!/^\S+@\S+\.\S+$/.test(email)) return res.json({ status: 'bad_email', reply: "That doesn't look like a complete email address — mind re-typing it?" });
+
+      // Resolve + verify the order exactly like /track does
+      let o: any = null;
+      if (order && sfLooksLikeContact(order)) o = (await sfFindByContact(order))[0] || null;
+      else if (order) o = await sfFetchOrder(order);
+      if (!o && contact && sfLooksLikeContact(contact)) o = (await sfFindByContact(contact))[0] || null;
+      if (!o) return res.json({ status: 'not_found', reply: `I couldn't find that order. Text our delivery manager Katie at ${KATIE_PHONE} and she'll get you the confirmation.` });
+      const verified = sfContactMatches(o, contact) || (sfLooksLikeContact(order) && sfContactMatches(o, order));
+      if (!verified) return res.json({ status: 'mismatch', reply: 'I couldn\'t verify that order. Please start over with the email or phone number you used at checkout.' });
+
+      const pod = await readPodOrder(String(o.id));
+      if (!pod || pod.__dbError || (!pod.photoR2Key && !pod.photo)) {
+        return res.json({ status: 'no_pod', reply: `I don't have a delivery photo on file for order ${o.name} — it may be older than 7 days. Text Katie at ${KATIE_PHONE} and she'll help right away.` });
+      }
+
+      const orderNum = (o.name || '').replace(/^#/, '') || String(o.id);
+      try {
+        const log: any = await getKV(`email_log:${orderNum}`);
+        const today = new Date().toISOString().slice(0, 10);
+        const sentToday = (log?.sends || []).filter((s: any) => s?.success === true && String(s?.timestamp || '').slice(0, 10) === today).length;
+        if (sentToday >= 5) return res.json({ status: 'limit', reply: `That confirmation has already been resent several times today. If it's still not arriving, text Katie at ${KATIE_PHONE}.` });
+      } catch {}
+
+      if (sfResendBusy) return res.json({ status: 'busy', reply: 'One moment — please try that again in a few seconds.' });
+      sfResendBusy = true;
+      try {
+        let photoB64: string | undefined;
+        if (pod.photoR2Key && R2) {
+          const obj = await R2.send(new GetObjectCommand({ Bucket: R2_BUCKET, Key: pod.photoR2Key }));
+          const bytes = await (obj.Body as any).transformToByteArray();
+          photoB64 = Buffer.from(bytes).toString('base64');
+        } else if (pod.photo) {
+          photoB64 = pod.photo;
+        }
+        const deliveryTime = new Date(pod.completedAt || pod.submittedAt || Date.now()).toLocaleString('en-US', {
+          timeZone: 'America/New_York',
+          weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
+          hour: 'numeric', minute: '2-digit', hour12: true
+        });
+        let isGift = true;
+        let shippingRecipientName: string | null = null;
+        try {
+          const det = await detectGiftFromShopify(String(o.id));
+          isGift = det.isGift;
+          shippingRecipientName = det.shippingRecipientName;
+        } catch {}
+        const receiverName = pod.giftReceiverName || shippingRecipientName || 'the recipient';
+        const { subject, text, html } = buildDeliveryConfirmationEmail({
+          variant: isGift ? 'gift' : 'self',
+          receiverName,
+          deliveryTime,
+          orderId: String(o.id),
+          orderNumber: orderNum,
+          baseUrl: getAppBaseUrl(req),
+          hasPhoto: !!photoB64
+        });
+        const ok = await sendEmail(
+          email,
+          subject,
+          text,
+          photoB64,
+          photoB64 ? `delivery-${o.id}.jpg` : undefined,
+          html,
+          photoB64 ? 'proof-photo' : undefined
+        );
+        await logEmailSend(orderNum, email, subject, ok);
+        if (ok) return res.json({ status: 'ok', reply: `Done! The delivery confirmation for order ${o.name} — photo included — is on its way to ${email}. Give it a minute, and check spam if you don't see it.` });
+        return res.json({ status: 'error', reply: `I couldn't send that just now. Please try again in a few minutes, or text Katie at ${KATIE_PHONE}.` });
+      } finally {
+        sfResendBusy = false;
+      }
+    } catch (e) {
+      sfResendBusy = false;
+      console.error('storefront/resend-pod error', e);
+      return res.json({ status: 'error', reply: 'Sorry, I hit a snag. Please try again in a moment.' });
     }
   });
 
@@ -1901,6 +2009,14 @@ async function startServer() {
     await streamR2Object(res, pod.signatureR2Key);
   });
 
+  // Checks & balances: exactly what confirmation text went out for an order (Twilio sends).
+  app.get("/api/sms-log/:orderNumber", async (req, res) => {
+    try {
+      const log = await getKV(`sms_log:${req.params.orderNumber}`);
+      res.json({ log: log || { sends: [] } });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
   app.post("/api/pod", async (req, res) => {
     const { orderId, photo, signature, notes, completedAt, status, driverId, driverName, failureReason, isManual, customerEmail, giftReceiverName, giftSenderName, address, orderNumber } = req.body;
 
@@ -2176,6 +2292,77 @@ async function startServer() {
           }
         } catch (emailErr) {
           console.error('Auto-send email error (non-fatal):', emailErr);
+        }
+      }
+
+      // ── AUTO-SEND DELIVERY CONFIRMATION TEXT (Twilio) ───────────────────────────────
+      // Inert until TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN / TWILIO_FROM are set in env.
+      // Memory-safe: the photo is never loaded here — Twilio fetches it itself from the
+      // public /api/pod/:orderId/photo proxy URL. Audit trail in kv sms_log:{orderNumber}.
+      const TW_SID = process.env.TWILIO_ACCOUNT_SID || '';
+      const TW_TOKEN = process.env.TWILIO_AUTH_TOKEN || '';
+      const TW_FROM = process.env.TWILIO_FROM || '';
+      if (status === 'DELIVERED' && TW_SID && TW_TOKEN && TW_FROM) {
+        try {
+          const smsKey = `sms_log:${String(orderNumber || orderId)}`;
+          const smsLog: any = (await getKV(smsKey)) || { sends: [] };
+          if (!Array.isArray(smsLog.sends)) smsLog.sends = [];
+          const alreadyTexted = smsLog.sends.some((s: any) => s?.success === true && s?.kind === 'pod');
+          if (alreadyTexted) {
+            console.log(`📱 POD text already sent for ${orderId} — skipping duplicate`);
+          } else {
+            // Text the buyer (the person who placed the order) — same person the email goes to.
+            let toPhone = '';
+            if (!isManual) {
+              try {
+                const resp = await fetch(`https://${SHOPIFY_STORE_URL}/admin/api/2025-01/orders/${orderId}.json?fields=phone,billing_address,customer`, {
+                  headers: { 'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN },
+                });
+                const od: any = await resp.json();
+                const ord = od.order || {};
+                toPhone = ord.phone || ord.billing_address?.phone || ord.customer?.phone || '';
+              } catch {}
+            }
+            const digits = String(toPhone || '').replace(/\D/g, '');
+            if (digits.length >= 10) {
+              const e164 = digits.length === 10 ? `+1${digits}` : `+${digits}`;
+              const deliveredAt = new Date(completedAt || Date.now()).toLocaleString('en-US', {
+                timeZone: 'America/New_York', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true
+              });
+              const hasPodPhoto = !!photo;
+              const bodyText = `The Sweet Tooth: your order #${orderNumber || orderId} was delivered ${deliveredAt}.` +
+                (hasPodPhoto ? ' Timestamped photo confirmation attached.' : '') +
+                ' Questions? (305) 682-1400';
+              const params = new URLSearchParams({ To: e164, From: TW_FROM, Body: bodyText });
+              const baseUrl = getAppBaseUrl(req);
+              if (hasPodPhoto && baseUrl) params.append('MediaUrl', `${baseUrl}/api/pod/${orderId}/photo`);
+              const tw = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${TW_SID}/Messages.json`, {
+                method: 'POST',
+                headers: {
+                  Authorization: 'Basic ' + Buffer.from(`${TW_SID}:${TW_TOKEN}`).toString('base64'),
+                  'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: params.toString(),
+              });
+              const twData: any = await tw.json().catch(() => ({}));
+              const twOk = tw.ok && !twData.error_code;
+              smsLog.sends.push({
+                kind: 'pod', to: e164, body: bodyText, withPhoto: hasPodPhoto,
+                sid: twData.sid || null, success: twOk,
+                error: twOk ? null : (twData.message || `HTTP ${tw.status}`),
+                timestamp: new Date().toISOString(),
+              });
+              if (smsLog.sends.length > 20) smsLog.sends = smsLog.sends.slice(-20);
+              await setKV(smsKey, smsLog);
+              console.log(twOk
+                ? `✅ Auto-texted delivery confirmation to ${e164} for order ${orderId}${hasPodPhoto ? ' (with photo)' : ''}`
+                : `⚠️ Twilio send failed for ${orderId}: ${twData.message || tw.status}`);
+            } else {
+              console.log(`📱 No usable phone for order ${orderId} — skipping POD text`);
+            }
+          }
+        } catch (smsErr) {
+          console.error('Auto-send SMS error (non-fatal):', smsErr);
         }
       }
 
