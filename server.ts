@@ -1048,6 +1048,22 @@ async function startServer() {
     return phones.some((p: string) => p && sfDigits(p).slice(-10) === t10);
   }
 
+  // True when the text reads as an email or a full phone number rather than an order number
+  // (order numbers are ~5 digits; phones are 10+ digits after stripping formatting).
+  const sfLooksLikeContact = (s: string) => s.includes('@') || sfDigits(s).length >= 10;
+
+  // Contact-only lookup: scan the last 60 days of orders for an email/phone match, newest first.
+  async function sfFindByContact(contact: string) {
+    const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString();
+    const r = await fetch(`${SF_API}/orders.json?status=any&limit=250&created_at_min=${encodeURIComponent(sixtyDaysAgo)}`, {
+      headers: { 'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN },
+    });
+    const data: any = await r.json();
+    const matches = (data.orders || []).filter((o: any) => sfContactMatches(o, contact));
+    matches.sort((a: any, b: any) => (b.created_at || '').localeCompare(a.created_at || ''));
+    return matches;
+  }
+
   const sfTag = (order: any, prefix: string) => {
     const t = (order.tags || '').split(',').map((x: string) => x.trim())
       .find((x: string) => x.toLowerCase().startsWith(prefix.toLowerCase()));
@@ -1137,8 +1153,25 @@ async function startServer() {
       const order = (req.body.order || '').trim();
       const contact = (req.body.contact || '').trim();
       if (!order) return res.json({ status: 'needs_contact', reply: "Sure! What's your order number? You can find it in your confirmation email (it looks like #35955)." });
+      // Customer typed their email/phone where the order number goes — look it up by contact instead.
+      if (sfLooksLikeContact(order)) {
+        const matches = await sfFindByContact(order);
+        if (!matches.length) return res.json({ status: 'not_found', reply: `I couldn't find a recent order under that ${order.includes('@') ? 'email' : 'phone number'}. 🤔 Double-check it matches what you used at checkout — or text our delivery manager Katie at ${KATIE_PHONE} and she'll track it down for you.` });
+        const prefix = matches.length > 1 ? `I found ${matches.length} recent orders under that contact — here's the latest. ` : '';
+        return res.json({ status: 'ok', reply: prefix + sfBuildStatus(matches[0]) });
+      }
       const o = await sfFetchOrder(order);
-      if (!o) return res.json({ status: 'not_found', reply: "I couldn't find an order with that number. 🤔 Double-check it against your confirmation email — or share the email or phone number you used at checkout and I'll look it up that way." });
+      if (!o) {
+        // Order number didn't match, but a valid contact came with it — fall back to contact lookup.
+        if (contact && sfLooksLikeContact(contact)) {
+          const matches = await sfFindByContact(contact);
+          if (matches.length) {
+            const prefix = matches.length > 1 ? `That order number didn't match, but I found ${matches.length} recent orders under your contact — here's the latest. ` : "That order number didn't match, but I found your order by contact. ";
+            return res.json({ status: 'ok', reply: prefix + sfBuildStatus(matches[0]) });
+          }
+        }
+        return res.json({ status: 'not_found', reply: "I couldn't find an order with that number. 🤔 Double-check it against your confirmation email — or share the email or phone number you used at checkout and I'll look it up that way." });
+      }
       if (!contact) return res.json({ status: 'needs_contact', reply: "Got it! To pull up your order securely, what's the email or phone number you used at checkout?" });
       if (!sfContactMatches(o, contact)) return res.json({ status: 'mismatch', reply: "Hmm, that email/phone doesn't match this order number. Please use the exact email or phone from your checkout — or send either one on its own and I'll find the order for you." });
       return res.json({ status: 'ok', reply: sfBuildStatus(o) });
