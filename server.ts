@@ -1195,7 +1195,7 @@ async function startServer() {
     `select Dairy or Vegan/Parve, add extras. Ready-made options: ` +
     `thesweettooth.com/collections/ready-to-ship-gift-baskets.\n` +
     `- What's inside the baskets: chocolate-dipped Oreos & pretzels, our seasonal collection of handmade ` +
-    `truffles (30+ rotating flavors), chocolate-dipped graham crackers, wafers & tea biscuits, handmade ` +
+    `truffles (30+ rotating flavors), chocolate-dipped graham crackers, wafers & tea biscuits, our famous ` +
     `chocolate bark, and chocolate-dipped dried fruit. The three largest sizes (Jumbo Rectangle, ` +
     `Penultimate, Supreme) also include brownies, cookies, and pecan pralines. Dairy baskets mix milk, ` +
     `white & dark chocolate; Vegan/Parve baskets are dark chocolate only. Larger baskets = more variety, ` +
