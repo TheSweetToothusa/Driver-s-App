@@ -1068,6 +1068,19 @@ async function startServer() {
     const isLocal = method.includes('deliver') || (order.tags || '').toLowerCase().includes('local delivery');
     const phoneClause = `text your driver ${driver} directly at ${KATIE_PHONE}`;
 
+    if (status === 'CANCELLED') {
+      return `Our records show order ${name} was cancelled. If that doesn't look right or you have any ` +
+             `questions, email orders@thesweettooth.com and we'll sort it out right away.`;
+    }
+
+    if (method.includes('pick')) {
+      if (status === 'DELIVERED' || status === 'COMPLETE') {
+        return `Order ${name} was picked up — enjoy! If anything's not right, email orders@thesweettooth.com.`;
+      }
+      return `Order ${name} is a store-pickup order — we'll have it ready for you at 18435 NE 19th Ave, ` +
+             `North Miami Beach (Monday-Friday, 10 AM-5 PM). Questions? Email orders@thesweettooth.com.`;
+    }
+
     if (status === 'DELIVERED' || status === 'COMPLETE') {
       let when = dday ? ` on ${dday}` : '';
       const comp = sfTag(order, 'st_completed:');
@@ -1179,6 +1192,14 @@ async function startServer() {
     `- Basket Builder: thesweettooth.com/pages/build-a-basket — pick an occasion, choose from 8 core sizes, ` +
     `select Dairy or Vegan/Parve, add extras. Ready-made options: ` +
     `thesweettooth.com/collections/ready-to-ship-gift-baskets.\n` +
+    `- What's inside the baskets: chocolate-dipped Oreos & pretzels, our seasonal collection of handmade ` +
+    `truffles (30+ rotating flavors), chocolate-dipped graham crackers, wafers & tea biscuits, handmade ` +
+    `chocolate bark, and chocolate-dipped dried fruit. The three largest sizes (Jumbo Rectangle, ` +
+    `Penultimate, Supreme) also include brownies, cookies, and pecan pralines. Dairy baskets mix milk, ` +
+    `white & dark chocolate; Vegan/Parve baskets are dark chocolate only. Larger baskets = more variety, ` +
+    `not just more quantity.\n` +
+    `- Most baskets include a free chocolate occasion plaque (like "Happy Birthday"); a larger plaque is an ` +
+    `optional add-on in the Basket Builder.\n` +
     `- NEVER quote basket prices — we have sizes for a wide range of budgets; exact prices are on the site.\n` +
     `- Occasion links you may share: /collections/sympathy-shiva, /collections/birthday, ` +
     `/collections/thank-you, /collections/get-well, /collections/baby, /collections/dubai-chocolate, ` +
@@ -1207,8 +1228,10 @@ async function startServer() {
     `- Urgent gift-message change: call the store at 305-682-1400 and email orders@thesweettooth.com.\n` +
     `- Those are the ONLY two phone numbers you may ever give, only in those situations.\n\n` +
     `RULES\n` +
-    `- If the customer asks about THEIR order status, tracking, "where is my order", delivery time, or ` +
-    `"did it arrive", do NOT guess. Reply exactly: "TRACK_ORDER" and nothing else.\n` +
+    `- If the customer asks about THEIR order's status — tracking, "where is my order", delivery time, or ` +
+    `"did it arrive" — do NOT guess. Reply exactly: "TRACK_ORDER" and nothing else. But if they want to ` +
+    `CHANGE or add something to an existing order, don't track it — give them the change instructions ` +
+    `from PROBLEMS & CHANGES instead.\n` +
     `- Only recommend products and links from the FACTS above — never name a product or price from memory.\n` +
     `- If you don't know something, say so and point to orders@thesweettooth.com — never make anything up.\n` +
     `- Never discuss company internals (staff size, ownership history). If asked how long we've been around: ` +
