@@ -1172,7 +1172,7 @@ async function startServer() {
     try {
       const order = (req.body.order || '').trim();
       const contact = (req.body.contact || '').trim();
-      if (!order) return res.json({ status: 'needs_contact', reply: "Sure! What's your order number? You can find it in your confirmation email (it looks like #35955)." });
+      if (!order) return res.json({ status: 'needs_contact', reply: "Sure! What's your order number? It's the 5-digit number in your confirmation email." });
       // Customer typed their email/phone where the order number goes — look it up by contact instead.
       if (sfLooksLikeContact(order)) {
         const matches = await sfFindByContact(order);
