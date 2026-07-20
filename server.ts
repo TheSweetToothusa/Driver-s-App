@@ -1387,6 +1387,9 @@ async function startServer() {
     `anything. Only the order-tracking flow can resend a delivery confirmation.\n` +
     `- Only recommend products and links from the FACTS above — never name a product or price from memory.\n` +
     `- If you don't know something, say so and point to orders@thesweettooth.com — never make anything up.\n` +
+    `- FACTS lists what you KNOW we offer — if something isn't mentioned (a flavor, sugar-free, a service), ` +
+    `that does NOT mean we don't have it. Never say "we don't offer X" unless FACTS explicitly says so; ` +
+    `instead say you're not sure and suggest emailing info@thesweettooth.com.\n` +
     `- Never discuss company internals (staff size, ownership history). If asked how long we've been around: ` +
     `since 1979 — say it once, nothing more.\n` +
     `- Keep answers to 1-3 short sentences, then a natural next step (a link or a question) when it helps ` +
@@ -1403,14 +1406,31 @@ async function startServer() {
       if (!SF_ANTHROPIC_KEY) return res.json({ reply: 'Thanks for your message! Our team will jump in shortly.' });
       const msgs = history.slice(-8).map((h: any) => ({ role: h.role === 'assistant' ? 'assistant' : 'user', content: String(h.content || '') }));
       msgs.push({ role: 'user', content: message });
+      const nowMiami = new Date().toLocaleString('en-US', {
+        timeZone: 'America/New_York', weekday: 'long', month: 'long', day: 'numeric',
+        hour: 'numeric', minute: '2-digit', hour12: true,
+      });
+      const systemNow = SF_SYSTEM + `\n\nCURRENT TIME: It is now ${nowMiami} in Miami. Use this for the ` +
+        `2 PM same-day cutoff and store-hours questions — never ask the customer what time it is. If it's ` +
+        `past 2 PM, same-day delivery is no longer available today; offer the next delivery day instead.`;
       const r = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-api-key': SF_ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
-        body: JSON.stringify({ model: process.env.CHAT_MODEL || 'claude-haiku-4-5-20251001', max_tokens: 300, system: SF_SYSTEM, messages: msgs }),
+        body: JSON.stringify({ model: process.env.CHAT_MODEL || 'claude-haiku-4-5-20251001', max_tokens: 300, system: systemNow, messages: msgs }),
       });
       const data: any = await r.json();
       const reply = (data.content || []).filter((b: any) => b.type === 'text').map((b: any) => b.text).join('').trim();
-      if (reply.includes('TRACK_ORDER')) return res.json({ reply: "I can help track that! What's your order number?", action: 'track' });
+      if (reply.includes('TRACK_ORDER')) {
+        // Guard against the track loop: if a tracking result was just shown and the customer's
+        // message adds no new order number/contact, they're disputing it — don't restart the flow.
+        const trackResultRx = /(was delivered|scheduled for delivery|has shipped|store-pickup order|is on the way today|was cancelled)/i;
+        const recentTrack = history.slice(-4).some((h: any) => h.role === 'assistant' && trackResultRx.test(String(h.content || '')));
+        const hasNewLookupInfo = /\d{4,}|@/.test(message);
+        if (recentTrack && !hasNewLookupInfo) {
+          return res.json({ reply: 'I hear you — the status above came straight from our live order system, so it\'s current. If it doesn\'t match what you\'re expecting, text Katie, our delivery manager, at 305-994-4070 and she\'ll check on it personally.' });
+        }
+        return res.json({ reply: "I can help track that! What's your order number?", action: 'track' });
+      }
       return res.json({ reply: reply || 'Thanks for your message! Our team will follow up shortly.' });
     } catch (e) {
       console.error('storefront/chat error', e);
