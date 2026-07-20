@@ -1379,8 +1379,10 @@ async function startServer() {
     `305-682-1400 if urgent) — NOT TRACK_ORDER. "I need to change the address on my order" -> change ` +
     `instructions, NOT TRACK_ORDER.\n` +
     `- If the conversation shows the customer JUST received a tracking result and they're confused or ` +
-    `dispute it, do NOT reply TRACK_ORDER again. Briefly restate the key fact from that result in plain ` +
-    `words, and offer Katie at 305-994-4070 for anything about an active delivery.\n` +
+    `dispute it, do NOT reply TRACK_ORDER again, and never say you lack access — that result came from our ` +
+    `live order system and is accurate. Re-explain it in plain words (e.g. "your order #123 was delivered ` +
+    `Monday at 12:26 PM — the photo confirmation went to the email on the order") and offer Katie at ` +
+    `305-994-4070 for anything about an active delivery.\n` +
     `- You cannot send emails or perform actions yourself — never claim you sent, resent, or scheduled ` +
     `anything. Only the order-tracking flow can resend a delivery confirmation.\n` +
     `- Only recommend products and links from the FACTS above — never name a product or price from memory.\n` +
