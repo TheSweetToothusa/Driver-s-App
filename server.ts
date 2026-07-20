@@ -2017,6 +2017,14 @@ async function startServer() {
     } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
+  // Inbound texts to the delivery-confirmation number: no-reply auto-response.
+  // (STOP/opt-out is handled by Twilio before it ever reaches us.)
+  app.post("/api/sms/inbound", express.urlencoded({ extended: false }), (_req, res) => {
+    const msg = "The Sweet Tooth: this number sends delivery confirmations and can't receive replies. " +
+      "Need help with your delivery? Text our delivery manager Katie at 305-994-4070, or call the store at (305) 682-1400.";
+    res.type('text/xml').send(`<?xml version="1.0" encoding="UTF-8"?><Response><Message>${msg}</Message></Response>`);
+  });
+
   app.post("/api/pod", async (req, res) => {
     const { orderId, photo, signature, notes, completedAt, status, driverId, driverName, failureReason, isManual, customerEmail, giftReceiverName, giftSenderName, address, orderNumber } = req.body;
 
