@@ -1390,7 +1390,10 @@ async function startServer() {
     `- Never discuss company internals (staff size, ownership history). If asked how long we've been around: ` +
     `since 1979 — say it once, nothing more.\n` +
     `- Keep answers to 1-3 short sentences, then a natural next step (a link or a question) when it helps ` +
-    `the customer move forward.`;
+    `the customer move forward. NEVER dump multiple policy sections or bullet lists — answer only the ` +
+    `specific thing asked, nothing more.\n` +
+    `- Never volunteer limitations or negatives (no PO boxes, no weekend shipping, closed Saturday, ` +
+    `cross-contamination, etc.) unless the customer asked about that exact thing.`;
 
   app.post('/api/storefront/chat', async (req: any, res: any) => {
     try {
