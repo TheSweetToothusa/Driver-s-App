@@ -975,6 +975,44 @@ async function logEmailSend(orderNumber: string, recipient: string, subject: str
   }
 }
 
+// Has a delivery confirmation email already gone out for this order? Audit trail
+// lives in email_log:{orderNumber}. We match on every subject pattern we've ever
+// used so older sends still count as already-sent. On a lookup failure we return
+// true — a false-positive skip is far better than emailing a customer twice.
+async function podEmailAlreadySent(orderKey: string): Promise<boolean> {
+  try {
+    const existingLog: any = await getKV(`email_log:${orderKey}`);
+    if (!existingLog || !Array.isArray(existingLog.sends)) return false;
+    return existingLog.sends.some((s: any) => {
+      if (!s || s.success !== true || typeof s.subject !== 'string') return false;
+      return s.subject.includes('just got your gift')
+        || s.subject.includes('has been delivered')
+        || s.subject.includes('Your Sweet Tooth order has arrived');
+    });
+  } catch (e: any) {
+    console.error('email idempotency check failed (treating as already-sent):', e?.message || e);
+    return true;
+  }
+}
+
+// Flag the POD record so the app knows the customer has been emailed. Without
+// this the bulk catch-up button treats every auto-notified order as pending.
+async function markPodNotified(orderId: string): Promise<void> {
+  try {
+    const existing = await readPodOrder(orderId);
+    // Bail on a DB error sentinel or a missing record — writing either back would
+    // overwrite the real POD (photo, completedAt, status) with an almost-empty object.
+    if (!existing || existing.__dbError || Object.keys(existing).length === 0) {
+      console.error(`markPodNotified skipped for ${orderId} — POD record unreadable`);
+      return;
+    }
+    existing.successNotificationSent = true;
+    await writePodOrder(orderId, existing);
+  } catch (e: any) {
+    console.error('markPodNotified failed (non-fatal):', e?.message || e);
+  }
+}
+
 // Memory helper
 function getMemoryMB() {
   const used = process.memoryUsage();
@@ -2249,28 +2287,9 @@ async function startServer() {
 
       // Idempotency: if we already sent a successful delivery confirmation for
       // this order, skip — prevents duplicate emails when the frontend retries.
-      // Audit trail lives in email_log:{orderNumber}. We match on every subject
-      // pattern we've ever used so older sends still count as already-sent.
       let alreadySentPodEmail = false;
       if (status === 'DELIVERED' && customerEmail) {
-        try {
-          const logKey = `email_log:${String(orderNumber || orderId)}`;
-          const existingLog: any = await getKV(logKey);
-          if (existingLog && Array.isArray(existingLog.sends)) {
-            alreadySentPodEmail = existingLog.sends.some((s: any) => {
-              if (!s || s.success !== true || typeof s.subject !== 'string') return false;
-              return s.subject.includes('just got your gift')
-                || s.subject.includes('has been delivered')
-                || s.subject.includes('Your Sweet Tooth order has arrived');
-            });
-          }
-        } catch (e: any) {
-          // Log check failed — err on the side of NOT sending a dup. The frontend
-          // retry that got us here was likely caused by a transient error, not a
-          // missing email, so a false-positive skip is better than a false-negative resend.
-          console.error('email idempotency check failed (treating as already-sent):', e?.message || e);
-          alreadySentPodEmail = true;
-        }
+        alreadySentPodEmail = await podEmailAlreadySent(String(orderNumber || orderId));
       }
 
       // Log why email might not be sent
@@ -2324,6 +2343,7 @@ async function startServer() {
           );
           await logEmailSend(String(orderNumber || orderId), customerEmail, subject, emailSent);
           if (emailSent) {
+            await markPodNotified(String(orderId));
             console.log(`✅ Auto-sent delivery confirmation to ${customerEmail} for order ${orderId}${hasPhoto ? ' (with photo)' : ''}`);
           } else {
             console.log(`⚠️ Failed to auto-send confirmation to ${customerEmail} for order ${orderId}`);
@@ -2642,10 +2662,21 @@ async function startServer() {
       return res.status(400).json({ error: 'Missing orders array' });
     }
     
-    const results: { orderId: string; email: string; sent: boolean }[] = [];
+    const results: { orderId: string; email: string; sent: boolean; skipped?: boolean }[] = [];
     const baseUrl = getAppBaseUrl(req);
 
     for (const o of orders) {
+      // Same duplicate guard the normal delivery flow uses — the catch-up button
+      // must never email a customer who already got their confirmation. Keyed on
+      // orderNumber first so it matches the key the auto-send writes.
+      const logKey = String(o.orderNumber || o.orderId);
+      if (await podEmailAlreadySent(logKey)) {
+        await markPodNotified(String(o.orderId));
+        results.push({ orderId: o.orderId, email: o.email, sent: false, skipped: true });
+        console.log(`📧 Bulk POD skipped for ${o.orderId} — already sent`);
+        continue;
+      }
+
       // Fetch the POD photo for this order
       const podData = await readPodOrder(o.orderId);
       const photo = podData?.confirmationPhoto || podData?.photo || null;

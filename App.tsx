@@ -5127,7 +5127,7 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
 
   // Bulk POD email send
   const [bulkSending, setBulkSending] = useState(false);
-  const [bulkResult, setBulkResult] = useState<{ sent: number; total: number } | null>(null);
+  const [bulkResult, setBulkResult] = useState<{ sent: number; total: number; skipped?: number } | null>(null);
 
 
   useEffect(() => {
@@ -5284,6 +5284,7 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
     
     const ordersToSend = deliveredWithEmail.map(d => ({
       orderId: d.id,
+      orderNumber: d.orderNumber,
       email: d.customer?.email || '',
       receiverName: d.giftReceiverName || 'the recipient',
       deliveryTime: d.completedAt 
@@ -5298,7 +5299,7 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
         body: JSON.stringify({ orders: ordersToSend })
       });
       const data = await res.json();
-      setBulkResult({ sent: data.sent || 0, total: data.total || ordersToSend.length });
+      setBulkResult({ sent: data.sent || 0, total: data.total || ordersToSend.length, skipped: data.skipped || 0 });
     } catch {
       setBulkResult({ sent: 0, total: ordersToSend.length });
     }
@@ -5382,21 +5383,21 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
       {/* ═══════════════════════════════════════════════════════════════════
           1. ADMIN TOOLS TILES (Fees highlighted yellow)
           ═══════════════════════════════════════════════════════════════════ */}
-      <div className="grid grid-cols-4 gap-2">
+      <div className="grid grid-cols-3 gap-2">
         <button onClick={() => setFeesModalOpen(true)}
-          className="flex flex-col items-center justify-center py-3 rounded-2xl bg-amber-400 shadow-md active:scale-95 transition-all">
-          <DollarSign size={20} className="text-amber-900" />
-          <span className="text-[9px] font-black uppercase mt-1 text-amber-900">Fees</span>
+          className={`flex flex-col items-center justify-center py-3 rounded-2xl transition-all active:scale-95 ${feesModalOpen ? 'bg-green-600 text-white' : 'bg-white border border-stone-200 text-stone-600'}`}>
+          <DollarSign size={20} />
+          <span className="text-[11px] font-black uppercase mt-1">Fees</span>
         </button>
         <button onClick={() => setActiveNav(null)}
-          className="flex flex-col items-center justify-center py-3 rounded-2xl bg-white border border-stone-200 text-stone-600 active:scale-95">
+          className={`flex flex-col items-center justify-center py-3 rounded-2xl transition-all active:scale-95 ${activeNav === null && !feesModalOpen ? 'bg-black text-white' : 'bg-white border border-stone-200 text-stone-600'}`}>
           <Users size={20} />
-          <span className="text-[9px] font-black uppercase mt-1">Drivers</span>
+          <span className="text-[11px] font-black uppercase mt-1">Drivers</span>
         </button>
         <button onClick={() => setActiveNav('MESSAGES')}
           className={`flex flex-col items-center justify-center py-3 rounded-2xl transition-all active:scale-95 ${activeNav === 'MESSAGES' ? 'bg-black text-white' : 'bg-white border border-stone-200 text-stone-600'}`}>
           <MessageSquare size={20} />
-          <span className="text-[9px] font-black uppercase mt-1">Messages</span>
+          <span className="text-[11px] font-black uppercase mt-1">Messages</span>
         </button>
       </div>
 
@@ -5568,7 +5569,9 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
               </button>
               {bulkResult && (
                 <p className={`text-center text-sm font-bold mt-2 ${bulkResult.sent > 0 ? 'text-green-600' : 'text-stone-500'}`}>
-                  {bulkResult.total === 0 ? 'No pending emails to send' : `✅ Sent ${bulkResult.sent}/${bulkResult.total} emails`}
+                  {bulkResult.total === 0
+                    ? 'No pending emails to send'
+                    : `✅ Sent ${bulkResult.sent}/${bulkResult.total} emails${bulkResult.skipped ? ` · ${bulkResult.skipped} already emailed, skipped` : ''}`}
                 </p>
               )}
             </div>
