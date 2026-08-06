@@ -697,6 +697,62 @@ function firstNameOf(full: string): string {
   return String(full || '').trim().split(/\s+/)[0] || '';
 }
 
+// Mark a Shopify order Fulfilled AND post the "delivered" shipment event.
+//
+// Fulfilling alone is not enough: with no tracking company and no fulfillment
+// event, Shopify's order status page and the Shop app sit on "On its way"
+// forever, so customers call us saying the basket never arrived. The delivered
+// event is what flips that page to "Delivered".
+//
+// Idempotent — safe to call on every retry. Best-effort: never throws.
+async function markShopifyDelivered(orderId: string): Promise<void> {
+  if (!SHOPIFY_STORE_URL || !SHOPIFY_ACCESS_TOKEN) return;
+  const api = `https://${SHOPIFY_STORE_URL}/admin/api/2025-01`;
+  const auth = { 'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN };
+
+  try {
+    const foResp = await fetch(`${api}/orders/${orderId}/fulfillment_orders.json`, { headers: auth });
+    const foData = await foResp.json();
+    const openFOs = (foData.fulfillment_orders || []).filter(
+      (fo: any) => ['open', 'in_progress', 'scheduled'].includes(fo.status)
+    );
+    for (const fo of openFOs) {
+      const fulResp = await fetch(`${api}/fulfillments.json`, {
+        method: 'POST',
+        headers: { ...auth, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fulfillment: {
+            notify_customer: false,
+            line_items_by_fulfillment_order: [{ fulfillment_order_id: fo.id }]
+          }
+        })
+      });
+      if (fulResp.ok) console.log(`Marked order ${orderId} Fulfilled in Shopify`);
+      else console.error(`Fulfillment failed for order ${orderId} (FO ${fo.id}):`, await fulResp.text());
+    }
+  } catch (err) {
+    console.error('Failed to fulfill order in Shopify:', err);
+  }
+
+  // Now stamp every fulfillment on the order as delivered.
+  try {
+    const fResp = await fetch(`${api}/orders/${orderId}/fulfillments.json`, { headers: auth });
+    const fData = await fResp.json();
+    for (const f of fData.fulfillments || []) {
+      if (f.shipment_status === 'delivered') continue;
+      const evResp = await fetch(`${api}/orders/${orderId}/fulfillments/${f.id}/events.json`, {
+        method: 'POST',
+        headers: { ...auth, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ event: { status: 'delivered' } })
+      });
+      if (evResp.ok) console.log(`Order ${orderId} fulfillment ${f.id} marked Delivered in Shopify`);
+      else console.error(`Delivered event failed for order ${orderId} (fulfillment ${f.id}):`, await evResp.text());
+    }
+  } catch (err) {
+    console.error('Failed to post delivered event to Shopify:', err);
+  }
+}
+
 function buildDeliveryConfirmationEmail(opts: {
   variant: 'gift' | 'self';
   receiverName: string;
@@ -844,6 +900,18 @@ ${heroHtml}${photoRow}
         </tr>
 
         <tr>
+          <td style="padding:0 32px 26px 32px;text-align:center;">
+            <div style="background-color:#fdf2f6;border-radius:10px;padding:18px 20px;">
+              <div style="font-size:15px;color:#2a2a2a;line-height:1.6;">
+                Anything at all about this delivery?<br>
+                Text <strong>Katie</strong>, our delivery manager, directly at
+                <a href="tel:+1${KATIE_PHONE.replace(/[^0-9]/g, '')}" style="color:#c2185b;text-decoration:none;font-weight:700;white-space:nowrap;">${KATIE_PHONE}</a>.
+              </div>
+            </div>
+          </td>
+        </tr>
+
+        <tr>
           <td style="padding:0 32px 24px 32px;text-align:center;">
             <div style="font-size:11px;color:#bbb;">Order #${safeDisplayId}</div>
           </td>
@@ -879,6 +947,8 @@ From ordering to delivery, we'd love to know how we did.
 4 stars: ${baseUrl}/review/${orderSlug}/4
 5 stars: ${baseUrl}/review/${orderSlug}/5
 
+Anything at all about this delivery? Text Katie, our delivery manager, directly at ${KATIE_PHONE}.
+
 Order #${displayId}
 
 The Sweet Tooth
@@ -899,6 +969,8 @@ Tap a star to share your experience. Your words help others find us.
 3 stars: ${baseUrl}/review/${orderSlug}/3
 4 stars: ${baseUrl}/review/${orderSlug}/4
 5 stars: ${baseUrl}/review/${orderSlug}/5
+
+Anything at all about this delivery? Text Katie, our delivery manager, directly at ${KATIE_PHONE}.
 
 Order #${displayId}
 
@@ -1736,34 +1808,7 @@ async function startServer() {
         // Best-effort: never blocks the driver's delivery update. notify_customer
         // is false so the customer doesn't get a confusing "shipped" email.
         if (status === 'DELIVERED') {
-          try {
-            const foResp = await fetch(`https://${SHOPIFY_STORE_URL}/admin/api/2025-01/orders/${orderId}/fulfillment_orders.json`, {
-              headers: { 'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN }
-            });
-            const foData = await foResp.json();
-            const openFOs = (foData.fulfillment_orders || []).filter(
-              (fo: any) => ['open', 'in_progress', 'scheduled'].includes(fo.status)
-            );
-            for (const fo of openFOs) {
-              const fulResp = await fetch(`https://${SHOPIFY_STORE_URL}/admin/api/2025-01/fulfillments.json`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN },
-                body: JSON.stringify({
-                  fulfillment: {
-                    notify_customer: false,
-                    line_items_by_fulfillment_order: [{ fulfillment_order_id: fo.id }]
-                  }
-                })
-              });
-              if (fulResp.ok) {
-                console.log(`Marked order ${orderId} Fulfilled in Shopify`);
-              } else {
-                console.error(`Fulfillment failed for order ${orderId} (FO ${fo.id}):`, await fulResp.text());
-              }
-            }
-          } catch (err) {
-            console.error('Failed to fulfill order in Shopify:', err);
-          }
+          await markShopifyDelivered(String(orderId));
         }
       } catch (err) {
         console.error('Failed to sync status to Shopify:', err);
@@ -2280,6 +2325,11 @@ async function startServer() {
         } catch (noteErr) {
           console.error('Failed to add POD note to Shopify (non-fatal):', noteErr);
         }
+
+        // Fulfil + stamp Delivered so the customer's Shopify order page stops
+        // saying "On its way". Idempotent, so it's safe that the status route
+        // may have already done this.
+        await markShopifyDelivered(String(orderId));
       }
 
       // ── AUTO-SEND DELIVERY CONFIRMATION EMAIL WITH PHOTO ───────────────────────────────
