@@ -2704,12 +2704,15 @@ async function startServer() {
         html,
         hasPhoto ? 'proof-photo' : undefined
       );
+      await logEmailSend(logKey, o.email, subject, sent);
+      if (sent) await markPodNotified(String(o.orderId));
       results.push({ orderId: o.orderId, email: o.email, sent });
       console.log(sent ? `✅ Bulk POD sent to ${o.email}${hasPhoto ? ' (with photo)' : ''}` : `❌ Failed to send to ${o.email}`);
     }
-    
+
     const sentCount = results.filter(r => r.sent).length;
-    res.json({ success: true, sent: sentCount, total: orders.length, results });
+    const skippedCount = results.filter(r => r.skipped).length;
+    res.json({ success: true, sent: sentCount, skipped: skippedCount, total: orders.length, results });
   });
 
   // ── REVIEW STAR-RATING REDIRECT ─────────────────────────────────────────────

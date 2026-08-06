@@ -5104,11 +5104,20 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
   const [calcStart, setCalcStart] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 7); return d.toISOString().split('T')[0]; });
   const [calcEnd, setCalcEnd] = useState(() => new Date().toISOString().split('T')[0]);
   const [feeDriverFilter, setFeeDriverFilter] = useState<string>('ALL');
+  // One-time notice about the fee-history change. Stays until the user X's it out.
+  const FEE_NOTICE_KEY = 'feeHistoryNotice_v1';
+  const [feeNoticeDismissed, setFeeNoticeDismissed] = useState(() => {
+    try { return localStorage.getItem(FEE_NOTICE_KEY) === 'dismissed'; } catch { return false; }
+  });
+  const dismissFeeNotice = () => {
+    setFeeNoticeDismissed(true);
+    try { localStorage.setItem(FEE_NOTICE_KEY, 'dismissed'); } catch { /* private mode — notice just returns next time */ }
+  };
   
   // Driver Pay Calculator states
   const [payCalcOpen, setPayCalcOpen] = useState(false);
   const [payDriverId, setPayDriverId] = useState<string>('');
-  const [payDateRange, setPayDateRange] = useState<'TODAY' | 'YESTERDAY' | 'THIS_WEEK' | 'LAST_WEEK' | 'THIS_MONTH' | 'LAST_MONTH' | 'CUSTOM'>('THIS_WEEK');
+  const [payDateRange, setPayDateRange] = useState<'TODAY' | 'YESTERDAY' | 'THIS_WEEK' | 'LAST_WEEK' | 'LAST_7' | 'THIS_MONTH' | 'LAST_MONTH' | 'CUSTOM'>('THIS_WEEK');
   const [payStartDate, setPayStartDate] = useState(() => { const d = new Date(); const day = d.getDay(); const diff = d.getDate() - day + (day === 0 ? -6 : 1); return new Date(d.setDate(diff)).toISOString().split('T')[0]; });
   const [payEndDate, setPayEndDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [payRatePerDelivery, setPayRatePerDelivery] = useState<string>('');
@@ -5136,39 +5145,54 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
     fetch('/api/config/driver-rates').then(r => r.json()).then(d => { if (d.rates) setDriverRates(d.rates); }).catch(() => {});
   }, []);
   
+  // Fee history only goes back as far as the app actually holds data: /api/orders
+  // pulls the last 14 days from Shopify. Anything older is simply not loaded, so
+  // offering longer ranges produces a confidently wrong number. Non-owners are
+  // capped at 7 days — comfortably inside what we can actually answer.
+  const isFeeOwner = currentUser.role === 'SUPER_ADMIN';
+  const FEE_HISTORY_DAYS = 7;
+  const feeFloor = (() => { const d = new Date(); d.setDate(d.getDate() - FEE_HISTORY_DAYS); return d.toISOString().split('T')[0]; })();
+
   // Driver Pay Calculator helpers
   const getDateRangeForPay = () => {
     const today = new Date();
     const todayStr = today.toISOString().split('T')[0];
-    
+
+    // Hard clamp for everyone but the owner, whatever range key is set.
+    const clamp = (r: { start: string; end: string }) =>
+      isFeeOwner ? r : { start: r.start < feeFloor ? feeFloor : r.start, end: r.end > todayStr ? todayStr : r.end };
+
+    if (payDateRange === 'LAST_7') {
+      return clamp({ start: feeFloor, end: todayStr });
+    }
     if (payDateRange === 'TODAY') {
-      return { start: todayStr, end: todayStr };
+      return clamp({ start: todayStr, end: todayStr });
     } else if (payDateRange === 'YESTERDAY') {
       const yesterday = new Date(today);
       yesterday.setDate(today.getDate() - 1);
       const yStr = yesterday.toISOString().split('T')[0];
-      return { start: yStr, end: yStr };
+      return clamp({ start: yStr, end: yStr });
     } else if (payDateRange === 'THIS_WEEK') {
       const day = today.getDay();
       const monday = new Date(today);
       monday.setDate(today.getDate() - day + (day === 0 ? -6 : 1));
-      return { start: monday.toISOString().split('T')[0], end: todayStr };
+      return clamp({ start: monday.toISOString().split('T')[0], end: todayStr });
     } else if (payDateRange === 'LAST_WEEK') {
       const day = today.getDay();
       const lastMonday = new Date(today);
       lastMonday.setDate(today.getDate() - day - 6);
       const lastSunday = new Date(lastMonday);
       lastSunday.setDate(lastMonday.getDate() + 6);
-      return { start: lastMonday.toISOString().split('T')[0], end: lastSunday.toISOString().split('T')[0] };
+      return clamp({ start: lastMonday.toISOString().split('T')[0], end: lastSunday.toISOString().split('T')[0] });
     } else if (payDateRange === 'THIS_MONTH') {
       const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-      return { start: firstOfMonth.toISOString().split('T')[0], end: todayStr };
+      return clamp({ start: firstOfMonth.toISOString().split('T')[0], end: todayStr });
     } else if (payDateRange === 'LAST_MONTH') {
       const firstOfLastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
       const lastOfLastMonth = new Date(today.getFullYear(), today.getMonth(), 0);
-      return { start: firstOfLastMonth.toISOString().split('T')[0], end: lastOfLastMonth.toISOString().split('T')[0] };
+      return clamp({ start: firstOfLastMonth.toISOString().split('T')[0], end: lastOfLastMonth.toISOString().split('T')[0] });
     }
-    return { start: payStartDate, end: payEndDate };
+    return clamp({ start: payStartDate, end: payEndDate });
   };
   
   const getDeliveredCountForDriver = (driverId: string, start: string, end: string) => {
@@ -5356,7 +5380,9 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
   const inRange = feeCalculated ? deliveries.filter(d => {
     if (d.status !== DeliveryStatus.DELIVERED) return false;
     const dateToCheck = (d.completedAt || d.submittedAt || d.deliveryDate || '').split('T')[0];
-    if (!dateToCheck) return true;
+    // An order with no date at all belongs to no period. It used to be counted in
+    // EVERY period, which quietly inflated every total on this screen.
+    if (!dateToCheck) return false;
     return dateToCheck >= calcStart && dateToCheck <= calcEnd;
   }) : [];
 
@@ -5651,7 +5677,27 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
             
             {/* Content - Scrollable */}
             <div className="flex-1 overflow-y-auto p-5 space-y-4">
-              
+
+              {/* App Update notice — shown until dismissed. Non-owners only. */}
+              {!isFeeOwner && !feeNoticeDismissed && (
+                <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4">
+                  <div className="flex items-start gap-2">
+                    <div className="flex-1">
+                      <p className="font-black text-blue-900 text-sm mb-1">App Update</p>
+                      <p className="text-[13px] text-blue-900/80 leading-snug">
+                        Fee totals for older dates were showing incorrect numbers. This has been corrected.
+                        The app only keeps the last 14 days of delivery records, so fees and earnings now
+                        show the last 7 days only.
+                      </p>
+                    </div>
+                    <button onClick={dismissFeeNotice} aria-label="Dismiss"
+                      className="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center shrink-0 active:bg-blue-200">
+                      <X size={15} className="text-blue-700" />
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* ══════════ TOTAL FEES TAB (Primary Feature) ══════════ */}
               {feesTab === 'LOOKUP' && (
                 <>
@@ -5659,25 +5705,40 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
                   <div className="bg-stone-50 rounded-2xl p-4">
                     <p className="text-xs font-bold uppercase text-stone-400 mb-3 text-center">Select Time Period</p>
                     <div className="grid grid-cols-2 gap-2">
-                      {([
-                        { key: 'TODAY', label: 'Today' },
-                        { key: 'YESTERDAY', label: 'Yesterday' },
-                        { key: 'THIS_WEEK', label: 'This Week' },
-                        { key: 'LAST_WEEK', label: 'Last Week' },
-                        { key: 'THIS_MONTH', label: 'This Month' },
-                        { key: 'LAST_MONTH', label: 'Last Month' },
-                      ] as const).map(({ key, label }) => (
+                      {(isFeeOwner
+                        ? [
+                            { key: 'TODAY', label: 'Today' },
+                            { key: 'YESTERDAY', label: 'Yesterday' },
+                            { key: 'THIS_WEEK', label: 'This Week' },
+                            { key: 'LAST_WEEK', label: 'Last Week' },
+                            { key: 'THIS_MONTH', label: 'This Month' },
+                            { key: 'LAST_MONTH', label: 'Last Month' },
+                          ]
+                        : [
+                            { key: 'TODAY', label: 'Today' },
+                            { key: 'YESTERDAY', label: 'Yesterday' },
+                            { key: 'THIS_WEEK', label: 'This Week' },
+                            { key: 'LAST_7', label: 'Last 7 Days' },
+                          ]
+                      ).map(({ key, label }) => (
                         <button key={key} onClick={() => setPayDateRange(key as typeof payDateRange)}
                           className={`py-3.5 rounded-xl font-bold text-sm transition-all ${payDateRange === key ? 'bg-emerald-500 text-white shadow-lg' : 'bg-white border-2 border-stone-200 text-stone-600 active:bg-stone-100'}`}>
                           {label}
                         </button>
                       ))}
-                      <button onClick={() => setPayDateRange('CUSTOM')}
-                        className={`col-span-2 py-3.5 rounded-xl font-bold text-sm transition-all ${payDateRange === 'CUSTOM' ? 'bg-emerald-500 text-white shadow-lg' : 'bg-white border-2 border-stone-200 text-stone-600 active:bg-stone-100'}`}>
-                        Custom Dates
-                      </button>
+                      {isFeeOwner && (
+                        <button onClick={() => setPayDateRange('CUSTOM')}
+                          className={`col-span-2 py-3.5 rounded-xl font-bold text-sm transition-all ${payDateRange === 'CUSTOM' ? 'bg-emerald-500 text-white shadow-lg' : 'bg-white border-2 border-stone-200 text-stone-600 active:bg-stone-100'}`}>
+                          Custom Dates
+                        </button>
+                      )}
                     </div>
-                    {payDateRange === 'CUSTOM' && (
+                    {!isFeeOwner && (
+                      <p className="text-[11px] text-stone-500 text-center mt-3 leading-snug">
+                        This app only keeps the last 14 days of delivery records, so fees are shown for the last 7 days.
+                      </p>
+                    )}
+                    {isFeeOwner && payDateRange === 'CUSTOM' && (
                       <div className="grid grid-cols-2 gap-3 mt-4">
                         <div>
                           <p className="text-xs font-bold text-stone-500 mb-1">From</p>
@@ -5756,9 +5817,9 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
                         <div className="inline-block bg-white/20 rounded-full px-4 py-1 mb-3">
                           <span className="text-emerald-100 font-bold text-sm">{totalDeliveries} deliveries</span>
                         </div>
-                        {totalDeliveries > 0 && (
+                        {isFeeOwner && totalDeliveries > 0 && (
                           <div>
-                            <button 
+                            <button
                               onClick={downloadReport}
                               className="bg-white/20 hover:bg-white/30 text-white font-bold text-sm px-4 py-2 rounded-xl transition-colors"
                             >
@@ -5766,6 +5827,21 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
                             </button>
                           </div>
                         )}
+                        <p className="text-emerald-100/80 text-[11px] mt-3 leading-snug">
+                          Shipping fees customers paid. This is not driver pay.
+                        </p>
+                        {(() => {
+                          // Shopify orders are only pulled for the last 14 days. A range that
+                          // starts before that can't be complete, so say so rather than let the
+                          // number pass as a full answer.
+                          const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 14);
+                          const cutoffStr = cutoff.toISOString().split('T')[0];
+                          return start < cutoffStr ? (
+                            <p className="text-amber-200 text-[11px] mt-2 leading-snug font-bold">
+                              ⚠️ Incomplete: Shopify orders are only kept for the last 14 days. Anything before {formatDate(cutoffStr)} is missing.
+                            </p>
+                          ) : null;
+                        })()}
                       </div>
                     );
                   })()}
@@ -5805,25 +5881,40 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
                       <div className="bg-stone-50 rounded-2xl p-4">
                         <p className="text-xs font-bold uppercase text-stone-400 mb-3 text-center">Step 2: Time Period</p>
                         <div className="grid grid-cols-2 gap-2">
-                          {([
-                            { key: 'TODAY', label: 'Today' },
-                            { key: 'YESTERDAY', label: 'Yesterday' },
-                            { key: 'THIS_WEEK', label: 'This Week' },
-                            { key: 'LAST_WEEK', label: 'Last Week' },
-                            { key: 'THIS_MONTH', label: 'This Month' },
-                            { key: 'LAST_MONTH', label: 'Last Month' },
-                          ] as const).map(({ key, label }) => (
+                          {(isFeeOwner
+                            ? [
+                                { key: 'TODAY', label: 'Today' },
+                                { key: 'YESTERDAY', label: 'Yesterday' },
+                                { key: 'THIS_WEEK', label: 'This Week' },
+                                { key: 'LAST_WEEK', label: 'Last Week' },
+                                { key: 'THIS_MONTH', label: 'This Month' },
+                                { key: 'LAST_MONTH', label: 'Last Month' },
+                              ]
+                            : [
+                                { key: 'TODAY', label: 'Today' },
+                                { key: 'YESTERDAY', label: 'Yesterday' },
+                                { key: 'THIS_WEEK', label: 'This Week' },
+                                { key: 'LAST_7', label: 'Last 7 Days' },
+                              ]
+                          ).map(({ key, label }) => (
                             <button key={key} onClick={() => { setPayDateRange(key as typeof payDateRange); setPayCalculated(false); }}
                               className={`py-2.5 rounded-xl font-bold text-xs transition-all ${payDateRange === key ? 'bg-emerald-500 text-white' : 'bg-white border border-stone-200 text-stone-600 active:bg-stone-100'}`}>
                               {label}
                             </button>
                           ))}
-                          <button onClick={() => { setPayDateRange('CUSTOM'); setPayCalculated(false); }}
-                            className={`col-span-2 py-2.5 rounded-xl font-bold text-xs transition-all ${payDateRange === 'CUSTOM' ? 'bg-emerald-500 text-white' : 'bg-white border border-stone-200 text-stone-600 active:bg-stone-100'}`}>
-                            Custom Dates
-                          </button>
+                          {isFeeOwner && (
+                            <button onClick={() => { setPayDateRange('CUSTOM'); setPayCalculated(false); }}
+                              className={`col-span-2 py-2.5 rounded-xl font-bold text-xs transition-all ${payDateRange === 'CUSTOM' ? 'bg-emerald-500 text-white' : 'bg-white border border-stone-200 text-stone-600 active:bg-stone-100'}`}>
+                              Custom Dates
+                            </button>
+                          )}
                         </div>
-                        {payDateRange === 'CUSTOM' && (
+                        {!isFeeOwner && (
+                          <p className="text-[11px] text-stone-500 text-center mt-3 leading-snug">
+                            This app only keeps the last 14 days of delivery records, so earnings are shown for the last 7 days.
+                          </p>
+                        )}
+                        {isFeeOwner && payDateRange === 'CUSTOM' && (
                           <div className="grid grid-cols-2 gap-3 mt-3">
                             <div>
                               <p className="text-xs font-bold text-stone-500 mb-1">From</p>
