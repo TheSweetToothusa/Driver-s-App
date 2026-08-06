@@ -614,7 +614,7 @@ async function sendEmail(
     const mailOptions: any = {
       from: `"The Sweet Tooth" <${SMTP_USER}>`,
       to: to,
-      bcc: ['orders@thesweettooth.com', 'raiver72@gmail.com'],
+      bcc: ['sandiassist272@gmail.com'],
       subject: subject,
       text: body
     };
