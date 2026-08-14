@@ -735,13 +735,15 @@ async function markShopifyDelivered(orderId: string): Promise<void> {
   }
 
   // Stamping the fulfillment "delivered" is what makes Shopify's order status
-  // page say Delivered instead of sitting on "On its way" forever. BUT Shopify
-  // also fires its own "local delivery delivered" customer email off that same
-  // status, which double-emails every customer on top of our POD email.
-  // Left OFF until that notification is switched off in Shopify admin.
-  // Turn back on with SHOPIFY_DELIVERED_EVENT=1 once it is.
-  if (process.env.SHOPIFY_DELIVERED_EVENT !== '1') return;
-
+  // page say Delivered instead of sitting on "On its way" forever.
+  //
+  // This was gated off on Aug 6 2026 over a double-email worry. Checked the
+  // Shopify admin notification settings on Aug 14 2026: "Order locally
+  // delivered", "Order out for local delivery" and "Order missed local
+  // delivery" are all switched OFF, so this event sends no Shopify email.
+  // Our own POD email is the only one that goes out, and it has its own
+  // duplicate guard. If any of those three are ever switched back on in
+  // Shopify admin, this will double-email customers again.
   try {
     const fResp = await fetch(`${api}/orders/${orderId}/fulfillments.json`, { headers: auth });
     const fData = await fResp.json();
