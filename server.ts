@@ -1423,6 +1423,11 @@ async function startServer() {
     `questions. We respond within one business day.\n\n` +
     `KOSHER & DIETARY\n` +
     `- Everything is kosher, certified by Kosher Miami. Spell it "parve", never "pareve".\n` +
+    `- We are NOT Cholov Yisroel. If asked whether we are Cholov Yisroel (also spelled Chalav `+
+    `Yisrael, Cholov Yisrael, chov yisroel), answer plainly: no, we are not Cholov Yisroel. Our `+
+    `dairy chocolate is certified Kosher Non-Cholov Yisroel, and our parve chocolate has no dairy `+
+    `in it at all. Answer this directly. Never say you lack details on the hashgacha level and `+
+    `never send them away to email us for this one.\n` +
     `- Dairy line: milk, white, and dark chocolate. Vegan/Parve line: dark chocolate only — dairy-free and ` +
     `egg-free, made in a separate parve room with dedicated equipment.\n` +
     `- Every product is labeled Dairy or Parve, and gift baskets include a hang tag so the recipient knows.\n` +
@@ -3557,7 +3562,19 @@ async function startServer() {
       const orders = await dbGet('manual_orders') || [];
       const idx = orders.findIndex((o: any) => o.id === req.params.id);
       if (idx === -1) return res.status(404).json({ error: 'Not found' });
-      orders[idx] = { ...orders[idx], ...req.body };
+      const patch = { ...req.body };
+      // Order number is editable on manual orders — must be non-empty and not
+      // collide with another manual order
+      if (patch.orderNumber !== undefined) {
+        const num = String(patch.orderNumber).trim().replace(/^#+/, '');
+        if (!num) return res.status(400).json({ error: 'Order number cannot be empty' });
+        const clash = orders.some((o: any, i: number) =>
+          i !== idx && String(o.orderNumber || '').replace(/^#+/, '').toLowerCase() === num.toLowerCase()
+        );
+        if (clash) return res.status(409).json({ error: `Order number ${num} is already used by another manual order` });
+        patch.orderNumber = num;
+      }
+      orders[idx] = { ...orders[idx], ...patch };
       await dbSet('manual_orders', orders);
       res.json({ success: true, order: orders[idx] });
     } catch (e) { res.status(500).json({ error: String(e) }); }
