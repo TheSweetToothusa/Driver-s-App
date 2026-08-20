@@ -56,6 +56,40 @@ If this returns `ECONNREFUSED` or "recovery mode" errors, the database is unreac
 
 ---
 
+## ⚠️ SHOPIFY ACCESS — READ BEFORE SAYING "I CAN'T" ⚠️
+
+Agents keep stalling here, so: **the store is `thesweettoothfl.myshopify.com`** (not
+`thesweettooth.myshopify.com`). Admin API access comes from an env var — check it FIRST:
+
+```bash
+echo "${SHOPIFY_ADMIN_TOKEN:+token present}" "${SHOPIFY_STORE_DOMAIN:-thesweettoothfl.myshopify.com}"
+curl -s -o /dev/null -w "%{http_code}\n" \
+  -H "X-Shopify-Access-Token: $SHOPIFY_ADMIN_TOKEN" \
+  "https://thesweettoothfl.myshopify.com/admin/api/2025-07/shop.json"
+```
+
+If `SHOPIFY_ADMIN_TOKEN` is empty, it has not been set on this environment yet — say so and
+point at the fix below. **Never ask Mikey to paste a token into chat.** Anything pasted into a
+conversation is stored in that conversation's history and has to be rotated afterwards.
+
+**Setting it (one time, per environment):** claude.ai/code → the environment used for this repo →
+environment variables → add `SHOPIFY_STORE_DOMAIN` and `SHOPIFY_ADMIN_TOKEN`. Every future session
+then has it with nothing pasted. Docs: https://code.claude.com/docs/en/claude-code-on-the-web
+
+### Where the Rosh Hashanah Basket Builder actually lives
+
+Not in this repo, and **not in the page body** — Pages → "Rosh Hashanah Basket Builder" has a
+36-character body and renders through `template_suffix: basket-builder-rosh`. The real file is:
+
+- Theme: **LIVE SITE — The Sweet Tooth**, id `161706344703` (role `main`)
+- File: **`templates/page.basket-builder-rosh.liquid`** (~185 KB, all inline CSS/JS)
+- The regular (non-Rosh) builder is `templates/page.basket-builder.liquid`
+- Page id `136333787391`, store-front URL `/pages/rosh-hashanah-basket-builder`
+
+Read it with `GET /admin/api/2025-07/themes/161706344703/assets.json?asset[key]=...`, write it with
+a `PUT` to the same endpoint. **Always save the current `value` to a file before writing** — the
+Assets API is last-write-wins with no merge, and other agents edit this same file.
+
 ## Store Info (NEVER GET THIS WRONG)
 
 - **Store Name:** The Sweet Tooth — Chocolate Factory

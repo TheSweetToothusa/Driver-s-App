@@ -1,22 +1,30 @@
 <!-- ===== RH WRAP SHOWCASE (rebuilt 2026-08-20 — mobile-safe) ===== -->
 <!--
   WHERE THIS GOES
-  Shopify Admin -> Pages -> "Rosh Hashanah Basket Builder" -> code view (<>).
-  Search the page HTML for the marker text "RH WRAP SHOWCASE". It appears twice:
-  once on the opening comment line, once on the closing one. Replace everything
-  from the opening marker line to the closing marker line (inclusive) with this file.
-  It sits just above <div class="basket-grid"> in Step 2 (Size).
+  Shopify theme "LIVE SITE — The Sweet Tooth" (id 161706344703),
+  file: templates/page.basket-builder-rosh.liquid
+  Position: immediately above the div.basket-grid element inside #step-size.
+  (NOT the page body - Pages > Rosh Hashanah Basket Builder has a 36-char body
+  and renders through the template_suffix "basket-builder-rosh".)
 
   WHAT CHANGED AND WHY
-  The old toggle was a dark pill absolutely positioned at top:10px right:10px of
-  the card. On mobile the card is a horizontal row (photo left 47%, text right
-  53%), so that corner is exactly where the basket NAME and PRICE live — the pill
-  covered both, and it also stacked on top of the selected-state black checkmark
-  (.basket-card.selected::after, same corner, z-index 20).
-  The toggle is now an in-flow chip inside .basket-content, below the piece count.
-  It cannot overlap anything at any width, it reads as a button instead of a
-  sticker, and it is a real 38-42px tap target.
-  The "size proof" band CSS (.rh-scale) below is unchanged from the old block.
+  The first version of this toggle was a dark pill absolutely positioned at
+  top:10px right:10px of the basket card. On mobile the card is a horizontal
+  row (photo left 47%, text right 53%), so that corner is exactly where the
+  basket NAME and PRICE live - the pill covered both, and it stacked on the
+  selected-state checkmark (.basket-card.selected::after, same corner, z-index
+  20). It was also the same black as the "Serves X people" pill directly under
+  it, so it read as a label rather than a button.
+
+  The toggle is now an in-flow chip inside .basket-content, below the piece
+  count. It cannot overlap anything at any width, it is outlined rather than
+  black, and it is a real 38-42px tap target.
+
+  This block also fixes a second collision in the same corner: the selected
+  checkmark landed on the price (measured at 390px: badge x340-362, price
+  x333-357), so .basket-header now reserves that corner on mobile.
+
+  The "size proof" band CSS (.rh-scale) is carried over unchanged.
 -->
 <style>
   .basket-card{position:relative;}
