@@ -54,6 +54,12 @@
   .basket-card.is-wrapped .basket-image{background:#fff;}
 
   @media (max-width:749px){
+    /* The selected-state check badge (.basket-card.selected::after) sits in the
+       card's top-right corner. On a horizontal mobile card that corner is where
+       the price sits, so the badge lands on it - measured: badge x340-362 vs
+       price x333-357. Reserve the corner, always, so nothing shifts on select. */
+    .basket-card .basket-header{padding-right:26px;}
+
     /* full width of the text column: same box in both states, no jitter,
        and a comfortably big tap target on a phone */
     .rh-flip{align-self:stretch;justify-content:center;
