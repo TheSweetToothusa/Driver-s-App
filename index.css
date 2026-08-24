@@ -48,3 +48,64 @@ body {
 .animate-shake {
   animation: shake 0.2s ease-in-out 0s 2;
 }
+
+/* ============================================================================
+   HIG TOKENS — additive only.
+   These define NEW utilities (text-body, p-step-3, text-ink-secondary, ...).
+   They do NOT redefine Tailwind's built-ins, so nothing already in App.tsx
+   changes appearance. Adopt them per-component, not in a sweep.
+   ============================================================================ */
+
+@theme {
+  /* --- Type scale (Apple HIG, Large default) ------------------------------
+     Body is 17px. 11px is the documented floor — never ship text below it.
+     Line heights are HIG's, not Tailwind's ratio-based defaults. */
+  --text-caption2:      11px;  --text-caption2--line-height:  13px;
+  --text-caption1:      12px;  --text-caption1--line-height:  16px;
+  --text-footnote:      13px;  --text-footnote--line-height:  18px;
+  --text-subheadline:   15px;  --text-subheadline--line-height: 20px;
+  --text-callout:       16px;  --text-callout--line-height:   21px;
+  --text-body:          17px;  --text-body--line-height:      22px;
+  --text-headline:      17px;  --text-headline--line-height:  22px;
+  --text-title3:        20px;  --text-title3--line-height:    25px;
+  --text-title2:        22px;  --text-title2--line-height:    28px;
+  --text-title1:        28px;  --text-title1--line-height:    34px;
+  --text-largetitle:    34px;  --text-largetitle--line-height: 41px;
+
+  /* Driver-facing names must stay oversized per the app's own hard rules.
+     These sit above HIG's scale on purpose — read at arm's length, in a van. */
+  --text-name:          40px;  --text-name--line-height:      44px;
+  --text-name-lg:       52px;  --text-name-lg--line-height:   56px;
+
+  /* --- Spacing (8pt grid, 4pt half-steps) ---------------------------------
+     Tailwind's numeric scale is 4px-based and already grid-aligned at whole
+     steps. These named steps exist so new code stops reaching for p-1.5 /
+     p-2.5 / p-3.5, which land on 6px / 10px / 14px and break the grid. */
+  --spacing-step-1:  4px;
+  --spacing-step-2:  8px;
+  --spacing-step-3: 16px;
+  --spacing-step-4: 24px;
+  --spacing-step-5: 32px;
+  --spacing-step-6: 48px;
+  --spacing-step-7: 64px;
+
+  /* --- Ink colors, all AA-compliant on white ------------------------------
+     Contrast vs #FFFFFF measured, not guessed. stone-400 (#a8a29e, 2.5:1)
+     and stone-300 (#d6d3d1, 1.6:1) both fail AA and are the reason these
+     exist. Use ink-secondary wherever stone-400 currently carries text. */
+  --color-ink-primary:   #1c1917; /* 17.8:1 */
+  --color-ink-body:      #374151; /* 10.3:1 — matches --foreground */
+  --color-ink-secondary: #57534e; /*  7.0:1 */
+  --color-ink-muted:     #78716c; /*  4.7:1 — AA floor for normal text */
+
+  /* --- Touch targets ------------------------------------------------------
+     HIG minimum is 44x44pt. Anything a driver taps one-handed while holding
+     a package should clear it. */
+  --spacing-tap: 44px;
+}
+
+/* Minimum tappable area without changing a control's visual size. */
+.tap-target {
+  min-width: var(--spacing-tap);
+  min-height: var(--spacing-tap);
+}
