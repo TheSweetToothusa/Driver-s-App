@@ -337,6 +337,22 @@ async function readPodOrder(orderId: string): Promise<any> {
   } catch { return {}; }
 }
 
+// Read a POD row for a read-modify-write update.
+//
+// Returns null when the DB is unreachable. Callers MUST bail instead of writing:
+// readPodOrder returns a { __dbError: true } sentinel on failure, and merging a
+// field into that and writing it back replaces the stored proof of delivery —
+// photo, signature, completedAt, status — with an almost-empty stub. That is a
+// silent, unrecoverable data loss, so a failed read must never become a write.
+async function readPodOrderForUpdate(orderId: string): Promise<any | null> {
+  const existing = await readPodOrder(orderId);
+  if (existing && existing.__dbError) {
+    console.error(`POD read failed for ${orderId} — refusing to write over existing proof`);
+    return null;
+  }
+  return existing;
+}
+
 async function writePodOrder(orderId: string, data: any): Promise<boolean> {
   let dbSuccess = false;
   // Always write to DB (with retry on transient connection errors)
@@ -1761,7 +1777,8 @@ async function startServer() {
     const orderId = req.params.id;
 
     // Save to DB
-    const existing = await readPodOrder(orderId);
+    const existing = await readPodOrderForUpdate(orderId);
+    if (!existing) return res.status(503).json({ error: 'Database unavailable — please retry' });
     existing.driverId = driverId;
     existing.driverName = driverName;
     await writePodOrder(orderId, existing);
@@ -1794,7 +1811,8 @@ async function startServer() {
 
   app.patch("/api/orders/:id/status", async (req, res) => {
     const { status } = req.body;
-    const existing = await readPodOrder(req.params.id);
+    const existing = await readPodOrderForUpdate(req.params.id);
+    if (!existing) return res.status(503).json({ error: 'Database unavailable — please retry' });
     existing.status = status;
     if (status === 'DELIVERED' && !existing.completedAt) {
       existing.completedAt = new Date().toISOString();
@@ -1949,7 +1967,8 @@ async function startServer() {
 
   app.post("/api/orders/:id/note", async (req, res) => {
     const { note } = req.body;
-    const existing = await readPodOrder(req.params.id);
+    const existing = await readPodOrderForUpdate(req.params.id);
+    if (!existing) return res.status(503).json({ error: 'Database unavailable — please retry' });
     const prev = existing.adminNotes || '';
     existing.adminNotes = prev
       ? `${prev}\n[${new Date().toLocaleString()}] ${note}`
@@ -1962,7 +1981,8 @@ async function startServer() {
   app.patch("/api/orders/:id/edit", async (req, res) => {
     const { customer, address, giftReceiverName, giftSenderName, giftSenderPhone, deliveryFee, deliveryDate } = req.body;
     const orderId = req.params.id;
-    const existing = await readPodOrder(orderId);
+    const existing = await readPodOrderForUpdate(orderId);
+    if (!existing) return res.status(503).json({ error: 'Database unavailable — please retry' });
     if (customer) existing.customer = customer;
     if (address) existing.address = address;
     if (giftReceiverName !== undefined) existing.giftReceiverName = giftReceiverName;
@@ -2031,7 +2051,8 @@ async function startServer() {
   app.post("/api/orders/:id/revert", async (req, res) => {
     const id = req.params.id;
     try {
-      const existing = await readPodOrder(id);
+      const existing = await readPodOrderForUpdate(id);
+      if (!existing) return res.status(503).json({ error: 'Database unavailable — please retry' });
       delete existing.photo;
       delete existing.signature;
       delete existing.completedAt;
@@ -2630,9 +2651,14 @@ async function startServer() {
       sent = await sendEmail(email, subject, message);
     }
     if (sent) {
-      const existingPodNotif = await readPodOrder(order.id);
-      existingPodNotif[type === 'SUCCESS' ? 'successNotificationSent' : 'failureNotificationSent'] = true;
-      await writePodOrder(order.id, existingPodNotif);
+      const existingPodNotif = await readPodOrderForUpdate(order.id);
+      // The email already went out. If the POD row is unreadable, skip the flag
+      // rather than write a stub over it — a duplicate notification later is
+      // recoverable, erased proof of delivery is not.
+      if (existingPodNotif) {
+        existingPodNotif[type === 'SUCCESS' ? 'successNotificationSent' : 'failureNotificationSent'] = true;
+        await writePodOrder(order.id, existingPodNotif);
+      }
       // Log the message
       await appendMessageLogDB({
         id: `msg_${Date.now()}`,
