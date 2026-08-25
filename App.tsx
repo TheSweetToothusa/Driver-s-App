@@ -41,6 +41,56 @@ const formatDate = (iso: string) => new Date(iso).toLocaleDateString('en-US', { 
 const localDateStr = (d: Date = new Date()) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
+// ─────────────────────────────────────────────────────────────────────────────
+// PROOF-OF-DELIVERY PHOTO SIZING
+//
+// The server accepts a 10 MB JSON body (deliberately capped — the app runs on a
+// 512 MB Render instance). An unscaled 12MP phone photo re-encoded at quality
+// 0.92 is 4-8 MB of base64 on its own; add the signature and the POD POST is
+// rejected with 413. A 413 is a 4xx, so the retry helper below (correctly) does
+// not retry it — the driver just saw "save failed" and the photo, which only
+// ever lived in React state, was gone the moment they navigated away.
+// Order 36491 (Aug 24, 2026) was lost exactly this way.
+const POD_PHOTO_MAX_EDGE = 1600;
+const POD_PHOTO_QUALITY = 0.85;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POD DRAFT RECOVERY
+//
+// A captured photo is proof that the driver cannot re-take once they have left
+// the doorstep. Keep it on the device the instant it is captured, so a failed
+// save, a reload, a backgrounded PWA or a dead cell signal can never destroy it.
+// Cleared only once the server has confirmed the POD is persisted.
+// ─────────────────────────────────────────────────────────────────────────────
+type PodDraft = { photo?: string | null; signature?: string | null; notes?: string; photoTimestamp?: string | null; savedAt?: string };
+
+const podDraftKey = (orderId: string) => `st_pod_draft_${orderId}`;
+
+function readPodDraft(orderId: string): PodDraft | null {
+  try {
+    const raw = localStorage.getItem(podDraftKey(orderId));
+    return raw ? JSON.parse(raw) as PodDraft : null;
+  } catch { return null; }
+}
+
+function writePodDraft(orderId: string, draft: PodDraft): void {
+  try {
+    localStorage.setItem(podDraftKey(orderId), JSON.stringify({ ...draft, savedAt: new Date().toISOString() }));
+  } catch (e) {
+    // Quota exceeded — drop the oldest drafts and try once more. Losing an old
+    // already-delivered draft is fine; losing the current photo is not.
+    try {
+      const keys = Object.keys(localStorage).filter(k => k.startsWith('st_pod_draft_'));
+      keys.slice(0, Math.max(1, keys.length - 3)).forEach(k => localStorage.removeItem(k));
+      localStorage.setItem(podDraftKey(orderId), JSON.stringify({ ...draft, savedAt: new Date().toISOString() }));
+    } catch { console.error('Could not persist POD draft locally', e); }
+  }
+}
+
+function clearPodDraft(orderId: string): void {
+  try { localStorage.removeItem(podDraftKey(orderId)); } catch {}
+}
+
 // POST /api/pod with retry — blocking until it succeeds or exhausts retries.
 // Retries on network error or 5xx (including 503 from backend when DB is unreachable).
 // Does NOT retry on 4xx — those are caller-side problems that won't recover with time.
@@ -65,6 +115,12 @@ async function postPodWithRetry(
       // 4xx — not retryable, caller sent something bad
       if (resp.status >= 400 && resp.status < 500) {
         const errBody = await resp.json().catch(() => ({}));
+        // 413 = the photo made the body bigger than the server accepts. Say so
+        // plainly instead of "Bad request" — and reassure the driver the photo is
+        // still held on the device, because it is (see POD DRAFT RECOVERY above).
+        if (resp.status === 413) {
+          return { ok: false, error: 'Photo too large to upload. Your photo is saved on this phone — retake it or tap Mark Delivered again.', status: 413 };
+        }
         return { ok: false, error: errBody?.error || `Bad request (${resp.status})`, status: resp.status };
       }
       // 5xx — retryable
@@ -979,6 +1035,19 @@ const OrderDetail: React.FC<{
   // stamp AND saved as completedAt, so a delivery logged late still shows its true time.
   const [customTime, setCustomTime] = useState('');
   const [rawPhoto, setRawPhoto] = useState<string | null>(null);
+
+  // Recover a photo captured earlier whose save never made it to the server
+  // (413, dead signal, app backgrounded). Never overwrites proof already loaded
+  // from the server — it only fills in what is missing.
+  useEffect(() => {
+    if (isCompleted) return;
+    const draft = readPodDraft(order.id);
+    if (!draft) return;
+    if (draft.photo) setPhotoData(prev => prev || draft.photo!);
+    if (draft.signature) setSigData(prev => prev || draft.signature!);
+    if (draft.notes) setDriverNote(prev => prev || draft.notes!);
+    if (draft.photoTimestamp) setPhotoTimestamp(prev => prev || draft.photoTimestamp!);
+  }, [order.id, isCompleted]);
   // Admins can re-open the proof-of-delivery capture on an already-delivered order
   // (e.g. to add a photo that was missed and email the customer) without the
   // status-toggle dance. Reveals the same capture card used for normal deliveries.
@@ -1012,22 +1081,30 @@ const OrderDetail: React.FC<{
   const stampPhotoWith = (rawDataUrl: string, when: Date): Promise<string> => new Promise((resolve) => {
     const img = new Image();
     img.onload = () => {
+      // Downscale before encoding. A modern phone camera shoots 12MP+; re-encoding
+      // that at full size produced 4-8 MB of base64 and blew past the server's
+      // 10 MB JSON limit, so the POD POST came back 413 and the delivery could not
+      // be saved at all. 1600px on the long edge is still far more detail than a
+      // doorstep proof photo needs, and keeps the payload a few hundred KB.
+      const scale = Math.min(1, POD_PHOTO_MAX_EDGE / Math.max(img.width, img.height));
+      const w = Math.max(1, Math.round(img.width * scale));
+      const h = Math.max(1, Math.round(img.height * scale));
       const canvas = document.createElement('canvas');
-      canvas.width = img.width;
-      canvas.height = img.height;
+      canvas.width = w;
+      canvas.height = h;
       const ctx = canvas.getContext('2d')!;
-      ctx.drawImage(img, 0, 0);
-      const barH = Math.max(48, img.height * 0.07);
+      ctx.drawImage(img, 0, 0, w, h);
+      const barH = Math.max(48, h * 0.07);
       ctx.fillStyle = 'rgba(0,0,0,0.62)';
-      ctx.fillRect(0, img.height - barH, img.width, barH);
-      const fontSize = Math.max(22, img.width * 0.038);
+      ctx.fillRect(0, h - barH, w, barH);
+      const fontSize = Math.max(22, w * 0.038);
       ctx.font = `bold ${fontSize}px Arial, sans-serif`;
       ctx.fillStyle = '#ffffff';
       ctx.textBaseline = 'middle';
       const stamp = when.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) +
         ' ' + when.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-      ctx.fillText('📍 The Sweet Tooth  ·  ' + stamp, img.width * 0.025, img.height - barH / 2);
-      resolve(canvas.toDataURL('image/jpeg', 0.92));
+      ctx.fillText('📍 The Sweet Tooth  ·  ' + stamp, w * 0.025, h - barH / 2);
+      resolve(canvas.toDataURL('image/jpeg', POD_PHOTO_QUALITY));
     };
     img.src = rawDataUrl;
   });
@@ -1042,6 +1119,8 @@ const OrderDetail: React.FC<{
       const stamped = await stampPhotoWith(raw, when);
       setPhotoData(stamped);
       setPhotoTimestamp(when.toISOString());
+      // Hold it on the device immediately — before any network call can fail.
+      writePodDraft(order.id, { photo: stamped, signature: sigData, notes: driverNote, photoTimestamp: when.toISOString() });
     };
     r.readAsDataURL(f);
   };
@@ -1055,6 +1134,7 @@ const OrderDetail: React.FC<{
       const stamped = await stampPhotoWith(rawPhoto, when);
       setPhotoData(stamped);
       setPhotoTimestamp(when.toISOString());
+      writePodDraft(order.id, { photo: stamped, signature: sigData, notes: driverNote, photoTimestamp: when.toISOString() });
     }
   };
 
@@ -1127,6 +1207,9 @@ const OrderDetail: React.FC<{
       return;
     }
 
+    // POD persisted — the device copy is no longer the only one, so release it.
+    clearPodDraft(order.id);
+
     // POD persisted — now safe to update Shopify tag and local state.
     const updates: Partial<Delivery> = { status: DeliveryStatus.DELIVERED, confirmationPhoto: photoData || undefined, confirmationSignature: sigData || undefined, driverNotes: driverNote, completedAt: now, submittedAt };
     onUpdate(order.id, updates);
@@ -1183,6 +1266,7 @@ const OrderDetail: React.FC<{
       return;
     }
 
+    clearPodDraft(order.id);
     const updates: Partial<Delivery> = { status: DeliveryStatus.DELIVERED, driverNotes: driverNote || 'Admin override — marked delivered manually', completedAt: now, submittedAt: now };
     onUpdate(order.id, updates);
 
