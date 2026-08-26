@@ -1,271 +1,128 @@
 /* ==========================================================================
-   Basket Builder — mobile size-step redesign
+   Basket Builder — mobile size step
    Scope: phones only (max-width: 749px). Desktop is untouched.
 
-   Fixes the layout bug that made every card render as a squat image floating
-   in a half-empty row:
-     .basket-image  flex 0 0 47%
-     .basket-content flex 1 1 53%   47% + 53% + 10px gap  >  100%
-   plus `flex-wrap: wrap` at <=600px, so the two halves wrapped onto separate
-   lines on every real phone. Replaced with an explicit 2-column grid, so the
-   widths can no longer overflow.
+   THE BUG
+   The card is meant to be photo-left / text-right. The widths can't fit:
+     .basket-image   flex: 0 0 47%
+     .basket-content flex: 1 1 53%
+     .basket-card    gap: 10px
+   47% + 53% + 10px is wider than the card, and a rule at <=600px adds
+   flex-wrap: wrap — so on every real phone the two halves land on separate
+   rows: a stranded photo, text under it, and a full-width bar under that.
+
+   THE PROPORTIONS
+   The product shots are 3:2 landscape (1200x800). Every photo column here is
+   3:2 to match, so the basket fills it edge to edge. Dropping a 3:2 photo into
+   a square column fits it by width and leaves a third of the box empty — which
+   is how the basket ends up smaller than the controls beside it.
+
+   Two columns, photo on top: the standard premium-retail grid on mobile
+   (Aesop, Bottega, Sugarfina). Biggest basket per screen, and all eight sizes
+   fit in four rows.
+
+   Everything is ranked below the photo. The basket is the largest element on
+   the card; the name and price sit at body size; the rest is quiet grey.
 
    Palette per brand rules: ink #1D1D1F (never #000), hairline #E8E8E8,
-   off-white well #FAFAFA, gold #D4AF37 as a sparing accent only.
+   gold #D4AF37 as a sparing accent only.
    ========================================================================== */
 
 @media (max-width: 749px) {
+  #bb-choose-title { font-size:1.5rem !important; letter-spacing:-.02em; color:#1D1D1F !important; margin:10px 16px 0 !important; }
+  .bb-mobile-pillbar { gap:6px; padding:8px 12px 10px; background:rgba(255,255,255,.92);
+    -webkit-backdrop-filter:saturate(180%) blur(12px); backdrop-filter:saturate(180%) blur(12px);
+    border-bottom:1px solid #E8E8E8; box-shadow:none; margin:0 -12px 12px; }
+  .bb-mobile-pillbar a { border-radius:8px; background:#F5F5F7; color:#1D1D1F; border:1px solid transparent;
+    font-size:.8125rem; font-weight:600; letter-spacing:-.01em; min-height:34px; padding:8px 4px; }
+  .bb-mobile-pillbar a.is-active { background:#1D1D1F; color:#fff; border-color:#1D1D1F; }
+  .bb-mobile-strip { padding:6px 6px 12px !important; margin:0 -6px 12px !important; }
 
-  /* ---- Section heading -------------------------------------------------- */
-  /* Was 2.4rem (38px) via inline style — oversized on a 390px screen. */
-  #bb-choose-title {
-    font-size: 1.5rem !important;
-    letter-spacing: -0.02em;
-    color: #1D1D1F !important;
-    margin: 10px 16px 0 !important;
-  }
-
-  /* ---- Size ladder: removed ---------------------------------------------
-     The pill bar and the ladder strip were two navigation controls stacked on
-     top of each other doing the same job (~90px of chrome above the fold).
-     The ladder's one unique signal — relative basket size — now lives in the
-     cards themselves, via the proportional artwork below.
-     To bring it back, delete this one rule.                                 */
-  .bb-mobile-strip { display: none !important; }
-
-  /* ---- Sticky size pills ------------------------------------------------- */
-  .bb-mobile-pillbar {
-    gap: 6px;
-    padding: 8px 12px 10px;
-    background: rgba(255, 255, 255, 0.92);
-    -webkit-backdrop-filter: saturate(180%) blur(12px);
-    backdrop-filter: saturate(180%) blur(12px);
-    border-bottom: 1px solid #E8E8E8;
-    box-shadow: none;
-    margin: 0 -12px 14px;
-  }
-  .bb-mobile-pillbar a {
-    border-radius: 8px;
-    background: #F5F5F7;
-    color: #1D1D1F;
-    border: 1px solid transparent;
-    font-size: 0.8125rem;
-    font-weight: 600;
-    letter-spacing: -0.01em;
-    min-height: 34px;
-    padding: 8px 4px;
-  }
-  .bb-mobile-pillbar a.is-active {
-    background: #1D1D1F;
-    color: #FFFFFF;
-    border-color: #1D1D1F;
-  }
-
-  /* ---- Card list --------------------------------------------------------- */
   .basket-grid {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
     gap: 10px !important;
+    align-items: stretch !important;
     margin-bottom: 24px !important;
   }
-
   .basket-card {
-    display: grid !important;
-    grid-template-columns: 108px minmax(0, 1fr) !important;
-    grid-template-rows: auto auto !important;
-    column-gap: 14px !important;
-    row-gap: 0 !important;
-    align-content: center !important;
-    align-items: center !important;
-    flex-wrap: nowrap !important;   /* neutralises the <=600px wrap rule */
-    padding: 12px !important;
-    border: 1px solid #E8E8E8 !important;
-    border-radius: 12px !important;
-    background: #FFFFFF !important;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04) !important;
-    transition: box-shadow 0.2s ease, border-color 0.2s ease !important;
-  }
-
-  /* Touch devices have no real hover — the lift used to stick after a tap. */
-  .basket-card:hover {
-    transform: none !important;
-    border-color: #E8E8E8 !important;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04) !important;
-  }
-
-  /* Selection is a ring, not a jump: no transform, so nothing reflows. */
-  .basket-card.selected {
-    transform: none !important;
-    background: #FFFFFF !important;
-    border-color: #1D1D1F !important;
-    box-shadow: inset 0 0 0 1px #1D1D1F, 0 4px 12px rgba(0, 0, 0, 0.06) !important;
-  }
-  /* The badge used to sit top-right, directly on top of the price. The photo
-     is padded inside its well, so the card's top-left corner is empty. */
-  .basket-card.selected::after {
-    top: 8px !important;
-    left: 8px !important;
-    right: auto !important;
-    width: 20px !important;
-    height: 20px !important;
-    font-size: 11px !important;
-    background: #1D1D1F !important;
-    box-shadow: 0 0 0 2px #FFFFFF !important;
-  }
-
-  /* ---- Artwork -----------------------------------------------------------
-     Fixed 108px well, both grid rows. The photo is scaled inside it in
-     proportion to the real basket diameter (10" .. 30"), so the list itself
-     shows the size difference the ladder strip used to carry.               */
-  .basket-card .basket-image {
-    grid-column: 1 !important;
-    grid-row: 1 / span 2 !important;
-    width: 108px !important;
-    height: 108px !important;
-    max-width: 108px !important;
-    max-height: 108px !important;
-    flex: none !important;
-    object-fit: contain !important;
-    /* The product shots carry their own white backdrop, so the well is white
-       too — a tinted well would draw a visible box around every photo. */
-    background: #FFFFFF !important;
-    border-radius: 0 !important;
-    align-self: center !important;
-    padding: 10px !important;
-    /* Jumbo/Penultimate/Supreme were shot on #FCFCFC-#FEFEFE, which reads as a
-       faint grey box against the white card. A 3% lift clips those backdrops
-       to pure white; mid-tones move ~2/255, which is invisible. */
-    filter: brightness(1.03) !important;
-  }
-  #size-small       .basket-image { padding: 15px !important; }  /* 10"   */
-  #size-medium      .basket-image { padding: 13px !important; }  /* 12"   */
-  #size-large       .basket-image { padding: 10px !important; }  /* 16"   */
-  #size-xl          .basket-image { padding:  8px !important; }  /* 18"   */
-  #size-grand       .basket-image { padding:  7px !important; }  /* 20"   */
-  #size-jumbo       .basket-image { padding:  4px !important; }  /* 24.5" */
-  #size-penultimate .basket-image { padding:  5px !important; }  /* 24"   */
-  #size-supreme     .basket-image { padding:  2px !important; }  /* 30"   */
-  /* The wrapped shots are framed looser than the open ones — without this the
-     basket shrinks noticeably the moment you flip a card. */
-  .basket-card.is-wrapped .basket-image { padding: 6px !important; }
-
-  /* ---- Text column -------------------------------------------------------- */
-  .basket-card .basket-content {
-    grid-column: 2 !important;
-    grid-row: 1 !important;
-    width: auto !important;
-    min-width: 0 !important;
-    flex: none !important;
-    padding: 0 !important;
     display: flex !important;
     flex-direction: column !important;
-    align-items: flex-start !important;
-    gap: 5px !important;
-  }
-
-  .basket-card .basket-header {
-    display: flex !important;
-    width: 100% !important;
-    flex-direction: row !important;
-    justify-content: space-between !important;
-    align-items: baseline !important;
-    gap: 10px !important;
-    margin-bottom: 0 !important;
-  }
-
-  .basket-card .basket-name {
-    font-size: 1.0625rem !important;   /* 17px */
-    font-weight: 600 !important;
-    line-height: 1.25 !important;
-    letter-spacing: -0.015em !important;
-    color: #1D1D1F !important;
-  }
-
-  .basket-card .basket-price {
-    font-size: 1.0625rem !important;
-    font-weight: 600 !important;
-    line-height: 1.25 !important;
-    letter-spacing: -0.015em !important;
-    color: #1D1D1F !important;
-    margin-left: 0 !important;
-    white-space: nowrap !important;
-    font-variant-numeric: tabular-nums !important;
-  }
-
-  /* Was a solid black pill on all eight rows — far too much weight repeated
-     down the list. Same information, a fraction of the ink. */
-  .basket-card .serving-pill {
-    background: #F5F5F7 !important;
-    color: #1D1D1F !important;
-    font-size: 0.75rem !important;      /* 12px */
-    font-weight: 600 !important;
-    letter-spacing: 0 !important;
-    line-height: 1.35 !important;
-    padding: 3px 8px !important;
-    border-radius: 6px !important;
-    margin-bottom: 0 !important;
-    align-self: flex-start !important;
-  }
-
-  .basket-card .basket-details {
-    font-size: 0.8125rem !important;    /* 13px */
-    font-weight: 400 !important;
-    line-height: 1.35 !important;
-    letter-spacing: 0 !important;   /* theme typography tracks body text out */
-    color: #6E6E73 !important;
-  }
-
-  /* ---- "See it wrapped" ---------------------------------------------------
-     Was a full-width cream bar 46px tall welded to the bottom of every card —
-     the single biggest source of the dead space. Now a compact chip in the
-     text column, with an invisible expanded hit area so it still clears the
-     44px touch-target minimum and a near-miss cannot select the basket.     */
-  .basket-card .rh-flip {
-    grid-column: 2 !important;
-    grid-row: 2 !important;
-    position: relative !important;
-    justify-self: start !important;
-    flex: none !important;
-    width: auto !important;
-    min-height: 0 !important;
-    margin: 8px 0 0 !important;
-    padding: 6px 10px !important;
+    flex-wrap: nowrap !important;
+    align-items: stretch !important;
+    padding: 8px 8px 10px !important;
+    gap: 0 !important;
     border: 1px solid #E8E8E8 !important;
-    border-radius: 8px !important;
-    background: #FFFFFF !important;
-    color: #1D1D1F !important;
-    font: 600 0.78125rem/1 inherit !important;  /* 12.5px */
-    letter-spacing: 0 !important;
-    gap: 6px !important;
+    border-radius: 12px !important;
+    background: #fff !important;
+    box-shadow: 0 1px 2px rgba(0,0,0,.04) !important;
+    transition: box-shadow .2s ease, border-color .2s ease !important;
   }
-  .basket-card .rh-flip::after {   /* 44px touch target, invisible */
-    content: '';
-    position: absolute;
-    inset: -9px -8px;
-  }
-  .basket-card .rh-flip svg {
-    width: 12px !important;
-    height: 12px !important;
-    color: #8E8E93 !important;   /* gold on all eight rows is not "sparing" */
-  }
-  .basket-card.is-wrapped .rh-flip svg { color: #D4AF37 !important; }
-  .basket-card .rh-flip:hover,
-  .basket-card .rh-flip:active {
-    background: #FAFAFA !important;
-    border-color: #D4AF37 !important;
-    color: #1D1D1F !important;
-  }
-  .basket-card.is-wrapped .rh-flip {
-    border-color: #D4AF37 !important;
-    background: #FFFDF7 !important;
-  }
+  .basket-card:hover { transform:none !important; border-color:#E8E8E8 !important; box-shadow:0 1px 2px rgba(0,0,0,.04) !important; }
+  .basket-card.selected { transform:none !important; background:#fff !important; border-color:#1D1D1F !important;
+    box-shadow: inset 0 0 0 1px #1D1D1F, 0 4px 12px rgba(0,0,0,.06) !important; }
+  .basket-card.selected::after { top:7px !important; left:7px !important; right:auto !important;
+    width:20px !important; height:20px !important; font-size:11px !important; background:#1D1D1F !important;
+    box-shadow:0 0 0 2px #fff !important; }
 
-  /* Sticky pill bar clears the anchored card. */
-  .basket-card[id^="size-"] {
-    scroll-margin-top: 78px;
+  .basket-card .basket-image {
+    order: 0 !important;
+    width: 100% !important; max-width: none !important;
+    height: auto !important; max-height: none !important;
+    aspect-ratio: 3 / 2 !important;
+    flex: none !important;
+    object-fit: contain !important;
+    background: #fff !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+    filter: brightness(1.03) !important;
   }
+  #size-small .basket-image { padding:6px !important; }
+  #size-medium .basket-image { padding:5px !important; }
+  #size-large  .basket-image { padding:3px !important; }
+  #size-xl     .basket-image { padding:3px !important; }
+  #size-grand  .basket-image { padding:2px !important; }
+  #size-jumbo  .basket-image { padding:0 !important; }
+  #size-penultimate .basket-image { padding:1px !important; }
+  #size-supreme .basket-image { padding:0 !important; }
+  .basket-card.is-wrapped .basket-image { padding:0 !important; }
 
-  @media (prefers-reduced-motion: reduce) {
-    .basket-card { transition: none !important; }
+  .basket-card .basket-content {
+    order: 1 !important;
+    width: auto !important; min-width: 0 !important; flex: 1 1 auto !important;
+    padding: 6px 2px 0 !important;
+    display: flex !important; flex-direction: column !important; align-items: flex-start !important;
+    gap: 2px !important;
   }
+  .basket-card .basket-header { display:flex !important; width:100% !important; flex-direction:row !important;
+    justify-content:space-between !important; align-items:baseline !important; gap:6px !important; margin-bottom:1px !important; }
+  .basket-card .basket-name { font-size:.9375rem !important; font-weight:600 !important; line-height:1.2 !important;
+    letter-spacing:-.02em !important; color:#1D1D1F !important; }
+  .basket-card .basket-price { font-size:.9375rem !important; font-weight:600 !important; line-height:1.2 !important;
+    letter-spacing:-.02em !important; color:#1D1D1F !important; margin-left:0 !important; white-space:nowrap !important;
+    font-variant-numeric:tabular-nums !important; }
+  .basket-card .serving-pill { display:block !important; background:none !important; color:#1D1D1F !important;
+    font-size:.6875rem !important; font-weight:500 !important; letter-spacing:0 !important; line-height:1.35 !important;
+    padding:0 !important; border-radius:0 !important; margin:0 !important; }
+  .basket-card .basket-details { font-size:.6875rem !important; font-weight:400 !important; line-height:1.35 !important;
+    letter-spacing:0 !important; color:#86827C !important; }
+
+  .basket-card .rh-flip {
+    order: 2 !important;
+    position: relative !important; align-self: flex-start !important;
+    flex: none !important; width: auto !important; min-height: 0 !important;
+    margin: 7px 0 0 2px !important; padding: 0 !important;
+    border: 0 !important; border-radius: 0 !important; background: none !important;
+    color: #86827C !important; font: 500 .6875rem/1.2 inherit !important; letter-spacing: 0 !important;
+    gap: 5px !important; text-decoration: none !important;
+  }
+  .basket-card .rh-flip::after { content:''; position:absolute; inset:-15px -12px; }
+  .basket-card .rh-flip svg { width:10px !important; height:10px !important; color:#B3AEA6 !important; }
+  .basket-card .rh-flip:hover, .basket-card .rh-flip:active { background:none !important; color:#1D1D1F !important; }
+  .basket-card.is-wrapped .rh-flip { color:#7D6218 !important; }
+  .basket-card.is-wrapped .rh-flip svg { color:#D4AF37 !important; }
+
+  .basket-card[id^="size-"] { scroll-margin-top:78px; }
 }
 
 /* ==========================================================================
@@ -275,8 +132,7 @@
 
    Measured on a 390x844 phone: the first basket card started 1,035px down the
    page, so nobody saw a basket without scrolling past a full screen and a half
-   of hero. This trims that to roughly half. No copy is changed — only the
-   image crop, type sizes and spacing.
+   of hero. No copy is changed — only the image crop, type sizes and spacing.
    ========================================================================== */
 @media (max-width: 749px) {
 
@@ -292,7 +148,7 @@
     margin-top: 7px !important;
     font-size: 0.75rem !important;
     line-height: 1.35 !important;
-    color: #6E6E73 !important;
+    color: #86827C !important;
   }
 
   .rh-hero { margin: 8px auto 0 !important; }
@@ -328,10 +184,9 @@
     margin-top: 10px !important;
     font-size: 0.78125rem !important;
     line-height: 1.5 !important;
-    color: #6E6E73 !important;
+    color: #86827C !important;
   }
   .rh-hero__plus b { color: #1D1D1F !important; }
 
-  /* Step tracker sits between the hero and the pills — keep it quiet. */
   .bb-tracker { margin-top: 10px !important; }
 }

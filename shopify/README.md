@@ -17,6 +17,10 @@ Mobile redesign of the **size step** on the Rosh Hashanah Basket Builder:
 Phones only — everything is inside `@media (max-width: 749px)`, so the desktop
 layout is byte-for-byte unchanged.
 
+Layout is a **two-column grid, photo on top** — the standard premium-retail
+grid on mobile (Aesop, Bottega, Sugarfina), and what Baymard reports as the
+default column count for phones. Two alternates are in `alternates/`.
+
 ### The bug it fixes
 
 The existing mobile CSS intends a side-by-side card: photo left, text right.
@@ -37,28 +41,34 @@ Measured on a 390×844 viewport (iPhone 14/15):
 
 | | before | after |
 |---|---:|---:|
-| Card height | 289px | 134px |
-| Full size list | 2,361px | 1,142px |
-| Scroll before the first basket is visible | 1,164px | 746px |
-| Whole page | 5,062px | 3,426px |
+| Basket photo, as drawn | 78 × 52px | **134 × 89px** |
+| Full size list | 2,361px | **742px** |
+| Scroll before the first basket is visible | 1,164px | **839px** |
 
-The fix replaces the flex widths with an explicit two-column grid
-(`108px minmax(0, 1fr)`), which cannot overflow.
+## Proportions
+
+The product shots are **3:2 landscape** (1200×800). Every photo column here is
+3:2 to match, so the basket fills it edge to edge.
+
+This is the mistake worth not repeating: an earlier pass put those 3:2 photos
+into a **square** column. `object-fit: contain` fits by width, so a third of the
+box was empty air and the basket collapsed to 78×52px — smaller than the
+"See it wrapped" button sitting next to it. On this page the basket is always
+the largest element on the card, and every control is ranked below it.
 
 ### What else changed
 
 - **Selection** is a ring instead of `translateY(-6px)`, so choosing a size no
   longer shifts the page under your thumb. The checkmark moved to the card's
   top-left; at top-right it was sitting on top of the price.
-- **"See it wrapped"** went from a full-width 46px bar to a compact chip. It
-  keeps a 136×46 touch area via an invisible `::after`, so it still clears the
-  44px minimum and a near-miss cannot select the basket.
-- **Artwork is scaled in proportion to the real basket diameter** (10″ → 30″),
-  so the list itself shows the size difference.
-- **The size ladder strip is hidden.** It duplicated the sticky pill bar
-  directly above it (~90px of chrome for a second copy of the same navigation);
-  its one unique signal, relative size, is now in the cards. To restore it,
-  delete the single `.bb-mobile-strip { display: none }` rule.
+- **"See it wrapped"** went from a full-width 46px cream bar to a plain grey
+  text link with no box. It is Rosh Hashanah only for now — the year-round
+  baskets get it later — so it must not shape the card. It keeps a ~44px touch
+  area via an invisible `::after`, so a near-miss still cannot select the
+  basket.
+- **Artwork carries a slight nod to real basket diameter** (10″ → 30″), held
+  under 10% so the small sizes still read as product photos, not thumbnails.
+- **The size ladder strip is kept**, just tightened.
 - Jumbo/Penultimate/Supreme ship with a #FCFCFC–#FEFEFE backdrop that reads as a
   grey box on a white card. `filter: brightness(1.03)` clips it to white;
   mid-tones move about 2/255.
@@ -85,6 +95,20 @@ customer-facing changes need sign-off before they go live.
 3. Check on a real phone before publishing.
 
 To roll back, delete the `<style>` block. Nothing else is touched.
+
+### Alternates
+
+Same bug fix, different layout. Each is self-contained — use one *instead of*
+the card block in `basket-builder-mobile.css`.
+
+| | Photo as drawn | Full list | Reference |
+|---|---:|---:|---|
+| **Two-up grid** (shipped) | 134 × 89px | 742px | Aesop, Bottega, Sugarfina |
+| `option-a-list-row.css` | 131 × 87px | 1,057px | Apple Store product rows |
+| `option-c-editorial.css` | 279 × 186px | 2,366px | Bottega, Le Labo |
+
+C has by far the biggest photo and by far the longest scroll — it lands close to
+the page's original height, which is the problem this started from.
 
 ### Not covered
 
