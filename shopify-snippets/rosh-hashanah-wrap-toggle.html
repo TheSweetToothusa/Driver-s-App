@@ -1,0 +1,169 @@
+<!-- ===== RH WRAP SHOWCASE (rebuilt 2026-08-20 — mobile-safe) ===== -->
+<!--
+  WHERE THIS GOES
+  Shopify theme "LIVE SITE — The Sweet Tooth" (id 161706344703),
+  file: templates/page.basket-builder-rosh.liquid
+  Position: immediately above the div.basket-grid element inside #step-size.
+  (NOT the page body - Pages > Rosh Hashanah Basket Builder has a 36-char body
+  and renders through the template_suffix "basket-builder-rosh".)
+
+  WHAT CHANGED AND WHY
+  The first version of this toggle was a dark pill absolutely positioned at
+  top:10px right:10px of the basket card. On mobile the card is a horizontal
+  row (photo left 47%, text right 53%), so that corner is exactly where the
+  basket NAME and PRICE live - the pill covered both, and it stacked on the
+  selected-state checkmark (.basket-card.selected::after, same corner, z-index
+  20). It was also the same black as the "Serves X people" pill directly under
+  it, so it read as a label rather than a button.
+
+  The toggle is now an in-flow chip inside .basket-content, below the piece
+  count. It cannot overlap anything at any width, it is outlined rather than
+  black, and it is a real 38-42px tap target.
+
+  This block also fixes a second collision in the same corner: the selected
+  checkmark landed on the price (measured at 390px: badge x340-362, price
+  x333-357), so .basket-header now reserves that corner on mobile.
+
+  The "size proof" band CSS (.rh-scale) is carried over unchanged.
+-->
+<style>
+  .basket-card{position:relative;}
+
+  /* ---- "See it wrapped" toggle — in normal flow, never an overlay ---- */
+  .rh-flip{
+    -webkit-appearance:none;appearance:none;
+    align-self:flex-start;
+    flex:0 0 auto;
+    display:inline-flex;align-items:center;gap:8px;
+    margin:14px 0 0;
+    padding:11px 18px;
+    min-height:44px;
+    background:#ffffff;
+    border:1.5px solid #e3ded1;
+    border-radius:999px;
+    color:#3f3a2c;
+    font-family:inherit;
+    font-size:15px;font-weight:600;line-height:1;letter-spacing:.005em;
+    text-align:left;
+    cursor:pointer;touch-action:manipulation;
+    transition:background .18s ease,border-color .18s ease,color .18s ease;
+  }
+  .rh-flip:hover{background:#fffdf6;border-color:#D4AF37;color:#111111;}
+  .rh-flip:focus-visible{outline:2px solid #D4AF37;outline-offset:2px;}
+  .rh-flip svg{flex:0 0 auto;width:15px;height:15px;color:#B9932F;
+    transition:transform .35s cubic-bezier(.4,0,.2,1);}
+
+  /* pressed = you are looking at the wrapped photo (gold, matching the page) */
+  .rh-flip[aria-pressed="true"]{background:#FBF3DC;border-color:#D4AF37;color:#54430f;}
+  .rh-flip[aria-pressed="true"] svg{color:#8a6b16;transform:rotate(180deg);}
+
+  /* soft cross-fade when the photo swaps */
+  .basket-card .basket-image{transition:opacity .18s ease;}
+  .basket-card.is-wrapped .basket-image{background:#fff;}
+
+  @media (max-width:749px){
+    /* The selected-state check badge (.basket-card.selected::after) sits in the
+       card's top-right corner. On a horizontal mobile card that corner is where
+       the price sits, so the badge lands on it - measured: badge x340-362 vs
+       price x333-357. Reserve the corner, always, so nothing shifts on select. */
+    .basket-card .basket-header{padding-right:26px;}
+
+    /* full width of the text column: same box in both states, no jitter,
+       and a comfortably big tap target on a phone */
+    .rh-flip{align-self:stretch;justify-content:center;
+             margin:8px 0 0;padding:9px 12px;min-height:38px;font-size:12.5px;gap:6px;}
+    .rh-flip svg{width:13px;height:13px;}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .rh-flip svg,.basket-card .basket-image{transition:none;}
+  }
+
+  /* -- Size-proof band under the size grid (unchanged) -- */
+  .rh-scale{max-width:900px;margin:6px auto 26px;padding:18px 20px;
+    background:#fffdf7;border:1px solid #ece6d8;border-radius:16px;
+    display:grid;grid-template-columns:1fr 500px;gap:24px;align-items:center;}
+  .rh-scale__label{margin:0 0 5px;font-size:12px;font-weight:800;letter-spacing:.08em;
+    text-transform:uppercase;color:#7d6218;}
+  .rh-scale__h{margin:0;font-size:20px;line-height:1.2;font-weight:800;color:#111;letter-spacing:-.01em;}
+  .rh-scale__p{margin:8px 0 0;font-size:14px;line-height:1.5;color:#4b5563;}
+  .rh-scale__pics{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  .rh-scale__pics figure{margin:0;}
+  .rh-scale__pics img{width:100%;height:auto;aspect-ratio:4/3;object-fit:contain;
+    border-radius:12px;display:block;background:#fff;border:1px solid #f0eade;}
+  @media (max-width:820px){
+    .rh-scale{grid-template-columns:1fr;gap:14px;margin:4px auto 20px;padding:15px 14px;border-radius:14px;}
+    .rh-scale__h{font-size:17px;}
+    .rh-scale__p{font-size:13px;}
+    .rh-scale__pics{gap:9px;}
+  }
+</style>
+<script>
+/* Map a size card id -> its WRAPPED photo (same angle, plain white background).
+   A card only gets the "See it wrapped" button once its photo is listed here,
+   so this turns on size by size as new shots come in. */
+window.RH_WRAPPED = {
+    'size-small':       "//thesweettooth.com/cdn/shop/t/83/assets/bbr-small_round_rosh_wrapped.jpg?v=63660285999918129631787258224",
+    'size-medium':      "//thesweettooth.com/cdn/shop/t/83/assets/bbr-medium_round_rosh_wrapped.jpg?v=3243994402042171751787258226",
+    'size-large':       "//thesweettooth.com/cdn/shop/t/83/assets/bbr-large_oval_rosh_wrapped.jpg?v=95954802876633706291787258227",
+    'size-xl':          "//thesweettooth.com/cdn/shop/t/83/assets/bbr-extra_large_rosh_wrapped.jpg?v=63573182111990448161787258228",
+    'size-grand':       "//thesweettooth.com/cdn/shop/t/83/assets/bbr-grand_oval_rosh_wrapped.jpg?v=172813801782775630401787258229",
+    'size-jumbo':       "//thesweettooth.com/cdn/shop/t/83/assets/bbr-jumbo_rosh_wrapped.jpg?v=46698093899437056641787258230",
+    // 'size-penultimate': "//thesweettooth.com/cdn/shop/t/83/assets/bbr-penultimate_rosh_wrapped.jpg?v=15510",
+    // 'size-supreme':     "//thesweettooth.com/cdn/shop/t/83/assets/bbr-supreme_rosh_wrapped.jpg?v=15510"
+};
+(function(){
+  var ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg>';
+  var OPEN_LABEL = 'See it wrapped';
+  var WRAP_LABEL = "See what's inside";
+
+  function build(){
+    var map = window.RH_WRAPPED || {};
+    Object.keys(map).forEach(function(id){
+      var card = document.getElementById(id);
+      if(!card) return;
+      var img = card.querySelector('.basket-image');
+      if(!img || card.querySelector('.rh-flip')) return;
+
+      var openSrc = img.getAttribute('src');
+      var wrapSrc = map[id];
+      var name    = (card.querySelector('.basket-name') || {}).textContent || 'this basket';
+
+      // Don't offer the flip if the wrapped photo isn't really there.
+      var probe = new Image();
+      probe.onload = function(){
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'rh-flip';
+        btn.setAttribute('aria-pressed','false');
+        btn.setAttribute('aria-label', OPEN_LABEL + ' — ' + name.trim());
+        btn.innerHTML = ICON + '<span>' + OPEN_LABEL + '</span>';
+
+        btn.addEventListener('click', function(e){
+          e.stopPropagation();          // never selects the basket
+          e.preventDefault();
+          var on = !card.classList.contains('is-wrapped');
+          card.classList.toggle('is-wrapped', on);
+          btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+          btn.querySelector('span').textContent = on ? WRAP_LABEL : OPEN_LABEL;
+          btn.setAttribute('aria-label', (on ? WRAP_LABEL : OPEN_LABEL) + ' — ' + name.trim());
+          img.style.opacity = '0';
+          setTimeout(function(){
+            img.setAttribute('src', on ? wrapSrc : openSrc);
+            img.style.opacity = '1';
+          }, 150);
+        });
+
+        // In flow, at the bottom of the card's text column — so it can never
+        // sit on top of the name, the price, or the selected checkmark.
+        (card.querySelector('.basket-content') || card).appendChild(btn);
+      };
+      probe.src = wrapSrc;
+    });
+  }
+
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', build);
+  } else { build(); }
+})();
+</script>
+<!-- ===== /RH WRAP SHOWCASE ===== -->
