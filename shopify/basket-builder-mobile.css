@@ -1,33 +1,6 @@
-/* ==========================================================================
-   Basket Builder — mobile size step
-   Scope: phones only (max-width: 749px). Desktop is untouched.
-
-   THE BUG
-   The card is meant to be photo-left / text-right. The widths can't fit:
-     .basket-image   flex: 0 0 47%
-     .basket-content flex: 1 1 53%
-     .basket-card    gap: 10px
-   47% + 53% + 10px is wider than the card, and a rule at <=600px adds
-   flex-wrap: wrap — so on every real phone the two halves land on separate
-   rows: a stranded photo, text under it, and a full-width bar under that.
-
-   THE PROPORTIONS
-   The product shots are 3:2 landscape (1200x800). Every photo column here is
-   3:2 to match, so the basket fills it edge to edge. Dropping a 3:2 photo into
-   a square column fits it by width and leaves a third of the box empty — which
-   is how the basket ends up smaller than the controls beside it.
-
-   Two columns, photo on top: the standard premium-retail grid on mobile
-   (Aesop, Bottega, Sugarfina). Biggest basket per screen, and all eight sizes
-   fit in four rows.
-
-   Everything is ranked below the photo. The basket is the largest element on
-   the card; the name and price sit at body size; the rest is quiet grey.
-
-   Palette per brand rules: ink #1D1D1F (never #000), hairline #E8E8E8,
-   gold #D4AF37 as a sparing accent only.
-   ========================================================================== */
-
+/* OPTION C — full-width editorial (Bottega / Le Labo pattern)
+   One basket per row, photo edge to edge. The most product-forward and the
+   most premium-feeling; also the longest scroll of the three. */
 @media (max-width: 749px) {
   #bb-choose-title { font-size:1.5rem !important; letter-spacing:-.02em; color:#1D1D1F !important; margin:10px 16px 0 !important; }
   .bb-mobile-pillbar { gap:6px; padding:8px 12px 10px; background:rgba(255,255,255,.92);
@@ -38,88 +11,86 @@
   .bb-mobile-pillbar a.is-active { background:#1D1D1F; color:#fff; border-color:#1D1D1F; }
   .bb-mobile-strip { padding:6px 6px 12px !important; margin:0 -6px 12px !important; }
 
-  .basket-grid {
-    display: grid !important;
-    grid-template-columns: 1fr 1fr !important;
-    gap: 10px !important;
-    align-items: stretch !important;
-    margin-bottom: 24px !important;
-  }
+  .basket-grid { gap: 14px !important; margin-bottom: 24px !important; }
+
   .basket-card {
-    display: flex !important;
-    flex-direction: column !important;
+    display: grid !important;
+    grid-template-columns: minmax(0,1fr) auto !important;
+    grid-template-rows: auto auto !important;
+    column-gap: 12px !important; row-gap: 0 !important;
     flex-wrap: nowrap !important;
-    align-items: stretch !important;
-    padding: 8px 8px 10px !important;
-    gap: 0 !important;
+    align-items: center !important;
+    padding: 0 0 12px !important;
+    overflow: hidden !important;
     border: 1px solid #E8E8E8 !important;
-    border-radius: 12px !important;
+    border-radius: 14px !important;
     background: #fff !important;
     box-shadow: 0 1px 2px rgba(0,0,0,.04) !important;
     transition: box-shadow .2s ease, border-color .2s ease !important;
   }
   .basket-card:hover { transform:none !important; border-color:#E8E8E8 !important; box-shadow:0 1px 2px rgba(0,0,0,.04) !important; }
   .basket-card.selected { transform:none !important; background:#fff !important; border-color:#1D1D1F !important;
-    box-shadow: inset 0 0 0 1px #1D1D1F, 0 4px 12px rgba(0,0,0,.06) !important; }
-  .basket-card.selected::after { top:7px !important; left:7px !important; right:auto !important;
-    width:20px !important; height:20px !important; font-size:11px !important; background:#1D1D1F !important;
+    box-shadow: inset 0 0 0 1px #1D1D1F, 0 6px 16px rgba(0,0,0,.07) !important; }
+  .basket-card.selected::after { top:10px !important; left:10px !important; right:auto !important;
+    width:24px !important; height:24px !important; font-size:12px !important; background:#1D1D1F !important;
     box-shadow:0 0 0 2px #fff !important; }
 
   .basket-card .basket-image {
-    order: 0 !important;
+    grid-column: 1 / -1 !important; grid-row: 1 !important;
     width: 100% !important; max-width: none !important;
     height: auto !important; max-height: none !important;
-    aspect-ratio: 3 / 2 !important;
+    aspect-ratio: 16 / 10 !important;
     flex: none !important;
     object-fit: contain !important;
-    background: #fff !important;
+    background: #FCFBF9 !important;
     border-radius: 0 !important;
-    padding: 0 !important;
+    padding: 6px 0 !important;
     filter: brightness(1.03) !important;
   }
-  #size-small .basket-image { padding:6px !important; }
-  #size-medium .basket-image { padding:5px !important; }
-  #size-large  .basket-image { padding:3px !important; }
-  #size-xl     .basket-image { padding:3px !important; }
-  #size-grand  .basket-image { padding:2px !important; }
-  #size-jumbo  .basket-image { padding:0 !important; }
-  #size-penultimate .basket-image { padding:1px !important; }
+  #size-small .basket-image { padding:16px 0 !important; }
+  #size-medium .basket-image { padding:13px 0 !important; }
+  #size-large  .basket-image { padding:9px 0 !important; }
+  #size-xl     .basket-image { padding:8px 0 !important; }
+  #size-grand  .basket-image { padding:6px 0 !important; }
+  #size-jumbo  .basket-image { padding:2px 0 !important; }
+  #size-penultimate .basket-image { padding:3px 0 !important; }
   #size-supreme .basket-image { padding:0 !important; }
   .basket-card.is-wrapped .basket-image { padding:0 !important; }
 
   .basket-card .basket-content {
-    order: 1 !important;
-    width: auto !important; min-width: 0 !important; flex: 1 1 auto !important;
-    padding: 6px 2px 0 !important;
+    grid-column: 1 !important; grid-row: 2 !important;
+    width: auto !important; min-width: 0 !important; flex: none !important;
+    padding: 12px 0 0 14px !important;
     display: flex !important; flex-direction: column !important; align-items: flex-start !important;
-    gap: 2px !important;
+    gap: 3px !important;
   }
   .basket-card .basket-header { display:flex !important; width:100% !important; flex-direction:row !important;
-    justify-content:space-between !important; align-items:baseline !important; gap:6px !important; margin-bottom:1px !important; }
-  .basket-card .basket-name { font-size:.9375rem !important; font-weight:600 !important; line-height:1.2 !important;
+    justify-content:flex-start !important; align-items:baseline !important; gap:10px !important; margin-bottom:1px !important; }
+  .basket-card .basket-name { font-size:1.0625rem !important; font-weight:600 !important; line-height:1.2 !important;
     letter-spacing:-.02em !important; color:#1D1D1F !important; }
-  .basket-card .basket-price { font-size:.9375rem !important; font-weight:600 !important; line-height:1.2 !important;
+  .basket-card .basket-price { font-size:1.0625rem !important; font-weight:600 !important; line-height:1.2 !important;
     letter-spacing:-.02em !important; color:#1D1D1F !important; margin-left:0 !important; white-space:nowrap !important;
     font-variant-numeric:tabular-nums !important; }
   .basket-card .serving-pill { display:block !important; background:none !important; color:#1D1D1F !important;
-    font-size:.6875rem !important; font-weight:500 !important; letter-spacing:0 !important; line-height:1.35 !important;
+    font-size:.75rem !important; font-weight:500 !important; letter-spacing:0 !important; line-height:1.35 !important;
     padding:0 !important; border-radius:0 !important; margin:0 !important; }
-  .basket-card .basket-details { font-size:.6875rem !important; font-weight:400 !important; line-height:1.35 !important;
+  .basket-card .basket-details { font-size:.75rem !important; font-weight:400 !important; line-height:1.35 !important;
     letter-spacing:0 !important; color:#86827C !important; }
 
   .basket-card .rh-flip {
-    order: 2 !important;
-    position: relative !important; align-self: flex-start !important;
+    grid-column: 2 !important; grid-row: 2 !important;
+    position: relative !important; align-self: center !important; justify-self: end !important;
     flex: none !important; width: auto !important; min-height: 0 !important;
-    margin: 7px 0 0 2px !important; padding: 0 !important;
+    margin: 12px 14px 0 0 !important; padding: 0 !important;
     border: 0 !important; border-radius: 0 !important; background: none !important;
-    color: #86827C !important; font: 500 .6875rem/1.2 inherit !important; letter-spacing: 0 !important;
-    gap: 5px !important; text-decoration: none !important;
+    color: #86827C !important; font: 500 .71875rem/1.2 inherit !important; letter-spacing: 0 !important;
+    gap: 5px !important; text-decoration: underline !important; text-underline-offset: 2px !important;
+    text-decoration-color: #D8D4CD !important; white-space: nowrap !important;
   }
   .basket-card .rh-flip::after { content:''; position:absolute; inset:-15px -12px; }
-  .basket-card .rh-flip svg { width:10px !important; height:10px !important; color:#B3AEA6 !important; }
+  .basket-card .rh-flip svg { width:11px !important; height:11px !important; color:#B3AEA6 !important; }
   .basket-card .rh-flip:hover, .basket-card .rh-flip:active { background:none !important; color:#1D1D1F !important; }
-  .basket-card.is-wrapped .rh-flip { color:#7D6218 !important; }
+  .basket-card.is-wrapped .rh-flip { color:#7D6218 !important; text-decoration-color:#D4AF37 !important; }
   .basket-card.is-wrapped .rh-flip svg { color:#D4AF37 !important; }
 
   .basket-card[id^="size-"] { scroll-margin-top:78px; }
