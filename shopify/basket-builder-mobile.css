@@ -121,14 +121,13 @@
     max-width: none !important;
     height: auto !important;
     max-height: none !important;
-    aspect-ratio: 21 / 10 !important;
+    aspect-ratio: 3 / 2 !important;
     flex: none !important;
-    /* cover crops the baked-in top/bottom margin; the scale then zooms past the
-       photo's own dead space so the basket actually fills the card. The card is
-       overflow:hidden, so the bleed is clipped at the edges. */
-    object-fit: cover !important;
-    transform: scale(1.28) !important;
-    transform-origin: center center !important;
+    /* contain, never cover. The wrapped shots put the bow at the top of the
+       frame; cropping to fill ate it on every single one. 3:2 matches the
+       source files, so the photo fills the box without losing anything. */
+    object-fit: contain !important;
+    transform: none !important;
     background: #FFFFFF !important;
     border-radius: 0 !important;
     padding: 0 !important;
@@ -136,21 +135,12 @@
        on a white card. A 3% lift clips it to white; mid-tones move ~2/255. */
     filter: brightness(1.03) !important;
   }
-  #size-small       .basket-image { transform: scale(1.18) !important; }  /* 10"   */
-  #size-medium      .basket-image { transform: scale(1.21) !important; }  /* 12"   */
-  #size-large       .basket-image { transform: scale(1.25) !important; }  /* 16"   */
-  #size-xl          .basket-image { transform: scale(1.27) !important; }  /* 18"   */
-  #size-grand       .basket-image { transform: scale(1.29) !important; }  /* 20"   */
-  #size-jumbo       .basket-image { transform: scale(1.33) !important; }  /* 24.5" */
-  #size-penultimate .basket-image { transform: scale(1.32) !important; }  /* 24"   */
-  #size-supreme     .basket-image { transform: scale(1.35) !important; }  /* 30"   */
 
   /* ---- Text — real reading sizes ----------------------------------------- */
   .basket-card .basket-content {
     grid-column: 1 !important;
     grid-row: 2 !important;
     width: 100% !important;
-    width: auto !important;
     min-width: 0 !important;
     flex: none !important;
     position: relative !important;
