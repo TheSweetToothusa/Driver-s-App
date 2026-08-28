@@ -996,6 +996,11 @@ const RescheduleModal: React.FC<RescheduleModalProps> = ({ order, failureReason,
   );
 };
 
+// A text message can't carry a picture — an `sms:` link is words only. So for
+// phone-only orders we send the driver's text with a link to the proof photo,
+// which the POD server already serves publicly at /api/pod/:orderId/photo.
+const podPhotoLink = (orderId: string) => `${window.location.origin}/api/pod/${orderId}/photo`;
+
 // ─────────────────────────────────────────────────────────────────────────────
 // ORDER DETAIL
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1156,18 +1161,51 @@ const OrderDetail: React.FC<{
   const [pendingDeliveryDate, setPendingDeliveryDate] = useState((order.deliveryDate || '').split('T')[0]);
   const [adminSaving, setAdminSaving] = useState(false);
   const [adminSaveResult, setAdminSaveResult] = useState<'saved' | 'error' | null>(null);
-  
+  const [adminSaveError, setAdminSaveError] = useState<string | null>(null);
+  // Order number is only editable on manually created orders (Shopify owns the rest)
+  const canEditOrderNumber = role === 'SUPER_ADMIN' && !!(order as any).isManual;
+  const [pendingOrderNumber, setPendingOrderNumber] = useState((order.orderNumber || '').replace(/^#+/, ''));
+  const [editingOrderNumber, setEditingOrderNumber] = useState(false);
+  const [savingOrderNumber, setSavingOrderNumber] = useState(false);
+
+  const saveOrderNumber = async () => {
+    const num = pendingOrderNumber.trim().replace(/^#+/, '');
+    if (!num) { setAdminSaveError('Order number cannot be empty'); return; }
+    if (num === (order.orderNumber?.replace(/^#+/, '') || order.id)) { setEditingOrderNumber(false); return; }
+    setSavingOrderNumber(true);
+    setAdminSaveError(null);
+    try {
+      const resp = await fetch(`/api/manual-orders/${order.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderNumber: num })
+      });
+      if (resp.ok) {
+        onUpdate(order.id, { orderNumber: num });
+        setEditingOrderNumber(false);
+      } else {
+        const err = await resp.json().catch(() => ({}));
+        setAdminSaveError(err.error || 'Could not save the order number');
+      }
+    } catch {
+      setAdminSaveError('Could not reach the server');
+    } finally {
+      setSavingOrderNumber(false);
+    }
+  };
+
   // Sync pending states when order prop changes (e.g., after save or external update)
   useEffect(() => {
     setPendingStatus(order.status);
     setPendingDriver(order.driverId || '');
     setPendingDeliveryDate((order.deliveryDate || '').split('T')[0]);
     setPendingDate(order.deliveryDate || '');
-  }, [order.id, order.status, order.driverId, order.deliveryDate]);
-  
+    setPendingOrderNumber((order.orderNumber || '').replace(/^#+/, ''));
+  }, [order.id, order.status, order.driverId, order.deliveryDate, order.orderNumber]);
+
   // Track if any pending changes exist
-  const hasAdminChanges = pendingStatus !== order.status || 
-    pendingDriver !== (order.driverId || '') || 
+  const hasAdminChanges = pendingStatus !== order.status ||
+    pendingDriver !== (order.driverId || '') ||
     pendingDeliveryDate !== (order.deliveryDate || '').split('T')[0];
 
 
@@ -1231,7 +1269,8 @@ const OrderDetail: React.FC<{
     if (!customerEmail && senderPhone) {
       const cleanPhone = senderPhone.replace(/\D/g, '');
       const receiverName = order.giftReceiverName || 'the recipient';
-      const smsMessage = `Great news! Your Sweet Tooth gift to ${receiverName} has been delivered. Thank you for your order! 🍫 - The Sweet Tooth`;
+      const photoLink = photoData ? `\n\nSee the delivery photo: ${podPhotoLink(String(order.id))}` : '';
+      const smsMessage = `Great news! Your Sweet Tooth gift to ${receiverName} has been delivered. Thank you for your order! 🍫 - The Sweet Tooth${photoLink}`;
       setTimeout(() => {
         window.location.href = `sms:${cleanPhone}?body=${encodeURIComponent(smsMessage)}`;
       }, 2000);
@@ -1368,7 +1407,11 @@ const OrderDetail: React.FC<{
     // If no email but gift sender has phone, open SMS app with pre-filled message
     if (!email && senderPhone) {
       const cleanPhone = senderPhone.replace(/\D/g, '');
-      const smsBody = encodeURIComponent(notifyPreviewText);
+      // Only the SUCCESS text gets the proof photo, and only once one exists.
+      const photoLink = (showNotifyPreview === 'SUCCESS' && order.confirmationPhoto)
+        ? `\n\nSee the delivery photo: ${podPhotoLink(String(order.id))}`
+        : '';
+      const smsBody = encodeURIComponent(`${notifyPreviewText}${photoLink}`);
       window.location.href = `sms:${cleanPhone}?body=${smsBody}`;
       setNotifySent(true);
       setNotifyChannel('SMS');
@@ -1466,6 +1509,9 @@ const OrderDetail: React.FC<{
   });
 
   const handleSaveContact = async () => {
+    const oldFee = order.deliveryFee || 0;
+    const newFee = parseFloat(editFields.deliveryFee) || 0;
+    const feeChanged = (role === 'SUPER_ADMIN' || role === 'MANAGER') && newFee !== oldFee;
     const updates: Partial<Delivery> = {
       customer: { name: editFields.recipientName, phone: editFields.recipientPhone, email: editFields.recipientEmail },
       address: { ...order.address, street: editFields.street, city: editFields.city, zip: editFields.zip },
@@ -1484,6 +1530,22 @@ const OrderDetail: React.FC<{
       });
       if (r.ok) {
         logAudit('CONTACT_EDIT', 'contact/address', order.giftReceiverName || '', editFields.recipientName);
+        if (feeChanged) {
+          const due = newFee - oldFee;
+          const owed = due > 0
+            ? `Customer owes $${due.toFixed(2)}.`
+            : due < 0
+              ? `Customer overpaid $${Math.abs(due).toFixed(2)}.`
+              : 'Nothing to collect.';
+          const note = `Address changed to ${editFields.street}, ${editFields.city} ${editFields.zip}. `
+            + `New delivery fee $${newFee.toFixed(2)}. Already paid $${oldFee.toFixed(2)}. ${owed}`;
+          await fetch(`/api/orders/${order.id}/note`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ note })
+          });
+          const ts = `[${new Date().toLocaleString()}] ${note}`;
+          onUpdate(order.id, { adminNotes: order.adminNotes ? `${order.adminNotes}\n${ts}` : ts });
+        }
         setStatusSaveToast('saved');
         setTimeout(() => setStatusSaveToast(null), 2500);
       } else { setStatusSaveToast('error'); setTimeout(() => setStatusSaveToast(null), 3500); }
@@ -1762,6 +1824,31 @@ const OrderDetail: React.FC<{
         </div>
       )}
 
+      {/* ── EDIT ORDER NUMBER (manual orders, super admin only) ── */}
+      {editingOrderNumber && (
+        <div className="fixed inset-0 bg-black/60 z-[998] flex items-end" onClick={() => setEditingOrderNumber(false)}>
+          <div className="w-full bg-white rounded-t-[32px] p-6 space-y-4" onClick={e => e.stopPropagation()}>
+            <p className="text-lg font-black text-stone-800">Edit Order Number</p>
+            <input
+              value={pendingOrderNumber}
+              onChange={e => setPendingOrderNumber(e.target.value)}
+              placeholder="M-0806-01"
+              autoFocus
+              className="w-full bg-stone-50 border-2 border-stone-200 rounded-2xl px-4 py-4 text-2xl font-black outline-none focus:border-black"
+            />
+            {adminSaveError && <p className="text-xs font-black text-red-600">{adminSaveError}</p>}
+            <button onClick={saveOrderNumber} disabled={savingOrderNumber}
+              className="w-full py-4 rounded-2xl font-black text-base bg-green-600 text-white active:scale-95 disabled:bg-stone-200 disabled:text-stone-400">
+              {savingOrderNumber ? 'Saving...' : '✓ Save Order Number'}
+            </button>
+            <button onClick={() => setEditingOrderNumber(false)}
+              className="w-full py-3 text-stone-400 font-bold text-sm active:scale-95">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ── DATE SAVED TOAST ── */}
       {dateSavedToast && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[999] bg-green-600 text-white px-6 py-3 rounded-2xl shadow-lg font-black text-sm flex items-center gap-2 animate-bounce">
@@ -1775,7 +1862,17 @@ const OrderDetail: React.FC<{
           <ChevronLeft size={20} />
         </button>
         <div className="flex-1 min-w-0">
-          <p className="text-xl font-black tracking-tight">#{cleanOrderNum}</p>
+          {canEditOrderNumber ? (
+            <button
+              onClick={() => { setPendingOrderNumber(cleanOrderNum); setAdminSaveError(null); setEditingOrderNumber(true); }}
+              className="flex items-center gap-1.5 active:opacity-70"
+            >
+              <span className="text-xl font-black tracking-tight">#{cleanOrderNum}</span>
+              <Edit3 size={13} className="text-white/50 shrink-0" />
+            </button>
+          ) : (
+            <p className="text-xl font-black tracking-tight">#{cleanOrderNum}</p>
+          )}
           <p className={`text-xs font-bold ${order.deliveryDate ? 'text-white' : 'text-amber-300'}`}>
             {order.deliveryDate ? new Date(order.deliveryDate + 'T12:00:00').toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric', year:'numeric' }) : '⚠ No date'}
           </p>
@@ -2297,7 +2394,7 @@ const OrderDetail: React.FC<{
                   setAdminSaveResult(null);
                   const isManualOrder = (order as any).isManual;
                   let allSuccess = true;
-                  
+
                   try {
                     // Save status if changed
                     if (pendingStatus !== order.status) {
@@ -2387,7 +2484,7 @@ const OrderDetail: React.FC<{
                   'SAVE CHANGES'
                 )}
               </button>
-              
+
               {(role === 'SUPER_ADMIN' || role === 'MANAGER') && (
                 <div>
                   <p className="text-[9px] font-black uppercase text-stone-400 tracking-widest mb-1">Delivery Fee</p>
@@ -2399,7 +2496,7 @@ const OrderDetail: React.FC<{
             {/* Edit Contact Info - Collapsible */}
             <div className="border-b border-stone-100">
               <button onClick={() => setEditingContact(e => !e)} className="w-full px-4 py-2 flex items-center justify-between bg-stone-50 active:bg-stone-100">
-                <span className="text-[10px] font-black uppercase text-stone-500 tracking-widest">Edit Contact & Address</span>
+                <span className="text-[10px] font-black uppercase text-stone-500 tracking-widest">Change Address & Collect Fee</span>
                 <ChevronRight size={14} className={`text-stone-400 transition-transform ${editingContact ? 'rotate-90' : ''}`} />
               </button>
               {editingContact && (
@@ -2435,31 +2532,70 @@ const OrderDetail: React.FC<{
                     const lookedUp = DELIVERY_FEES[editFields.zip] ?? null;
                     const current = parseFloat(editFields.deliveryFee) || 0;
                     const changed = lookedUp !== null && lookedUp !== (order.deliveryFee || 0);
+                    const alreadyPaid = order.deliveryFee || 0;
+                    const due = current - alreadyPaid;
                     return (
-                      <div className={`rounded-xl px-3 py-2.5 flex items-center justify-between ${lookedUp !== null ? 'bg-green-50 border border-green-200' : 'bg-amber-50 border border-amber-200'}`}>
-                        {lookedUp !== null ? (
-                          <>
-                            <span className="text-xs font-bold text-green-700">
-                              {changed ? '✓ Fee auto-updated' : '✓ Fee confirmed'}
+                      <div className="space-y-2">
+                        <div className={`rounded-xl px-3 py-2.5 flex items-center justify-between ${lookedUp !== null ? 'bg-green-50 border border-green-200' : 'bg-amber-50 border border-amber-200'}`}>
+                          {lookedUp !== null ? (
+                            <>
+                              <span className="text-xs font-bold text-green-700">
+                                {changed ? '✓ Fee auto-updated' : '✓ Fee confirmed'}
+                              </span>
+                              <span className="text-lg font-black text-green-700">${current.toFixed(2)}</span>
+                            </>
+                          ) : (
+                            <>
+                              <span className="text-xs font-bold text-amber-700">ZIP not in table — enter fee manually</span>
+                              <input
+                                value={editFields.deliveryFee}
+                                onChange={e => setEditFields(p => ({ ...p, deliveryFee: e.target.value }))}
+                                placeholder="0.00"
+                                inputMode="decimal"
+                                className="w-20 text-right bg-white border border-amber-300 rounded-lg px-2 py-1 text-sm font-black outline-none"
+                              />
+                            </>
+                          )}
+                        </div>
+
+                        {/* What the customer owes for this address change */}
+                        <div className="rounded-xl border border-stone-200 bg-stone-50 px-3 py-2.5 space-y-1">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-bold text-stone-500">New delivery fee</span>
+                            <span className="text-sm font-black text-stone-700">${current.toFixed(2)}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-bold text-stone-500">Already paid</span>
+                            <span className="text-sm font-black text-stone-700">${alreadyPaid.toFixed(2)}</span>
+                          </div>
+                          <div className="flex items-center justify-between border-t border-stone-200 pt-1.5">
+                            <span className="text-[10px] font-black uppercase tracking-widest text-stone-500">
+                              {due > 0 ? 'Customer owes' : due < 0 ? 'Customer overpaid' : 'Nothing to collect'}
                             </span>
-                            <span className="text-lg font-black text-green-700">${current.toFixed(2)}</span>
-                          </>
-                        ) : (
-                          <>
-                            <span className="text-xs font-bold text-amber-700">ZIP not in table — enter fee manually</span>
-                            <input
-                              value={editFields.deliveryFee}
-                              onChange={e => setEditFields(p => ({ ...p, deliveryFee: e.target.value }))}
-                              placeholder="0.00"
-                              inputMode="decimal"
-                              className="w-20 text-right bg-white border border-amber-300 rounded-lg px-2 py-1 text-sm font-black outline-none"
-                            />
-                          </>
+                            <span className={`text-2xl font-black ${due > 0 ? 'text-green-700' : due < 0 ? 'text-red-600' : 'text-stone-400'}`}>
+                              ${Math.abs(due).toFixed(2)}
+                            </span>
+                          </div>
+                        </div>
+
+                        {due > 0 && (
+                          <a
+                            href={`https://admin.shopify.com/store/thesweettoothfl/orders/${order.id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="block w-full py-3 bg-green-600 text-white rounded-xl font-black uppercase text-xs text-center active:scale-[0.98]"
+                          >
+                            Open in Shopify to collect ${due.toFixed(2)}
+                          </a>
                         )}
                       </div>
                     );
                   })()}
-                  <button onClick={handleSaveContact} className="w-full py-3 bg-black text-white rounded-xl font-black uppercase text-xs mt-2">Save Changes</button>
+                  <button onClick={handleSaveContact} className="w-full py-3 bg-black text-white rounded-xl font-black uppercase text-xs mt-2">
+                    {editFields.zip.length === 5 && (parseFloat(editFields.deliveryFee) || 0) !== (order.deliveryFee || 0)
+                      ? 'Save This As The New Delivery Address'
+                      : 'Save Changes'}
+                  </button>
                 </div>
               )}
             </div>
