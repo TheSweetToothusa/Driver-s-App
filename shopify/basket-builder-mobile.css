@@ -121,12 +121,13 @@
     max-width: none !important;
     height: auto !important;
     max-height: none !important;
-    aspect-ratio: 3 / 2 !important;
+    aspect-ratio: auto !important;
     flex: none !important;
-    /* contain, never cover. The wrapped shots put the bow at the top of the
-       frame; cropping to fill ate it on every single one. 3:2 matches the
-       source files, so the photo fills the box without losing anything. */
+    /* The source files were re-cropped so the basket fills ~85% of the frame
+       (Small Round was 18%). No object-fit box, no zoom, no cropping in CSS —
+       the photo is simply shown at its own aspect, full card width. */
     object-fit: contain !important;
+    transform: none !important;
     background: #FFFFFF !important;
     border-radius: 0 !important;
     padding: 0 !important;
@@ -135,27 +136,6 @@
     filter: brightness(1.03) !important;
   }
 
-  /* Per-photo zoom, computed from the actual content box of each file.
-     Each value is the largest zoom whose crop still lands entirely in the
-     blank margin, times 0.94 for breathing room. The wrapped shots are
-     framed far tighter (bow at the top), so they get their own, smaller
-     values — a single blanket zoom cropped the bow off every one. */
-  #size-small .basket-image { transform: scale(2.10) !important; }
-  #size-medium .basket-image { transform: scale(1.83) !important; }
-  #size-large .basket-image { transform: scale(1.59) !important; }
-  #size-xl .basket-image { transform: scale(1.16) !important; }
-  #size-grand .basket-image { transform: scale(1.21) !important; }
-  #size-jumbo .basket-image { transform: scale(1.16) !important; }
-  #size-penultimate .basket-image { transform: scale(1.00) !important; }
-  #size-supreme .basket-image { transform: scale(1.00) !important; }
-  #size-small.is-wrapped .basket-image { transform: scale(1.16) !important; }
-  #size-medium.is-wrapped .basket-image { transform: scale(1.00) !important; }
-  #size-large.is-wrapped .basket-image { transform: scale(1.25) !important; }
-  #size-xl.is-wrapped .basket-image { transform: scale(1.03) !important; }
-  #size-grand.is-wrapped .basket-image { transform: scale(1.02) !important; }
-  #size-jumbo.is-wrapped .basket-image { transform: scale(1.16) !important; }
-  #size-penultimate.is-wrapped .basket-image { transform: scale(1.00) !important; }
-  #size-supreme.is-wrapped .basket-image { transform: scale(1.00) !important; }
 
   /* ---- Text — real reading sizes ----------------------------------------- */
   .basket-card .basket-content {
