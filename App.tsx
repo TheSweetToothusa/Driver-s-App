@@ -100,7 +100,7 @@ async function postPodWithRetry(
   body: Record<string, any>,
   attempts: number = 3,
   delays: number[] = [1000, 3000, 7000]
-): Promise<{ ok: boolean; error?: string; status?: number }> {
+): Promise<{ ok: boolean; error?: string; status?: number; textedByServer?: boolean }> {
   let lastError = 'Unknown error';
   let lastStatus: number | undefined;
   for (let i = 0; i < attempts; i++) {
@@ -110,7 +110,10 @@ async function postPodWithRetry(
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-      if (resp.ok) return { ok: true };
+      if (resp.ok) {
+        const okBody = await resp.json().catch(() => ({} as any));
+        return { ok: true, textedByServer: !!okBody?.textedByServer };
+      }
       lastStatus = resp.status;
       // 4xx — not retryable, caller sent something bad
       if (resp.status >= 400 && resp.status < 500) {
@@ -1263,10 +1266,13 @@ const OrderDetail: React.FC<{
     setIsSavingPOD(false);
     setShowDeliveredConfirm(true);
 
-    // Auto-open SMS for phone-only orders (no email)
+    // Phone-only orders (no email) still need telling. The server texts them
+    // itself once Twilio is switched on, and says so via textedByServer — the
+    // driver's phone only steps in while that's off, or if the send failed.
+    // Nobody ever gets two messages.
     const customerEmail = order.customer?.email || '';
     const senderPhone = order.giftSenderPhone || '';
-    if (!customerEmail && senderPhone) {
+    if (!customerEmail && senderPhone && !podResult.textedByServer) {
       const cleanPhone = senderPhone.replace(/\D/g, '');
       const receiverName = order.giftReceiverName || 'the recipient';
       const photoLink = photoData ? `\n\nSee the delivery photo: ${podPhotoLink(String(order.id))}` : '';

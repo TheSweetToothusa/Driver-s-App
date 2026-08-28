@@ -2447,13 +2447,17 @@ async function startServer() {
       const TW_SID = process.env.TWILIO_ACCOUNT_SID || '';
       const TW_TOKEN = process.env.TWILIO_AUTH_TOKEN || '';
       const TW_FROM = process.env.TWILIO_FROM || '';
-      if (status === 'DELIVERED' && TW_SID && TW_TOKEN && TW_FROM) {
+      // Email and text are either/or, never both: the email above already went to
+      // everyone who left one, so the text is only for phone-only orders.
+      let textedByServer = false;
+      if (status === 'DELIVERED' && !customerEmail && TW_SID && TW_TOKEN && TW_FROM) {
         try {
           const smsKey = `sms_log:${String(orderNumber || orderId)}`;
           const smsLog: any = (await getKV(smsKey)) || { sends: [] };
           if (!Array.isArray(smsLog.sends)) smsLog.sends = [];
           const alreadyTexted = smsLog.sends.some((s: any) => s?.success === true && s?.kind === 'pod');
           if (alreadyTexted) {
+            textedByServer = true;
             console.log(`📱 POD text already sent for ${orderId} — skipping duplicate`);
           } else {
             // Text the buyer (the person who placed the order) — same person the email goes to.
@@ -2499,6 +2503,7 @@ async function startServer() {
               });
               if (smsLog.sends.length > 20) smsLog.sends = smsLog.sends.slice(-20);
               await setKV(smsKey, smsLog);
+              textedByServer = twOk;
               console.log(twOk
                 ? `✅ Auto-texted delivery confirmation to ${e164} for order ${orderId}${hasPodPhoto ? ' (with photo)' : ''}`
                 : `⚠️ Twilio send failed for ${orderId}: ${twData.message || tw.status}`);
@@ -2511,7 +2516,7 @@ async function startServer() {
         }
       }
 
-      res.json({ success: true });
+      res.json({ success: true, textedByServer });
     } catch (e: any) {
       // Surface the real error so the frontend retry loop can act on it instead
       // of silently swallowing. Status 500 → frontend retries; status 503 was
