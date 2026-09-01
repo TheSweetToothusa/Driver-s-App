@@ -1753,11 +1753,15 @@ async function startServer() {
       // where it would land in "NO DATE — NEEDS ATTENTION" and confuse
       // drivers (orders #36506/#36536/#36551, Sep 2026).
       const rawOrders = data.orders || [];
-      const allOrders = rawOrders.filter((o: any) => o.source_name !== 'shopify_draft_order');
+      // Staff-entered dashboard orders (tagged st_dashboard) are real single
+      // deliveries even though they start as drafts — keep those on the list.
+      const isDraftParent = (o: any) => o.source_name === 'shopify_draft_order' &&
+        !(o.tags || '').split(',').some((t: string) => t.trim() === 'st_dashboard');
+      const allOrders = rawOrders.filter((o: any) => !isDraftParent(o));
       const droppedDrafts = rawOrders.length - allOrders.length;
       if (droppedDrafts > 0) {
         console.log(`Excluded ${droppedDrafts} draft-origin parent order(s) from driver list:`,
-          rawOrders.filter((o: any) => o.source_name === 'shopify_draft_order').map((o: any) => o.name).join(', '));
+          rawOrders.filter(isDraftParent).map((o: any) => o.name).join(', '));
       }
       // Include orders with local delivery shipping OR tagged Local Delivery
       const filtered = allOrders.filter((o: any) => {
