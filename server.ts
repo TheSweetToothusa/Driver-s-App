@@ -1691,11 +1691,15 @@ async function startServer() {
 
   // ── ORDERS ──────────────────────────────────────────────────────────────────
 
-  app.get("/api/orders", async (_req, res) => {
-    try {
-      // Only fetch orders from the last 14 days — that's all a delivery app needs
-      const twoWeeksAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
-      const url = `https://${SHOPIFY_STORE_URL}/admin/api/2025-01/orders.json?status=any&limit=100&created_at_min=${twoWeeksAgo}`;
+  // Fetch every page of a Shopify orders query by following the Link header.
+  // A single limit=100 request silently drops anything older than the newest
+  // 100 orders — that made order #36439 (placed Aug 19 for a Sep 1 delivery)
+  // vanish from the driver list once 100+ newer orders existed (Sep 2026).
+  // Page cap of 10 (up to 2,500 orders) is a runaway guard, not a real limit.
+  async function fetchAllShopifyOrders(firstUrl: string): Promise<any[]> {
+    const out: any[] = [];
+    let url: string | null = firstUrl;
+    for (let page = 0; url && page < 10; page++) {
       const resp = await fetch(url, { headers: { 'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN, 'Content-Type': 'application/json' } });
       if (!resp.ok) {
         const errText = await resp.text();
@@ -1703,6 +1707,45 @@ async function startServer() {
         throw new Error(`Shopify ${resp.status}`);
       }
       const data = await resp.json();
+      out.push(...(data.orders || []));
+      const link = resp.headers.get('link') || '';
+      const next = link.match(/<([^>]+)>;\s*rel="next"/);
+      url = next ? next[1] : null;
+    }
+    return out;
+  }
+
+  app.get("/api/orders", async (_req, res) => {
+    try {
+      // Recent orders: last 14 days, ALL pages (see fetchAllShopifyOrders).
+      const twoWeeksAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
+      const recentOrders = await fetchAllShopifyOrders(
+        `https://${SHOPIFY_STORE_URL}/admin/api/2025-01/orders.json?status=any&limit=250&created_at_min=${twoWeeksAgo}`
+      );
+
+      // Advance orders: placed MORE than 14 days before their delivery date
+      // (customer ordering weeks ahead) age out of the window above while
+      // still undelivered. Pull open orders from the older 14–90 day band and
+      // keep only the ones this app hasn't marked done (no st_status: tag) —
+      // that skips old delivered-but-never-fulfilled orders so history isn't
+      // flooded. Non-fatal: the recent list still works if this query fails.
+      let advanceOrders: any[] = [];
+      try {
+        const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
+        const older = await fetchAllShopifyOrders(
+          `https://${SHOPIFY_STORE_URL}/admin/api/2025-01/orders.json?status=open&fulfillment_status=unfulfilled&limit=250&created_at_min=${ninetyDaysAgo}&created_at_max=${twoWeeksAgo}`
+        );
+        advanceOrders = older.filter((o: any) => !(o.tags || '').split(',').some((t: string) => t.trim().startsWith('st_status:')));
+        if (advanceOrders.length > 0) {
+          console.log(`Including ${advanceOrders.length} open advance order(s) older than 14 days:`,
+            advanceOrders.map((o: any) => o.name).join(', '));
+        }
+      } catch (err) {
+        console.error('Advance-order fetch failed (non-fatal):', err);
+      }
+
+      const seenIds = new Set(recentOrders.map((o: any) => o.id));
+      const data = { orders: [...recentOrders, ...advanceOrders.filter((o: any) => !seenIds.has(o.id))] };
       // A completed draft order (source_name "shopify_draft_order") is the
       // PARENT/payment order — e.g. a corporate master order whose real
       // deliveries are scheduled as separate sub-orders, or a paid pickup.
