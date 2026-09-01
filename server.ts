@@ -1703,7 +1703,19 @@ async function startServer() {
         throw new Error(`Shopify ${resp.status}`);
       }
       const data = await resp.json();
-      const allOrders = data.orders || [];
+      // A completed draft order (source_name "shopify_draft_order") is the
+      // PARENT/payment order — e.g. a corporate master order whose real
+      // deliveries are scheduled as separate sub-orders, or a paid pickup.
+      // It carries no delivery date and must never appear on the driver list,
+      // where it would land in "NO DATE — NEEDS ATTENTION" and confuse
+      // drivers (orders #36506/#36536/#36551, Sep 2026).
+      const rawOrders = data.orders || [];
+      const allOrders = rawOrders.filter((o: any) => o.source_name !== 'shopify_draft_order');
+      const droppedDrafts = rawOrders.length - allOrders.length;
+      if (droppedDrafts > 0) {
+        console.log(`Excluded ${droppedDrafts} draft-origin parent order(s) from driver list:`,
+          rawOrders.filter((o: any) => o.source_name === 'shopify_draft_order').map((o: any) => o.name).join(', '));
+      }
       // Include orders with local delivery shipping OR tagged Local Delivery
       const filtered = allOrders.filter((o: any) => {
         const tags = (o.tags || '').split(',').map((t: string) => t.trim().toLowerCase());
