@@ -139,6 +139,44 @@ async function postPodWithRetry(
   return { ok: false, error: lastError, status: lastStatus };
 }
 
+// SAVE-FAILED ALERT — when a delivery report cannot be saved after 3 tries,
+// tell Mike by email via the server. If the phone has no signal, the alert is
+// queued in localStorage and sent on the next order sync (flushAlertOutbox).
+const ALERT_OUTBOX_KEY = 'st_alert_outbox';
+async function alertMikeSaveFailed(payload: Record<string, any>): Promise<boolean> {
+  try {
+    const resp = await fetch('/api/alert/save-failed', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (resp.ok) return true;
+  } catch { /* offline — fall through to the outbox */ }
+  try {
+    const queue = JSON.parse(localStorage.getItem(ALERT_OUTBOX_KEY) || '[]');
+    queue.push(payload);
+    localStorage.setItem(ALERT_OUTBOX_KEY, JSON.stringify(queue.slice(-20)));
+  } catch { /* storage unavailable — nothing more we can do on-device */ }
+  return false;
+}
+async function flushAlertOutbox(): Promise<void> {
+  let queue: any[] = [];
+  try { queue = JSON.parse(localStorage.getItem(ALERT_OUTBOX_KEY) || '[]'); } catch { return; }
+  if (!Array.isArray(queue) || queue.length === 0) return;
+  const remaining: any[] = [];
+  for (const payload of queue) {
+    try {
+      const resp = await fetch('/api/alert/save-failed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!resp.ok) remaining.push(payload);
+    } catch { remaining.push(payload); }
+  }
+  try { localStorage.setItem(ALERT_OUTBOX_KEY, JSON.stringify(remaining)); } catch {}
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // PRINT PREVIEW — bulletproof cross-platform print UI
 //
@@ -920,9 +958,10 @@ interface RescheduleModalProps {
   onAutoReschedule: () => void | Promise<void>;
   onManualReschedule: () => void | Promise<void>;
   onCancel: () => void;
+  saveError?: string | null;
 }
 
-const RescheduleModal: React.FC<RescheduleModalProps> = ({ order, failureReason, driverNotes, photo, onAutoReschedule, onManualReschedule, onCancel }) => {
+const RescheduleModal: React.FC<RescheduleModalProps> = ({ order, failureReason, driverNotes, photo, onAutoReschedule, onManualReschedule, onCancel, saveError }) => {
   const [working, setWorking] = useState<'auto' | 'manual' | null>(null);
   const tomorrow = (() => {
     const d = new Date();
@@ -970,6 +1009,13 @@ const RescheduleModal: React.FC<RescheduleModalProps> = ({ order, failureReason,
           <h3 className="text-xl font-black uppercase">Reschedule?</h3>
           <p className="text-sm text-stone-500 font-medium mt-2">Delivery for <span className="font-black text-stone-800">{order.giftReceiverName || order.customer.name}</span> was marked failed.</p>
         </div>
+
+        {saveError && (
+          <div style={{ background: '#FEF2F2', border: '1px solid #FCA5A5', borderRadius: 12, padding: 12, display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+            <AlertTriangle size={18} style={{ color: '#B91C1C', flexShrink: 0, marginTop: 2 }} />
+            <p style={{ fontSize: 12, fontWeight: 700, color: '#B91C1C', lineHeight: 1.4 }}>{saveError}</p>
+          </div>
+        )}
 
         <div className="p-4 bg-stone-50 rounded-2xl border border-stone-100 space-y-1">
           <p className="text-[10px] font-black uppercase text-stone-400">Failure Reason</p>
@@ -1355,16 +1401,33 @@ const OrderDetail: React.FC<{
     const attempt = { id: Date.now().toString(), timestamp: now, driverId: currentUser.id, driverName: currentUser.name, attemptNumber: (order.attemptNumber || 1) as 1 | 2, reason, notes, photo: photo || undefined };
     onUpdate(order.id, { status: DeliveryStatus.FAILED, confirmationPhoto: photo || undefined, driverNotes: notes, submittedAt: now, attempts: [...(order.attempts || []), attempt] });
     setPendingFailure({ reason, notes, photo });
+    setPodSaveError(null);
     setShowFailFlow(false);
     setShowReschedule(true);
 
+    // Same 3-try retry as Mark Delivered. Order #36562 (Sep 2026) was reported
+    // failed with a single fire-and-forget request that never arrived, so the
+    // failure only existed on the driver's phone. If all tries fail, Mike gets
+    // an email and the driver sees a red banner.
     setIsSavingPOD(true);
-    try {
-      await fetch('/api/pod', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orderId: order.id, photo, notes, submittedAt: now, status: 'FAILED', driverId: currentUser.id, driverName: currentUser.name, failureReason: reason }) });
-    } catch (err) {
-      console.error('POD save failed (non-blocking):', err);
-    }
+    const podResult = await postPodWithRetry({ orderId: order.id, photo, notes, submittedAt: now, status: 'FAILED', driverId: currentUser.id, driverName: currentUser.name, failureReason: reason });
     setIsSavingPOD(false);
+    if (!podResult.ok) {
+      const alerted = await alertMikeSaveFailed({
+        orderId: order.id,
+        orderNumber: order.orderNumber || '',
+        status: 'FAILED',
+        driverName: currentUser.name,
+        customerName: order.giftReceiverName || order.customer?.name || '',
+        address: order.address || '',
+        failureReason: FAILURE_REASON_LABELS[reason] || reason,
+        error: podResult.error || 'Save failed',
+        occurredAt: now,
+      });
+      setPodSaveError(alerted
+        ? 'Save failed — this failed delivery is NOT in the system yet. Mike has been emailed.'
+        : 'Save failed — this failed delivery is NOT in the system yet. Mike will be emailed as soon as this phone gets signal.');
+    }
   };
 
   const handleAutoReschedule = async () => {
@@ -2673,6 +2736,7 @@ const OrderDetail: React.FC<{
           onAutoReschedule={handleAutoReschedule}
           onManualReschedule={handleManualReschedule}
           onCancel={() => setShowReschedule(false)}
+          saveError={podSaveError}
         />
       )}
 
@@ -7328,6 +7392,8 @@ export default function App() {
   }, [currentUser]);
 
   const fetchOrders = async (isBackgroundSync = false) => {
+    // Send any save-failed alerts that were queued while the phone had no signal.
+    flushAlertOutbox().catch(() => {});
     // If we have cached data showing, use syncing indicator instead of full loading
     if (isBackgroundSync && deliveries.length > 0) {
       setIsSyncing(true);

@@ -2428,6 +2428,32 @@ async function startServer() {
         await markShopifyDelivered(String(orderId));
       }
 
+      // For Shopify orders — a FAILED attempt is written back as a tag too, so
+      // every device (not just the driver's phone) sees it after a refresh.
+      // Order #36562 (Sep 2026): the failed report only lived on Katie's phone.
+      if (!isManualOrder && SHOPIFY_STORE_URL && SHOPIFY_ACCESS_TOKEN && status === 'FAILED') {
+        try {
+          const existing = await fetch(`https://${SHOPIFY_STORE_URL}/admin/api/2025-01/orders/${orderId}.json?fields=tags`, {
+            headers: { 'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN }
+          });
+          const existingData = await existing.json();
+          const currentTags = existingData.order?.tags || '';
+          const tagsList = currentTags.split(',').map((t: string) => t.trim())
+            .filter((t: string) => t && !t.startsWith('st_status:') && !t.startsWith('st_driver:') && !t.startsWith('st_drivername:'));
+          tagsList.push('st_status:FAILED');
+          if (driverId) tagsList.push(`st_driver:${driverId}`);
+          if (driverName) tagsList.push(`st_drivername:${driverName.replace(/,/g, '')}`);
+          await fetch(`https://${SHOPIFY_STORE_URL}/admin/api/2025-01/orders/${orderId}.json`, {
+            method: 'PUT',
+            headers: { 'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ order: { id: orderId, tags: tagsList.join(', ') } })
+          });
+          console.log(`Synced status FAILED to Shopify for order ${orderId}`);
+        } catch (tagErr) {
+          console.error('Failed to write FAILED tag to Shopify (non-fatal):', tagErr);
+        }
+      }
+
       // ── AUTO-SEND DELIVERY CONFIRMATION EMAIL WITH PHOTO ───────────────────────────────
       const SMTP_PASS = process.env.SMTP_PASS || '';
 
@@ -2804,6 +2830,34 @@ async function startServer() {
   });
 
   // ── TEST NOTIFICATION ────────────────────────────────────────────────────
+  // ── SAVE-FAILED ALERT ─────────────────────────────────────────────────────
+  // The driver's phone calls this after a delivery report could not be saved
+  // (3 tries exhausted). Emails Mike so a lost report never goes unnoticed.
+  app.post("/api/alert/save-failed", async (req, res) => {
+    const { orderId, orderNumber, status, driverName, customerName, address, failureReason, error, occurredAt } = req.body || {};
+    const displayId = orderNumber || orderId || 'unknown';
+    const subject = `Driver app: ${status || 'delivery'} report NOT saved — Order ${displayId}`;
+    const body = [
+      `A driver's ${status || 'delivery'} report could not be saved after 3 tries.`,
+      `It is NOT in the system. Please check this order.`,
+      ``,
+      `Order: ${displayId}`,
+      `Internal ID: ${orderId || 'unknown'}`,
+      `Customer: ${customerName || 'unknown'}`,
+      `Address: ${address || 'unknown'}`,
+      `Driver: ${driverName || 'unknown'}`,
+      failureReason ? `Failure reason: ${failureReason}` : null,
+      `Error: ${error || 'unknown'}`,
+      `Happened: ${occurredAt || new Date().toISOString()}`,
+    ].filter((l) => l !== null).join('\n');
+    const sent = await sendEmail('raiver72@gmail.com', subject, body).catch((e) => {
+      console.error('save-failed alert email error:', e?.message || e);
+      return false;
+    });
+    console.log(`🚨 save-failed alert for ${displayId}: email ${sent ? 'sent' : 'NOT sent'}`);
+    res.json({ sent });
+  });
+
   app.post("/api/notify/test", async (req, res) => {
     const { to } = req.body;
     const message = "Test from The Sweet Tooth Driver App — email notifications are working! 🍫";
