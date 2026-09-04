@@ -201,6 +201,24 @@ async function savePhotoToPhone(dataUrl: string, filename: string): Promise<void
   }
 }
 
+// Every instruction line for an order: the delivery instructions plus any
+// "Special Instructions" typed on a line item at checkout. Deduped, trimmed.
+function orderInstructionLines(order: Delivery): string[] {
+  const out: string[] = [];
+  const add = (v: any) => {
+    const t = String(v || '').trim();
+    if (t && t !== 'null' && !out.some(x => x.toLowerCase() === t.toLowerCase())) out.push(t);
+  };
+  add(order.deliveryInstructions);
+  for (const item of (order.items || []) as any[]) {
+    for (const prop of (item.properties || []) as any[]) {
+      const n = String(prop?.name || '').toLowerCase();
+      if (n.includes('special instruction') || n.includes('special_instruction')) add(prop.value);
+    }
+  }
+  return out;
+}
+
 // Katie's number, same as the server's KATIE_PHONE. Used in the driver's
 // pre-filled text to the gift giver after a failed attempt.
 const KATIE_PHONE_DISPLAY = '305-994-4070';
@@ -4800,12 +4818,18 @@ const ScheduleView: React.FC<{
                         {order.address?.street}{order.address?.unit ? ` #${order.address.unit}` : ''}, {order.address?.city} {order.address?.zip}
                       </p>
                       
-                      {/* Delivery instructions — subtle */}
-                      {order.deliveryInstructions && (
-                        <p style={{ color: '#9CA3AF', fontSize: 11, marginTop: 6, fontStyle: 'italic' }}>
-                          Note: {order.deliveryInstructions}
-                        </p>
-                      )}
+                      {/* Special instructions — same yellow strip as the order page, so a
+                          "deliver before 1pm" is visible without opening every order. */}
+                      {(() => {
+                        const lines = orderInstructionLines(order);
+                        if (lines.length === 0) return null;
+                        return (
+                          <div style={{ background: '#FEF3C7', borderLeft: '3px solid #F59E0B', borderRadius: 8, padding: '8px 12px', marginTop: 8 }}>
+                            <p style={{ fontSize: 10, fontWeight: 700, color: '#92400E', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 2 }}>⚠ Special Instructions</p>
+                            {lines.map((l, i) => <p key={i} style={{ fontSize: 13, fontWeight: 600, color: '#78350F' }}>{l}</p>)}
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
                 );
