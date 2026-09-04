@@ -177,6 +177,49 @@ async function flushAlertOutbox(): Promise<void> {
   try { localStorage.setItem(ALERT_OUTBOX_KEY, JSON.stringify(remaining)); } catch {}
 }
 
+// SAVE TO PHONE — a web app cannot write to the camera roll on its own. The
+// share sheet is the one-tap route: on iPhone the driver taps "Save Image".
+// Fallback for browsers without file sharing: a plain download of the JPEG.
+async function savePhotoToPhone(dataUrl: string, filename: string): Promise<void> {
+  try {
+    const blob = await (await fetch(dataUrl)).blob();
+    const file = new File([blob], filename, { type: blob.type || 'image/jpeg' });
+    const nav: any = navigator;
+    if (nav.share && (!nav.canShare || nav.canShare({ files: [file] }))) {
+      await nav.share({ files: [file] });
+      return;
+    }
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+  } catch (err: any) {
+    // The driver closing the share sheet throws AbortError — not a problem.
+    if (err?.name !== 'AbortError') console.error('Save to phone failed:', err);
+  }
+}
+
+// Katie's number, same as the server's KATIE_PHONE. Used in the driver's
+// pre-filled text to the gift giver after a failed attempt.
+const KATIE_PHONE_DISPLAY = '305-994-4070';
+const FAILURE_REASON_PHRASES: Record<string, string> = {
+  NO_ANSWER: 'no one was able to receive it',
+  BAD_ADDRESS: 'we could not find the address as written',
+  ACCESS_ISSUE: 'we could not get past the gate or lobby',
+  NO_SECURE_LOCATION: 'there was no safe spot to leave it',
+  REFUSED: 'the delivery was declined at the door',
+};
+function failedAttemptText(order: Delivery, reason: FailureReason, photoLink: string | null): string {
+  const who = order.giftReceiverName || order.customer?.name || 'your recipient';
+  const why = FAILURE_REASON_PHRASES[reason] || 'we were not able to complete the delivery';
+  return `The Sweet Tooth: We tried to deliver your gift for ${who} today but ${why}.` +
+    (photoLink ? ` Photo: ${photoLink}.` : '') +
+    ` Your gift is safe with us. To reschedule, please text me directly at ${KATIE_PHONE_DISPLAY}.` +
+    `\n\nKatie\nDelivery Manager, The Sweet Tooth`;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // PRINT PREVIEW — bulletproof cross-platform print UI
 //
@@ -886,6 +929,10 @@ const FailedDeliveryFlow: React.FC<FailedFlowProps> = ({ order, currentUser, onS
                       🖼️ Library
                     </button>
                   </div>
+                  <button type="button" onClick={() => savePhotoToPhone(photo, `sweet-tooth-${(order.orderNumber || order.id).replace(/[^a-zA-Z0-9]/g, '')}-attempt.jpg`)}
+                    className="w-full mt-2 py-3 rounded-[20px] font-black uppercase text-xs flex items-center justify-center gap-2 bg-stone-100 text-stone-700 active:scale-95 transition-all">
+                    Save to phone
+                  </button>
                 </>
               ) : (
                 <>
@@ -963,6 +1010,9 @@ interface RescheduleModalProps {
 
 const RescheduleModal: React.FC<RescheduleModalProps> = ({ order, failureReason, driverNotes, photo, onAutoReschedule, onManualReschedule, onCancel, saveError }) => {
   const [working, setWorking] = useState<'auto' | 'manual' | null>(null);
+  const [texted, setTexted] = useState(false);
+  const senderDigits = (order.giftSenderPhone || '').replace(/\D/g, '');
+  const senderFirst = (order.giftSenderName || '').trim().split(/\s+/)[0] || 'the sender';
   const tomorrow = (() => {
     const d = new Date();
     d.setDate(d.getDate() + 1);
@@ -1022,6 +1072,18 @@ const RescheduleModal: React.FC<RescheduleModalProps> = ({ order, failureReason,
           <p className="text-sm font-black text-stone-800">{FAILURE_REASON_LABELS[failureReason]}</p>
           {driverNotes && <p className="text-xs text-stone-500 italic mt-1">"{driverNotes}"</p>}
         </div>
+
+        {/* Text the gift giver from this phone. The email to them goes out on its
+            own when the failed report is saved; the text is the second channel. */}
+        {senderDigits.length >= 10 && (
+          <a
+            href={`sms:${senderDigits}?body=${encodeURIComponent(failedAttemptText(order, failureReason, photo ? podPhotoLink(String(order.id)) : null))}`}
+            onClick={() => setTexted(true)}
+            className={`w-full py-4 rounded-[28px] font-black uppercase text-sm flex items-center justify-center gap-2 ${texted ? 'bg-green-50 text-green-700 border-2 border-green-400' : 'bg-pink-50 text-pink-700 border-2 border-pink-300'}`}
+          >
+            <MessageSquare size={18} /> {texted ? 'Text opened' : `Text ${senderFirst} (gift giver)`}
+          </a>
+        )}
 
         <button
           type="button"
@@ -1410,7 +1472,15 @@ const OrderDetail: React.FC<{
     // failure only existed on the driver's phone. If all tries fail, Mike gets
     // an email and the driver sees a red banner.
     setIsSavingPOD(true);
-    const podResult = await postPodWithRetry({ orderId: order.id, photo, notes, submittedAt: now, status: 'FAILED', driverId: currentUser.id, driverName: currentUser.name, failureReason: reason });
+    const podResult = await postPodWithRetry({
+      orderId: order.id, photo, notes, submittedAt: now, completedAt: now, status: 'FAILED',
+      driverId: currentUser.id, driverName: currentUser.name, failureReason: reason,
+      isManual: !!(order as any).isManual, orderNumber: order.orderNumber || '',
+      customerEmail: order.giftSenderEmail || order.customer?.email || '',
+      giftReceiverName: order.giftReceiverName || order.customer?.name || '',
+      giftSenderName: order.giftSenderName || '',
+      address: order.address ? `${order.address.street}${order.address.unit ? ' ' + order.address.unit : ''}, ${order.address.city}` : '',
+    });
     setIsSavingPOD(false);
     if (!podResult.ok) {
       const alerted = await alertMikeSaveFailed({
@@ -1448,7 +1518,8 @@ const OrderDetail: React.FC<{
 
   const handleManualReschedule = async () => {
     try {
-      await fetch('/api/reschedule/pending', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ order, failureReason: pendingFailure?.reason, driverNotes: pendingFailure?.notes, photo: pendingFailure?.photo }) });
+      const { confirmationPhoto: _cp, attempts: _at, ...orderNoPhoto } = order as any;
+      await fetch('/api/reschedule/pending', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ order: orderNoPhoto, failureReason: pendingFailure?.reason, driverNotes: pendingFailure?.notes }) });
     } catch (err) {
       console.error('Manual reschedule failed:', err);
     }
@@ -2225,6 +2296,15 @@ const OrderDetail: React.FC<{
                     </button>
                   </div>
                 )}
+                {photoData && (
+                  <button
+                    type="button"
+                    onClick={() => savePhotoToPhone(photoData, `sweet-tooth-${(order.orderNumber || order.id).replace(/[^a-zA-Z0-9]/g, '')}.jpg`)}
+                    style={{ width: '100%', marginTop: 8, padding: '10px', borderRadius: 12, background: '#F9FAFB', border: '1px solid #E5E7EB', fontSize: 12, fontWeight: 600, color: '#374151', cursor: 'pointer' }}
+                  >
+                    Save to phone
+                  </button>
+                )}
               </div>
 
               {/* Delivery-time override — admins only. Defaults to now (left blank);
@@ -2387,10 +2467,17 @@ const OrderDetail: React.FC<{
                 <p style={{ fontSize: 10, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Previous Attempts ({order.attempts.length})</p>
               </div>
               {order.attempts.map((a, i) => (
-                <div key={i} style={{ padding: '12px 16px', borderBottom: i < order.attempts.length - 1 ? '1px solid #F3F4F6' : 'none' }}>
-                  <p style={{ fontSize: 14, fontWeight: 600, color: '#374151' }}>{FAILURE_REASON_LABELS[a.reason as FailureReason] || a.reason}</p>
-                  {a.notes && <p style={{ fontSize: 12, color: '#6B7280', fontStyle: 'italic', marginTop: 4 }}>"{a.notes}"</p>}
-                  <p style={{ fontSize: 11, color: '#9CA3AF', marginTop: 4 }}>{a.driverName || 'Driver'} · {formatDate(a.timestamp)}</p>
+                <div key={a.id || i} style={{ padding: '12px 16px', borderBottom: i < order.attempts.length - 1 ? '1px solid #F3F4F6' : 'none', display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                  {a.photo && (
+                    <button type="button" onClick={() => setLightboxPhoto(a.photo!)} style={{ flexShrink: 0, width: 64, height: 64, borderRadius: 8, overflow: 'hidden', border: '1px solid #E5E7EB', padding: 0, background: '#F9FAFB', cursor: 'pointer' }}>
+                      <img src={a.photo} alt="Attempt photo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    </button>
+                  )}
+                  <div style={{ minWidth: 0 }}>
+                    <p style={{ fontSize: 14, fontWeight: 600, color: '#374151' }}>{FAILURE_REASON_LABELS[a.reason as FailureReason] || a.reason}</p>
+                    {a.notes && <p style={{ fontSize: 12, color: '#6B7280', fontStyle: 'italic', marginTop: 4 }}>"{a.notes}"</p>}
+                    <p style={{ fontSize: 11, color: '#9CA3AF', marginTop: 4 }}>{a.driverName || 'Driver'} · {formatDate(a.timestamp)}</p>
+                  </div>
                 </div>
               ))}
             </div>

@@ -278,7 +278,8 @@ async function readPodDataLight(): Promise<Record<string, any>> {
           value::jsonb->>'photoR2Key' as photo_r2_key,
           value::jsonb->>'signatureR2Key' as signature_r2_key,
           value::jsonb->>'adminNotes' as admin_notes,
-          value::jsonb->>'deliveryFee' as delivery_fee
+          value::jsonb->>'deliveryFee' as delivery_fee,
+          value::jsonb->'attempts' as attempts
         FROM kv_store 
         WHERE key LIKE 'pod:%'
       `);
@@ -305,12 +306,40 @@ async function readPodDataLight(): Promise<Record<string, any>> {
         };
         if (row.photo_r2_key) entry.confirmationPhoto = `/api/pod/${row.order_id}/photo`;
         if (row.signature_r2_key) entry.confirmationSignature = `/api/pod/${row.order_id}/signature`;
+        if (Array.isArray(row.attempts) && row.attempts.length > 0) entry.attempts = attemptsForClient(row.order_id, row.attempts);
+        else if (row.failure_reason) entry.attempts = legacyAttempt(row.order_id, { failureReason: row.failure_reason, submittedAt: row.submitted_at, completedAt: row.completed_at, driverId: row.driver_id, driverName: row.driver_name, driverNotes: row.driver_notes, photoR2Key: row.photo_r2_key });
         result[row.order_id] = entry;
       }
       return result;
     } catch(e) { console.error('readPodDataLight DB error:', e); }
   }
   return {};
+}
+
+// Failed-attempt history as the phone shows it: no base64, each photo is a
+// proxy URL streamed from Cloudflare.
+function attemptsForClient(orderId: string, attempts: any[]): any[] {
+  return attempts.map((a: any, i: number) => {
+    const { photoR2Key, ...rest } = a || {};
+    return { ...rest, photo: photoR2Key ? `/api/pod/${orderId}/attempt/${i}/photo` : undefined };
+  });
+}
+
+// Failed reports saved before attempt history existed (e.g. order #36562)
+// still carry reason/notes/photo on the record itself. Show that as attempt 1
+// until a newer report overwrites those fields.
+function legacyAttempt(orderId: string, pod: any): any[] {
+  if (!pod || !pod.failureReason) return [];
+  return [{
+    id: pod.submittedAt || 'legacy',
+    timestamp: pod.completedAt || pod.submittedAt || '',
+    driverId: pod.driverId || '',
+    driverName: pod.driverName || '',
+    attemptNumber: 1,
+    reason: pod.failureReason,
+    notes: pod.driverNotes || pod.notes || '',
+    photo: pod.photoR2Key ? `/api/pod/${orderId}/photo` : undefined,
+  }];
 }
 
 async function readPodOrder(orderId: string): Promise<any> {
@@ -467,8 +496,14 @@ async function readUsersDB(): Promise<any[]> {
   // fallback to file
   try { return JSON.parse(fs.readFileSync(USERS_PATH, 'utf-8')); } catch { return []; }
 }
-function readRescheduleQueue() { return JSON.parse(fs.readFileSync(RESCHEDULE_PATH, 'utf-8')); }
-function writeRescheduleQueue(q: any[]) { fs.writeFileSync(RESCHEDULE_PATH, JSON.stringify(q, null, 2)); }
+// Katie's manual-reschedule queue lives in the database. It used to be a JSON
+// file on Render's disk, which is wiped on every deploy.
+async function readRescheduleQueue(): Promise<any[]> {
+  const q = await getKV('reschedule_queue');
+  if (Array.isArray(q)) return q;
+  try { const legacy = JSON.parse(fs.readFileSync(RESCHEDULE_PATH, 'utf-8')); return Array.isArray(legacy) ? legacy : []; } catch { return []; }
+}
+async function writeRescheduleQueue(q: any[]): Promise<void> { await setKV('reschedule_queue', q); }
 
 // --- PostgreSQL-backed message log (persists across deploys) ---
 async function getMessageLog(): Promise<any[]> {
@@ -485,7 +520,7 @@ async function appendMessageLogDB(entry: any): Promise<void> {
 // --- PostgreSQL-backed templates (persists across deploys) ---
 const DEFAULT_TEMPLATES = [
   { id: 'SUCCESS', label: 'Delivery Successful', body: 'Hi {{customer_name}}! 🍫 Great news — your Sweet Tooth order #{{order_number}} was just delivered to {{address}}. We hope whoever receives it loves it! Thank you for choosing The Sweet Tooth.' },
-  { id: 'FAILURE', label: 'Delivery Attempted – Please Reschedule', body: 'Hi {{customer_name}}, this is {{driver_name}} with your Sweet Tooth delivery. We attempted to deliver your order to {{address}}, but were unsuccessful because: {{failure_reason}}.\n\nDriver Note: {{driver_notes}}\n\nPlease text our manager Katie at {{katie_phone}} to reschedule. Thanks!' }
+  { id: 'FAILURE', label: 'Delivery Attempted – Please Reschedule', body: 'The Sweet Tooth: We tried to deliver your gift for {{customer_name}} today but {{failure_reason}}. Your gift is safe with us. To reschedule, please text me directly at {{katie_phone}}.\n\nKatie\nDelivery Manager, The Sweet Tooth' }
 ];
 async function getTemplates(): Promise<any[]> {
   const val = await getKV('notification_templates');
@@ -1006,6 +1041,127 @@ The Sweet Tooth
 thesweettooth.com`;
 
   return { subject, text: isGift ? textGift : textSelf, html };
+}
+
+// Plain-English reason for the gift giver. Keyed by the driver's pick.
+const FAILURE_REASON_PHRASES: Record<string, string> = {
+  NO_ANSWER: 'no one was able to receive it',
+  BAD_ADDRESS: 'we could not find the address as written',
+  ACCESS_ISSUE: 'we could not get past the gate or lobby',
+  NO_SECURE_LOCATION: 'there was no safe spot to leave it',
+  REFUSED: 'the delivery was declined at the door',
+};
+function failureReasonPhrase(reason?: string): string {
+  return FAILURE_REASON_PHRASES[String(reason || '')] || 'we were not able to complete the delivery';
+}
+
+// Email to the gift giver after a failed attempt. Signed by Katie so the reply
+// goes to a person, not a company. Never mentions payment.
+function buildFailedDeliveryEmail(opts: {
+  isGift: boolean;
+  senderFirstName: string;
+  receiverName: string;
+  address: string;
+  attemptTime: string;
+  reasonPhrase: string;
+  orderNumber: string;
+  hasPhoto: boolean;
+}): { subject: string; text: string; html: string } {
+  const { isGift, senderFirstName, receiverName, address, attemptTime, reasonPhrase, orderNumber, hasPhoto } = opts;
+  const what = isGift ? `your gift for ${receiverName}` : 'your order';
+  const subject = isGift
+    ? `We tried to deliver your gift today (Order ${orderNumber})`
+    : `We tried to deliver your order today (Order ${orderNumber})`;
+  const katieTel = `tel:+1${KATIE_PHONE.replace(/[^0-9]/g, '')}`;
+  const e = escapeHtmlForEmail;
+
+  const text = `Hi ${senderFirstName},
+
+I stopped by ${address} today at ${attemptTime} to deliver ${what}, but ${reasonPhrase}.${hasPhoto ? ' The photo from the door is attached.' : ''}
+
+Your ${isGift ? 'gift' : 'order'} is safe with us at the chocolate factory. Please text or call me directly at ${KATIE_PHONE} and we will pick a new delivery day together.
+
+Thank you,
+Katie
+Delivery Manager, The Sweet Tooth
+
+Order ${orderNumber}
+The Sweet Tooth
+18435 NE 19th Ave, North Miami Beach, FL 33179
+thesweettooth.com`;
+
+  const headerInner = EMAIL_LOGO_BASE64
+    ? `<img src="cid:brand-logo" alt="The Sweet Tooth" width="240" style="display:block;width:240px;max-width:80%;height:auto;margin:0 auto;border:0;outline:none;text-decoration:none;">`
+    : `<div style="font-size:22px;font-weight:700;color:#ffffff;">The Sweet Tooth</div>`;
+  const photoRow = hasPhoto ? `
+        <tr>
+          <td style="padding:8px 32px 8px 32px;text-align:center;">
+            <img src="cid:proof-photo" alt="Photo from the door" style="max-width:100%;height:auto;border-radius:8px;border:1px solid #eee;">
+          </td>
+        </tr>` : '';
+
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${e(subject)}</title>
+</head>
+<body style="margin:0;padding:0;background-color:#faf7f2;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#2a2a2a;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#faf7f2;">
+  <tr>
+    <td align="center" style="padding:32px 16px;">
+      <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background-color:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.04);">
+        <tr>
+          <td align="center" style="background-color:#2a2a2a;padding:32px 24px;">
+            ${headerInner}
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:36px 32px 8px 32px;">
+            <div style="font-size:22px;font-weight:600;color:#2a2a2a;line-height:1.3;">We tried to deliver ${e(what)} today.</div>
+            <div style="font-size:16px;color:#444;margin-top:18px;line-height:1.6;">Hi ${e(senderFirstName)},</div>
+            <div style="font-size:16px;color:#444;margin-top:12px;line-height:1.6;">
+              I stopped by <strong style="color:#2a2a2a;">${e(address)}</strong> today at <strong style="color:#2a2a2a;">${e(attemptTime)}</strong> to deliver ${e(what)}, but ${e(reasonPhrase)}.${hasPhoto ? ' Here is the photo from the door.' : ''}
+            </div>
+          </td>
+        </tr>
+${photoRow}
+        <tr>
+          <td style="padding:16px 32px 8px 32px;">
+            <div style="font-size:16px;color:#444;line-height:1.6;">
+              Your ${isGift ? 'gift' : 'order'} is safe with us at the chocolate factory. Please text or call me directly at
+              <a href="${katieTel}" style="color:#c2185b;text-decoration:none;font-weight:700;white-space:nowrap;">${KATIE_PHONE}</a>
+              and we will pick a new delivery day together.
+            </div>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:20px 32px 32px 32px;">
+            <div style="font-size:16px;color:#444;line-height:1.6;">Thank you,<br><strong style="color:#2a2a2a;">Katie</strong><br>Delivery Manager, The Sweet Tooth</div>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:0 32px 24px 32px;text-align:center;">
+            <div style="font-size:11px;color:#bbb;">Order ${e(orderNumber)}</div>
+          </td>
+        </tr>
+        <tr>
+          <td style="background-color:#2a2a2a;padding:24px 32px;text-align:center;">
+            <div style="font-size:12px;color:#ffffff;line-height:1.6;">
+              The Sweet Tooth<br>
+              18435 NE 19th Ave, North Miami Beach, FL 33179<br>
+              <a href="https://thesweettooth.com" style="color:#ffffff;text-decoration:none;">thesweettooth.com</a>
+            </div>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+</body>
+</html>`;
+  return { subject, text, html };
 }
 
 // Decide whether an order is a gift (shipping ≠ billing address) by fetching
@@ -2187,6 +2343,8 @@ async function startServer() {
           pod.confirmationSignature = `/api/pod/${req.params.orderId}/signature`;
           pod.signature = pod.confirmationSignature;
         }
+        if (Array.isArray(pod.attempts) && pod.attempts.length > 0) pod.attempts = attemptsForClient(req.params.orderId, pod.attempts);
+        else if (pod.failureReason) pod.attempts = legacyAttempt(req.params.orderId, pod);
         res.json({ pod });
       } else {
         res.json({ pod: null });
@@ -2217,6 +2375,13 @@ async function startServer() {
     if (!pod?.signatureR2Key) { res.status(404).end(); return; }
     await streamR2Object(res, pod.signatureR2Key);
   });
+  // Photo from one failed attempt (index into the order's attempt history).
+  app.get("/api/pod/:orderId/attempt/:idx/photo", async (req, res) => {
+    const pod = await readPodOrder(req.params.orderId);
+    const attempt = Array.isArray(pod?.attempts) ? pod.attempts[Number(req.params.idx)] : null;
+    if (!attempt?.photoR2Key) { res.status(404).end(); return; }
+    await streamR2Object(res, attempt.photoR2Key);
+  });
 
   // Checks & balances: exactly what confirmation text went out for an order (Twilio sends).
   app.get("/api/sms-log/:orderNumber", async (req, res) => {
@@ -2235,7 +2400,7 @@ async function startServer() {
   });
 
   app.post("/api/pod", async (req, res) => {
-    const { orderId, photo, signature, notes, completedAt, status, driverId, driverName, failureReason, isManual, customerEmail, giftReceiverName, giftSenderName, address, orderNumber } = req.body;
+    const { orderId, photo, signature, notes, completedAt, status, driverId, driverName, failureReason, isManual, customerEmail, giftReceiverName, giftSenderName, address, orderNumber, submittedAt: clientSubmittedAt } = req.body;
 
     // DEBUG: Log what photo data is received
     console.log(`📷 POD POST for ${orderId}: photo=${photo ? `YES (${photo.length} chars, starts: ${photo.substring(0,30)}...)` : 'NO'}, status=${status}`);
@@ -2250,9 +2415,22 @@ async function startServer() {
         return res.status(503).json({ error: 'Database unavailable, retry in a moment' });
       }
 
+      // Failed attempts are kept forever in pod.attempts — a reschedule or a
+      // status change must never erase them (order #36562, Sep 2026: the failed
+      // photo + notes vanished from view once the order was set back to
+      // SCHEDULED). The phone's submittedAt is the attempt id, so the 3-try
+      // retry loop can't log the same attempt twice.
+      const priorAttempts: any[] = Array.isArray(existingPod.attempts) ? existingPod.attempts : [];
+      const attemptKey = status === 'FAILED' ? String(clientSubmittedAt || completedAt || Date.now()) : null;
+      const duplicateAttempt = attemptKey ? priorAttempts.find((a: any) => a.id === attemptKey) : null;
+      // A new failed attempt gets its own photo. Only reuse the stored key when
+      // this is a retry of the same attempt.
+      const photoBelongsToPriorAttempt = !!existingPod.photoR2Key && priorAttempts.some((a: any) => a.photoR2Key === existingPod.photoR2Key);
+      const forceFreshPhoto = status === 'FAILED' && !duplicateAttempt && photoBelongsToPriorAttempt;
+
       // Upload new photo/signature to R2 if configured and we got base64 data.
       // If R2 upload fails, we fall back to storing base64 in the DB (legacy path).
-      let photoR2Key: string | null = existingPod.photoR2Key || null;
+      let photoR2Key: string | null = (forceFreshPhoto ? null : existingPod.photoR2Key) || null;
       let signatureR2Key: string | null = existingPod.signatureR2Key || null;
       let newPhotoBase64: string | null = null;
       let newSignatureBase64: string | null = null;
@@ -2326,6 +2504,19 @@ async function startServer() {
       const finalPhoto = photoR2Key ? null : (newPhotoBase64 || existingPod.photo || existingPod.confirmationPhoto || null);
       const finalSignature = signatureR2Key ? null : (newSignatureBase64 || existingPod.signature || existingPod.confirmationSignature || null);
 
+      const attempts = (status === 'FAILED' && attemptKey && !duplicateAttempt)
+        ? [...priorAttempts, {
+            id: attemptKey,
+            timestamp: completedAt || new Date().toISOString(),
+            driverId: driverId || '',
+            driverName: driverName || '',
+            attemptNumber: priorAttempts.length + 1,
+            reason: failureReason || 'NO_ANSWER',
+            notes: notes || '',
+            photoR2Key: photoR2Key || null,
+          }]
+        : priorAttempts;
+
       const updated = {
         ...existingPod,
         photo: finalPhoto,
@@ -2341,7 +2532,8 @@ async function startServer() {
         status,
         driverId,
         driverName,
-        failureReason
+        failureReason,
+        attempts
       };
       const podSaved = await writePodOrder(orderId, updated);
       if (!podSaved) {
@@ -2451,6 +2643,62 @@ async function startServer() {
           console.log(`Synced status FAILED to Shopify for order ${orderId}`);
         } catch (tagErr) {
           console.error('Failed to write FAILED tag to Shopify (non-fatal):', tagErr);
+        }
+      }
+
+      // ── AUTO-SEND FAILED-ATTEMPT EMAIL TO THE GIFT GIVER ─────────────────────────────
+      // One email per failed attempt, straight to the buyer on the Shopify order,
+      // photo inline, signed by Katie. Never mentions payment.
+      if (status === 'FAILED' && attemptKey && !duplicateAttempt) {
+        try {
+          let to = customerEmail || '';
+          let senderFirst = '';
+          let receiver = giftReceiverName || '';
+          let addr = '';
+          let isGift = true;
+          if (!isManualOrder && SHOPIFY_STORE_URL && SHOPIFY_ACCESS_TOKEN) {
+            const r = await fetch(`https://${SHOPIFY_STORE_URL}/admin/api/2025-01/orders/${orderId}.json?fields=email,contact_email,customer,billing_address,shipping_address,name`, {
+              headers: { 'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN }
+            });
+            const od: any = r.ok ? await r.json() : {};
+            const ord = od.order || {};
+            to = ord.email || ord.contact_email || to;
+            senderFirst = ord.customer?.first_name || ord.billing_address?.first_name || '';
+            const sh = ord.shipping_address || {};
+            receiver = receiver || `${sh.first_name || ''} ${sh.last_name || ''}`.trim();
+            addr = [sh.address1, sh.city].filter(Boolean).join(', ');
+            isGift = (await detectGiftFromShopify(String(orderId))).isGift;
+          }
+          if (!addr && address) addr = typeof address === 'string' ? address : [address.street, address.city].filter(Boolean).join(', ');
+          if (!senderFirst) senderFirst = firstNameOf(giftSenderName || '') || 'there';
+          const SMTP_PASS_F = process.env.SMTP_PASS || '';
+          if (to && SMTP_PASS_F) {
+            const attemptTime = new Date(completedAt || Date.now()).toLocaleString('en-US', {
+              timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true
+            });
+            const hasPhoto = !!(photo && typeof photo === 'string' && photo.startsWith('data:'));
+            const { subject, text, html } = buildFailedDeliveryEmail({
+              isGift, senderFirstName: senderFirst, receiverName: receiver || 'your recipient',
+              address: addr || 'the delivery address', attemptTime,
+              reasonPhrase: failureReasonPhrase(failureReason),
+              orderNumber: String(orderNumber || `#${orderId}`), hasPhoto,
+            });
+            const sent = await sendEmail(to, subject, text,
+              hasPhoto ? photo : undefined, hasPhoto ? `attempt-${orderId}.jpg` : undefined,
+              html, hasPhoto ? 'proof-photo' : undefined);
+            await logEmailSend(String(orderNumber || orderId), to, subject, sent);
+            if (sent) {
+              const fresh = await readPodOrderForUpdate(orderId);
+              if (fresh) { fresh.failureNotificationSent = true; await writePodOrder(orderId, fresh); }
+              console.log(`✅ Failed-attempt email sent to ${to} for order ${orderId}`);
+            } else {
+              console.log(`⚠️ Failed-attempt email NOT sent to ${to} for order ${orderId}`);
+            }
+          } else {
+            console.log(`📧 Failed-attempt email skipped for ${orderId}: ${!to ? 'no buyer email' : 'SMTP not configured'}`);
+          }
+        } catch (failMailErr) {
+          console.error('Failed-attempt email error (non-fatal):', failMailErr);
         }
       }
 
@@ -2642,9 +2890,9 @@ async function startServer() {
   });
 
   // Manual reschedule: add to Katie's pending queue
-  app.post("/api/reschedule/pending", (req, res) => {
-    const { order, failureReason, driverNotes, photo } = req.body;
-    const queue = readRescheduleQueue();
+  app.post("/api/reschedule/pending", async (req, res) => {
+    const { order, failureReason, driverNotes } = req.body;
+    const queue = await readRescheduleQueue();
     const entry = {
       id: `reschedule_${Date.now()}`,
       orderId: order.id,
@@ -2655,25 +2903,51 @@ async function startServer() {
       driverName: order.driverName,
       failureReason,
       driverNotes,
-      photo,
       submittedAt: new Date().toISOString(),
       status: 'PENDING' // PENDING | REASSIGNED | CANCELLED
     };
     queue.push(entry);
-    writeRescheduleQueue(queue);
-    res.json({ success: true, entry });
+    await writeRescheduleQueue(queue);
+
+    // The status used to change only on the driver's phone (order #36562,
+    // Sep 2026): every other device kept showing FAILED. Persist it.
+    const orderId = String(order.id || '');
+    const existing = orderId ? await readPodOrderForUpdate(orderId) : null;
+    if (existing) {
+      existing.status = 'PENDING_RESCHEDULE';
+      await writePodOrder(orderId, existing);
+    }
+    if (orderId && !orderId.startsWith('manual_') && SHOPIFY_STORE_URL && SHOPIFY_ACCESS_TOKEN) {
+      try {
+        const tagResp = await fetch(`https://${SHOPIFY_STORE_URL}/admin/api/2025-01/orders/${orderId}.json?fields=tags`, {
+          headers: { 'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN }
+        });
+        const tagData = await tagResp.json();
+        const tagsList = (tagData.order?.tags || '').split(',').map((t: string) => t.trim())
+          .filter((t: string) => t && !t.startsWith('st_status:'));
+        tagsList.push('st_status:PENDING_RESCHEDULE');
+        await fetch(`https://${SHOPIFY_STORE_URL}/admin/api/2025-01/orders/${orderId}.json`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN },
+          body: JSON.stringify({ order: { id: orderId, tags: tagsList.join(', ') } })
+        });
+      } catch (err) {
+        console.error('Failed to sync PENDING_RESCHEDULE to Shopify (non-fatal):', err);
+      }
+    }
+    res.json({ success: true, entry, persisted: !!existing });
   });
 
-  app.get("/api/reschedule/pending", (_req, res) => {
-    res.json({ queue: readRescheduleQueue() });
+  app.get("/api/reschedule/pending", async (_req, res) => {
+    res.json({ queue: await readRescheduleQueue() });
   });
 
-  app.patch("/api/reschedule/:id", (req, res) => {
-    const queue = readRescheduleQueue();
+  app.patch("/api/reschedule/:id", async (req, res) => {
+    const queue = await readRescheduleQueue();
     const idx = queue.findIndex((e: any) => e.id === req.params.id);
     if (idx === -1) return res.status(404).json({ error: "Not found" });
     queue[idx] = { ...queue[idx], ...req.body };
-    writeRescheduleQueue(queue);
+    await writeRescheduleQueue(queue);
     res.json({ entry: queue[idx] });
   });
 
