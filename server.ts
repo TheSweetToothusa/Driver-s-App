@@ -520,7 +520,7 @@ async function appendMessageLogDB(entry: any): Promise<void> {
 // --- PostgreSQL-backed templates (persists across deploys) ---
 const DEFAULT_TEMPLATES = [
   { id: 'SUCCESS', label: 'Delivery Successful', body: 'Hi {{customer_name}}! 🍫 Great news — your Sweet Tooth order #{{order_number}} was just delivered to {{address}}. We hope whoever receives it loves it! Thank you for choosing The Sweet Tooth.' },
-  { id: 'FAILURE', label: 'Delivery Attempted – Please Reschedule', body: 'The Sweet Tooth: We tried to deliver your gift for {{customer_name}} today but {{failure_reason}}. Your gift is safe with us. To reschedule, please text me directly at {{katie_phone}}.\n\nKatie\nDelivery Manager, The Sweet Tooth' }
+  { id: 'FAILURE', label: 'Delivery Attempted – Please Reschedule', body: 'The Sweet Tooth: We tried to deliver your gift for {{customer_name}} today. Reason: {{failure_reason}}. Your gift is safe with us. To reschedule, please text me directly at {{katie_phone}}.\n\nKatie\nDelivery Manager, The Sweet Tooth' }
 ];
 async function getTemplates(): Promise<any[]> {
   const val = await getKV('notification_templates');
