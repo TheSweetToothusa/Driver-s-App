@@ -149,8 +149,8 @@ async function r2KeyExists(key: string): Promise<boolean> {
 // Delivery metadata (who/when/notes) is kept forever; only images are removed.
 const POD_PHOTO_RETENTION_DAYS = 7;
 
-async function cleanupOldPodPhotos(): Promise<{ r2Deleted: number; dbRowsStripped: number; errors: string[] }> {
-  const summary = { r2Deleted: 0, dbRowsStripped: 0, errors: [] as string[] };
+async function cleanupOldPodPhotos(): Promise<{ r2Deleted: number; dbRowsStripped: number; manualStripped: number; errors: string[] }> {
+  const summary = { r2Deleted: 0, dbRowsStripped: 0, manualStripped: 0, errors: [] as string[] };
   const cutoffMs = Date.now() - POD_PHOTO_RETENTION_DAYS * 24 * 60 * 60 * 1000;
   const cutoffDate = new Date(cutoffMs).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }); // YYYY-MM-DD
   const cutoffIso = new Date(cutoffMs).toISOString();
@@ -200,7 +200,28 @@ async function cleanupOldPodPhotos(): Promise<{ r2Deleted: number; dbRowsStrippe
     }
   }
 
-  console.log(`🧹 Photo retention (${POD_PHOTO_RETENTION_DAYS}d): ${summary.r2Deleted} Cloudflare files deleted, ${summary.dbRowsStripped} DB rows stripped${summary.errors.length ? ' — errors: ' + summary.errors.join('; ') : ''}`);
+  // Manual orders keep their photo inline on the order record. Strip it once
+  // the delivery is older than the retention window, same as pod:* rows.
+  if (pool) {
+    try {
+      const manualOrders = await dbGet('manual_orders');
+      if (Array.isArray(manualOrders)) {
+        let stripped = 0;
+        for (const o of manualOrders) {
+          const done = typeof o?.completedAt === 'string' ? o.completedAt : '';
+          if (!/^\d{4}-\d{2}-\d{2}/.test(done) || done >= cutoffIso) continue;
+          for (const f of ['photo', 'confirmationPhoto', 'signature', 'confirmationSignature']) {
+            if (typeof o[f] === 'string' && o[f].startsWith('data:')) { delete o[f]; stripped++; }
+          }
+        }
+        if (stripped > 0) { await dbSet('manual_orders', manualOrders); summary.manualStripped = stripped; }
+      }
+    } catch (e: any) {
+      summary.errors.push(`manual orders: ${e?.message || e}`);
+    }
+  }
+
+  console.log(`🧹 Photo retention (${POD_PHOTO_RETENTION_DAYS}d): ${summary.r2Deleted} Cloudflare files deleted, ${summary.dbRowsStripped} DB rows stripped, ${summary.manualStripped} manual-order images stripped${summary.errors.length ? ' — errors: ' + summary.errors.join('; ') : ''}`);
   return summary;
 }
 
@@ -3902,11 +3923,45 @@ async function startServer() {
 
   // ── MANUAL ORDERS ───────────────────────────────────────────────────────────
 
+  // Photos/signatures on manual orders are stored inline as base64 data URLs.
+  // Never ship those blobs in the list — the dashboard polls this every 5 min
+  // and 28 old photos made the response 60 MB (Sept 2026 bandwidth blowup).
+  // Hand out a link per image instead; the <img> tags load it on demand.
+  const MANUAL_IMAGE_FIELDS: Array<[string, string]> = [
+    ['confirmationPhoto', 'photo'], ['photo', 'photo'],
+    ['confirmationSignature', 'signature'], ['signature', 'signature'],
+  ];
+  const isDataUrl = (v: any) => typeof v === 'string' && v.startsWith('data:');
+  function lightManualOrder(o: any) {
+    const out = { ...o };
+    for (const [field, kind] of MANUAL_IMAGE_FIELDS) {
+      if (isDataUrl(out[field])) out[field] = `/api/manual-orders/${o.id}/${kind}`;
+    }
+    return out;
+  }
+  function sendDataUrl(res: express.Response, dataUrl: any) {
+    const m = isDataUrl(dataUrl) ? String(dataUrl).match(/^data:([^;]+);base64,(.+)$/) : null;
+    if (!m) { res.status(404).end(); return; }
+    res.setHeader('Content-Type', m[1]);
+    res.setHeader('Cache-Control', 'private, max-age=3600');
+    res.end(Buffer.from(m[2], 'base64'));
+  }
+
   app.get('/api/manual-orders', async (_req, res) => {
     try {
       const orders = await dbGet('manual_orders') || [];
-      res.json({ orders });
+      res.json({ orders: orders.map(lightManualOrder) });
     } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+  app.get('/api/manual-orders/:id/photo', async (req, res) => {
+    const orders = await dbGet('manual_orders') || [];
+    const o = orders.find((x: any) => x.id === req.params.id);
+    sendDataUrl(res, o?.confirmationPhoto || o?.photo);
+  });
+  app.get('/api/manual-orders/:id/signature', async (req, res) => {
+    const orders = await dbGet('manual_orders') || [];
+    const o = orders.find((x: any) => x.id === req.params.id);
+    sendDataUrl(res, o?.confirmationSignature || o?.signature);
   });
 
   // Generate manual order number in MMDD-NN format (e.g., M-0429-01)
@@ -3983,6 +4038,11 @@ async function startServer() {
       const idx = orders.findIndex((o: any) => o.id === req.params.id);
       if (idx === -1) return res.status(404).json({ error: 'Not found' });
       const patch = { ...req.body };
+      // The list hands clients a link (not the image). If that link comes back
+      // in a PATCH, drop it so it never overwrites the stored image.
+      for (const [field] of MANUAL_IMAGE_FIELDS) {
+        if (typeof patch[field] === 'string' && !isDataUrl(patch[field])) delete patch[field];
+      }
       // Order number is editable on manual orders — must be non-empty and not
       // collide with another manual order
       if (patch.orderNumber !== undefined) {
