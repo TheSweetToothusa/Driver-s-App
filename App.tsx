@@ -7497,8 +7497,14 @@ export default function App() {
       const pingInterval = setInterval(() => {
         fetch('/api/health').catch(() => {});
       }, 240000); // 4 minutes
-      
-      return () => { clearInterval(iv); clearInterval(pingInterval); };
+
+      // The 5-minute timer meant a date changed on the dashboard could sit stale on
+      // the phone for minutes. Refresh the moment the app comes back to the front.
+      const onVisible = () => { if (document.visibilityState === 'visible') fetchOrders(true); };
+      document.addEventListener('visibilitychange', onVisible);
+      window.addEventListener('focus', onVisible);
+
+      return () => { clearInterval(iv); clearInterval(pingInterval); document.removeEventListener('visibilitychange', onVisible); window.removeEventListener('focus', onVisible); };
     }
   }, [currentUser]);
 
