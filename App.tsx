@@ -54,6 +54,28 @@ const localDateStr = (d: Date = new Date()) =>
 const POD_PHOTO_MAX_EDGE = 1600;
 const POD_PHOTO_QUALITY = 0.85;
 
+// Shrink a raw photo data URL to POD_PHOTO_MAX_EDGE on the long edge. The failed-
+// delivery flow sent the file untouched, so a full-size photo picked from the
+// phone's library (far bigger than what the in-app camera returns) hit the same
+// 10 MB limit above and the upload was refused.
+function shrinkPhoto(rawDataUrl: string): Promise<string> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, POD_PHOTO_MAX_EDGE / Math.max(img.width, img.height));
+      const w = Math.max(1, Math.round(img.width * scale));
+      const h = Math.max(1, Math.round(img.height * scale));
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      canvas.getContext('2d')!.drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL('image/jpeg', POD_PHOTO_QUALITY));
+    };
+    img.onerror = () => resolve(rawDataUrl);
+    img.src = rawDataUrl;
+  });
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // POD DRAFT RECOVERY
 //
@@ -837,7 +859,7 @@ const FailedDeliveryFlow: React.FC<FailedFlowProps> = ({ order, currentUser, onS
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onloadend = () => setPhoto(reader.result as string);
+    reader.onloadend = async () => setPhoto(await shrinkPhoto(reader.result as string));
     reader.readAsDataURL(file);
   };
 
