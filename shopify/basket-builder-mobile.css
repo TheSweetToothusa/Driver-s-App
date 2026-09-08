@@ -1,0 +1,306 @@
+/* ==========================================================================
+   Basket Builder — mobile size step
+   Scope: phones only (max-width: 749px). Desktop is untouched.
+
+   THE LAYOUT BUG
+   The card is meant to be photo-left / text-right. The widths can't fit:
+     .basket-image   flex: 0 0 47%
+     .basket-content flex: 1 1 53%
+     .basket-card    gap: 10px
+   47% + 53% + 10px is wider than the card, and a rule at <=600px adds
+   flex-wrap: wrap — so on every real phone the two halves land on separate
+   rows. Replaced with an explicit grid.
+
+   ALL SIZES ARE IN px, NEVER rem.
+   This theme sets html { font-size: 62.5% }, so 1rem = 10px here, not 16px.
+   An earlier version of this file used rem and every value came out at 62.5%
+   of its intended size — the basket name rendered at 10.6px and the detail
+   lines at 7.5px, which is unreadable. Do not reintroduce rem in this file.
+
+   THE LAYOUT
+   One basket per row, photo full card width at 3:2 to match the source photos
+   (1200x800). The basket is the largest thing on the card by a wide margin;
+   the text sits underneath at real reading sizes.
+
+   Palette per brand rules: ink #1D1D1F (never #000), hairline #E8E8E8,
+   gold #D4AF37 as a sparing accent only.
+   ========================================================================== */
+
+@media (max-width: 749px) {
+
+  /* ---- Section heading --------------------------------------------------- */
+  #bb-choose-title {
+    font-size: 26px !important;
+    line-height: 1.15 !important;
+    letter-spacing: -0.02em !important;
+    color: #1D1D1F !important;
+    margin: 10px 16px 0 !important;
+  }
+
+  /* ---- Sticky size pills ------------------------------------------------- */
+  .bb-mobile-pillbar {
+    gap: 6px;
+    padding: 8px 12px 10px;
+    background: rgba(255, 255, 255, 0.94);
+    -webkit-backdrop-filter: saturate(180%) blur(12px);
+    backdrop-filter: saturate(180%) blur(12px);
+    border-bottom: 1px solid #E8E8E8;
+    box-shadow: none;
+    margin: 0 -12px 12px;
+  }
+  .bb-mobile-pillbar a {
+    border-radius: 8px;
+    background: #F5F5F7;
+    color: #1D1D1F;
+    border: 1px solid transparent;
+    font-size: 14px !important;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    min-height: 38px;
+    padding: 9px 4px;
+  }
+  .bb-mobile-pillbar a.is-active {
+    background: #1D1D1F;
+    color: #FFFFFF;
+    border-color: #1D1D1F;
+  }
+  .bb-mobile-strip .bb-strip-price { font-size: 12px !important; }
+
+  /* ---- Card list --------------------------------------------------------- */
+  .basket-grid {
+    display: block !important;
+    margin-bottom: 24px !important;
+  }
+  .basket-grid > .basket-card { margin-bottom: 14px !important; }
+
+  .basket-card {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-rows: auto auto auto !important;
+    column-gap: 12px !important;
+    row-gap: 0 !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    width: 100% !important;
+    padding: 0 0 14px !important;
+    overflow: hidden !important;
+    isolation: isolate !important;
+    border: 1px solid #E8E8E8 !important;
+    border-radius: 14px !important;
+    background: #FFFFFF !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+    transition: box-shadow .2s ease, border-color .2s ease !important;
+  }
+  .basket-card:hover {
+    transform: none !important;
+    border-color: #E8E8E8 !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, .04) !important;
+  }
+  .basket-card.selected {
+    transform: none !important;
+    background: #FFFFFF !important;
+    border-color: #1D1D1F !important;
+    box-shadow: inset 0 0 0 2px #1D1D1F, 0 6px 16px rgba(0, 0, 0, .07) !important;
+  }
+  .basket-card.selected::after {
+    top: 10px !important;
+    left: 10px !important;
+    right: auto !important;
+    width: 26px !important;
+    height: 26px !important;
+    font-size: 14px !important;
+    background: #1D1D1F !important;
+    box-shadow: 0 0 0 2px #FFFFFF !important;
+  }
+
+  /* ---- The basket — the biggest thing on the card ------------------------ */
+  .basket-card .basket-image {
+    grid-column: 1 / -1 !important;
+    grid-row: 1 !important;
+    width: 100% !important;
+    max-width: none !important;
+    height: auto !important;
+    max-height: none !important;
+    aspect-ratio: auto !important;
+    flex: none !important;
+    /* The source files were re-cropped so the basket fills ~85% of the frame
+       (Small Round was 18%). No object-fit box, no zoom, no cropping in CSS —
+       the photo is simply shown at its own aspect, full card width. */
+    object-fit: contain !important;
+    transform: none !important;
+    background: #FFFFFF !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+    /* Some shots ship on a #FCFCFC-#FEFEFE backdrop that reads as a grey box
+       on a white card. A 3% lift clips it to white; mid-tones move ~2/255. */
+    filter: brightness(1.03) !important;
+  }
+
+
+  /* ---- Text — real reading sizes ----------------------------------------- */
+  .basket-card .basket-content {
+    grid-column: 1 !important;
+    grid-row: 2 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    flex: none !important;
+    position: relative !important;
+    z-index: 1 !important;
+    background: #FFFFFF !important;
+    padding: 16px 0 0 16px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 4px !important;
+  }
+  .basket-card .basket-header {
+    display: flex !important;
+    flex-direction: row !important;
+    justify-content: flex-start !important;
+    align-items: baseline !important;
+    gap: 12px !important;
+    margin-bottom: 2px !important;
+  }
+  .basket-card .basket-name {
+    font-size: 20px !important;
+    font-weight: 700 !important;
+    line-height: 1.2 !important;
+    letter-spacing: -0.02em !important;
+    color: #1D1D1F !important;
+  }
+  .basket-card .basket-price {
+    font-size: 20px !important;
+    font-weight: 700 !important;
+    line-height: 1.2 !important;
+    letter-spacing: -0.02em !important;
+    color: #1D1D1F !important;
+    margin-left: 0 !important;
+    white-space: nowrap !important;
+    font-variant-numeric: tabular-nums !important;
+  }
+  .basket-card .serving-pill {
+    display: inline-block !important;
+    background: #F5F5F7 !important;
+    color: #1D1D1F !important;
+    font-size: 14px !important;
+    font-weight: 600 !important;
+    line-height: 1.35 !important;
+    letter-spacing: 0 !important;
+    padding: 4px 10px !important;
+    border-radius: 7px !important;
+    margin: 0 !important;
+  }
+  .basket-card .basket-details {
+    display: block !important;
+    text-wrap: pretty;
+    font-size: 14px !important;
+    font-weight: 400 !important;
+    line-height: 1.4 !important;
+    letter-spacing: 0 !important;
+    color: #6E6A64 !important;
+  }
+
+  /* ---- "See it wrapped" — Rosh Hashanah only for now --------------------- */
+  .basket-card .rh-flip {
+    grid-column: 1 !important;
+    grid-row: 3 !important;
+    align-self: start !important;
+    justify-self: start !important;
+    flex: none !important;
+    width: auto !important;
+    min-height: 0 !important;
+    position: relative !important;
+    z-index: 1 !important;
+    margin: 12px 0 0 16px !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: none !important;
+    color: #6E6A64 !important;
+    font-family: inherit !important;
+    font-size: 14px !important;
+    font-weight: 600 !important;
+    line-height: 1.2 !important;
+    letter-spacing: 0 !important;
+    gap: 6px !important;
+    white-space: nowrap !important;
+    text-decoration: underline !important;
+    text-underline-offset: 3px !important;
+    text-decoration-color: #D8D4CD !important;
+  }
+  .basket-card .rh-flip::after {   /* 44px touch target, invisible */
+    content: '';
+    position: absolute;
+    inset: -15px -14px;
+  }
+  .basket-card .rh-flip svg {
+    width: 13px !important;
+    height: 13px !important;
+    color: #A8A29A !important;
+  }
+  .basket-card .rh-flip:hover,
+  .basket-card .rh-flip:active { background: none !important; color: #1D1D1F !important; }
+  .basket-card.is-wrapped .rh-flip { color: #7D6218 !important; text-decoration-color: #D4AF37 !important; }
+  .basket-card.is-wrapped .rh-flip svg { color: #D4AF37 !important; }
+
+  .basket-card[id^="size-"] { scroll-margin-top: 84px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .basket-card { transition: none !important; }
+  }
+}
+
+/* ==========================================================================
+   Mobile hero compaction — Rosh Hashanah page only (.rh-hero exists there).
+   Harmless no-op on the year-round builder. Delete this block to keep the
+   current hero. No copy is changed — crop, type sizes and spacing only.
+   ========================================================================== */
+@media (max-width: 749px) {
+  .rh-hero__shot img {
+    aspect-ratio: 16 / 10 !important;
+    object-fit: cover !important;
+    object-position: center 46% !important;
+    border-radius: 12px !important;
+  }
+  .rh-hero__shot { max-width: none !important; }
+  .rh-hero__cap {
+    margin-top: 8px !important;
+    font-size: 13px !important;
+    line-height: 1.4 !important;
+    color: #6E6A64 !important;
+  }
+  .rh-hero { margin: 8px auto 0 !important; }
+  .rh-hero__grid { gap: 12px !important; }
+  .rh-hero h1 {
+    font-size: 26px !important;
+    line-height: 1.15 !important;
+    letter-spacing: -0.025em !important;
+    color: #1D1D1F !important;
+  }
+  .rh-hero__added { margin-top: 12px !important; padding-top: 10px !important; }
+  .rh-hero__label {
+    margin-bottom: 8px !important;
+    font-size: 12px !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.08em !important;
+    text-transform: uppercase !important;
+  }
+  .rh-chips { gap: 6px !important; }
+  .rh-chips li {
+    background: #FFFDF7 !important;
+    border-color: #EFE3C4 !important;
+    color: #1D1D1F !important;
+    font-size: 13px !important;
+    font-weight: 500 !important;
+    padding: 6px 11px !important;
+    border-radius: 8px !important;
+  }
+  .rh-hero__plus {
+    margin-top: 10px !important;
+    font-size: 13px !important;
+    line-height: 1.5 !important;
+    color: #6E6A64 !important;
+  }
+  .rh-hero__plus b { color: #1D1D1F !important; }
+  .bb-tracker { margin-top: 10px !important; }
+}

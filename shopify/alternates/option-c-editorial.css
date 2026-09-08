@@ -1,0 +1,97 @@
+/* OPTION C — full-width editorial (Bottega / Le Labo pattern)
+   One basket per row, photo edge to edge. The most product-forward and the
+   most premium-feeling; also the longest scroll of the three. */
+@media (max-width: 749px) {
+  #bb-choose-title { font-size:1.5rem !important; letter-spacing:-.02em; color:#1D1D1F !important; margin:10px 16px 0 !important; }
+  .bb-mobile-pillbar { gap:6px; padding:8px 12px 10px; background:rgba(255,255,255,.92);
+    -webkit-backdrop-filter:saturate(180%) blur(12px); backdrop-filter:saturate(180%) blur(12px);
+    border-bottom:1px solid #E8E8E8; box-shadow:none; margin:0 -12px 12px; }
+  .bb-mobile-pillbar a { border-radius:8px; background:#F5F5F7; color:#1D1D1F; border:1px solid transparent;
+    font-size:.8125rem; font-weight:600; letter-spacing:-.01em; min-height:34px; padding:8px 4px; }
+  .bb-mobile-pillbar a.is-active { background:#1D1D1F; color:#fff; border-color:#1D1D1F; }
+  .bb-mobile-strip { padding:6px 6px 12px !important; margin:0 -6px 12px !important; }
+
+  .basket-grid { gap: 14px !important; margin-bottom: 24px !important; }
+
+  .basket-card {
+    display: grid !important;
+    grid-template-columns: minmax(0,1fr) auto !important;
+    grid-template-rows: auto auto !important;
+    column-gap: 12px !important; row-gap: 0 !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    padding: 0 0 12px !important;
+    overflow: hidden !important;
+    border: 1px solid #E8E8E8 !important;
+    border-radius: 14px !important;
+    background: #fff !important;
+    box-shadow: 0 1px 2px rgba(0,0,0,.04) !important;
+    transition: box-shadow .2s ease, border-color .2s ease !important;
+  }
+  .basket-card:hover { transform:none !important; border-color:#E8E8E8 !important; box-shadow:0 1px 2px rgba(0,0,0,.04) !important; }
+  .basket-card.selected { transform:none !important; background:#fff !important; border-color:#1D1D1F !important;
+    box-shadow: inset 0 0 0 1px #1D1D1F, 0 6px 16px rgba(0,0,0,.07) !important; }
+  .basket-card.selected::after { top:10px !important; left:10px !important; right:auto !important;
+    width:24px !important; height:24px !important; font-size:12px !important; background:#1D1D1F !important;
+    box-shadow:0 0 0 2px #fff !important; }
+
+  .basket-card .basket-image {
+    grid-column: 1 / -1 !important; grid-row: 1 !important;
+    width: 100% !important; max-width: none !important;
+    height: auto !important; max-height: none !important;
+    aspect-ratio: 16 / 10 !important;
+    flex: none !important;
+    object-fit: contain !important;
+    background: #FCFBF9 !important;
+    border-radius: 0 !important;
+    padding: 6px 0 !important;
+    filter: brightness(1.03) !important;
+  }
+  #size-small .basket-image { padding:16px 0 !important; }
+  #size-medium .basket-image { padding:13px 0 !important; }
+  #size-large  .basket-image { padding:9px 0 !important; }
+  #size-xl     .basket-image { padding:8px 0 !important; }
+  #size-grand  .basket-image { padding:6px 0 !important; }
+  #size-jumbo  .basket-image { padding:2px 0 !important; }
+  #size-penultimate .basket-image { padding:3px 0 !important; }
+  #size-supreme .basket-image { padding:0 !important; }
+  .basket-card.is-wrapped .basket-image { padding:0 !important; }
+
+  .basket-card .basket-content {
+    grid-column: 1 !important; grid-row: 2 !important;
+    width: auto !important; min-width: 0 !important; flex: none !important;
+    padding: 12px 0 0 14px !important;
+    display: flex !important; flex-direction: column !important; align-items: flex-start !important;
+    gap: 3px !important;
+  }
+  .basket-card .basket-header { display:flex !important; width:100% !important; flex-direction:row !important;
+    justify-content:flex-start !important; align-items:baseline !important; gap:10px !important; margin-bottom:1px !important; }
+  .basket-card .basket-name { font-size:1.0625rem !important; font-weight:600 !important; line-height:1.2 !important;
+    letter-spacing:-.02em !important; color:#1D1D1F !important; }
+  .basket-card .basket-price { font-size:1.0625rem !important; font-weight:600 !important; line-height:1.2 !important;
+    letter-spacing:-.02em !important; color:#1D1D1F !important; margin-left:0 !important; white-space:nowrap !important;
+    font-variant-numeric:tabular-nums !important; }
+  .basket-card .serving-pill { display:block !important; background:none !important; color:#1D1D1F !important;
+    font-size:.75rem !important; font-weight:500 !important; letter-spacing:0 !important; line-height:1.35 !important;
+    padding:0 !important; border-radius:0 !important; margin:0 !important; }
+  .basket-card .basket-details { font-size:.75rem !important; font-weight:400 !important; line-height:1.35 !important;
+    letter-spacing:0 !important; color:#86827C !important; }
+
+  .basket-card .rh-flip {
+    grid-column: 2 !important; grid-row: 2 !important;
+    position: relative !important; align-self: center !important; justify-self: end !important;
+    flex: none !important; width: auto !important; min-height: 0 !important;
+    margin: 12px 14px 0 0 !important; padding: 0 !important;
+    border: 0 !important; border-radius: 0 !important; background: none !important;
+    color: #86827C !important; font: 500 .71875rem/1.2 inherit !important; letter-spacing: 0 !important;
+    gap: 5px !important; text-decoration: underline !important; text-underline-offset: 2px !important;
+    text-decoration-color: #D8D4CD !important; white-space: nowrap !important;
+  }
+  .basket-card .rh-flip::after { content:''; position:absolute; inset:-15px -12px; }
+  .basket-card .rh-flip svg { width:11px !important; height:11px !important; color:#B3AEA6 !important; }
+  .basket-card .rh-flip:hover, .basket-card .rh-flip:active { background:none !important; color:#1D1D1F !important; }
+  .basket-card.is-wrapped .rh-flip { color:#7D6218 !important; text-decoration-color:#D4AF37 !important; }
+  .basket-card.is-wrapped .rh-flip svg { color:#D4AF37 !important; }
+
+  .basket-card[id^="size-"] { scroll-margin-top:78px; }
+}
