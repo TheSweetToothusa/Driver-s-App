@@ -1388,6 +1388,12 @@ async function startServer() {
     return a ? a.value : '';
   };
 
+  // 2026-09-13: the customer-facing delivery-window wording switches on this Miami date (Mike, 2026-09-09).
+  const stMiamiYmd = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+  const stWindowLive = () => stMiamiYmd() >= '2026-09-13';
+  const ST_WINDOW_LINE = "Our delivery window runs until 5 PM. You will receive a delivery confirmation with a time stamp after it's delivered.";
+  const ST_CHANGE_HINT = 'Need to change something? Tap "Change my order" below.';
+
   function sfBuildStatus(order: any) {
     const name = order.name || '';
     const status = (sfTag(order, 'st_status:') || '').toUpperCase();
@@ -1427,6 +1433,10 @@ async function startServer() {
     }
 
     if (['OUT', 'ROUTE', 'TRANSIT', 'WAY'].some((k) => status.includes(k))) {
+      if (stWindowLive()) {
+        return `Your order ${name} is on the way today with ${driver}. Our delivery window runs until 5 PM. ` +
+               `If you need anything, you can ${phoneClause}.`;
+      }
       return `Your order ${name} is on the way today with ${driver}! 🚗 It will arrive before 5 PM. ` +
              `If you need anything, you can ${phoneClause}.`;
     }
@@ -1437,10 +1447,12 @@ async function startServer() {
       const todayYmd = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
       const pretty = parsed.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
       if (ddYmd === todayYmd) {
+        if (stWindowLive()) return `Your order ${name} is scheduled for delivery today (${pretty}). ${ST_WINDOW_LINE} ${ST_CHANGE_HINT}`;
         return `Your order ${name} is scheduled for delivery today (${pretty})! 🎉 It will arrive before 5 PM. ` +
                `If you need anything sooner or have a special request, you can ${phoneClause}.`;
       }
       if (ddYmd > todayYmd) {
+        if (stWindowLive()) return `Your order ${name} is scheduled for delivery on ${pretty}. ${ST_WINDOW_LINE} ${ST_CHANGE_HINT}`;
         return `Your order ${name} is scheduled for delivery on ${pretty}, before 5 PM. If you need anything, you can ${phoneClause}.`;
       }
       return `Your order ${name} was scheduled for ${pretty}. If it hasn't arrived, you can ${phoneClause} and we'll check on it right away.`;
@@ -1637,8 +1649,7 @@ async function startServer() {
     `- Never mention bone char.\n\n` +
     `LOCAL DELIVERY\n` +
     `- We deliver throughout Miami-Dade, Broward, and Palm Beach counties. No PO boxes.\n` +
-    `- Same-day delivery on orders placed by 2 PM — Monday-Friday and Sunday. Deliveries run 10 AM-6 PM; ` +
-    `the driver sets the route unless a specific time was requested at checkout.\n` +
+    `- Same-day delivery on orders placed by 2 PM — Monday-Friday and Sunday. __ST_WINDOW__\n` +
     `- Delivery pricing is based on zip code — the exact price shows at checkout.\n` +
     `- If the recipient isn't home: our driver calls or texts the recipient directly to arrange it (that's ` +
     `why including the recipient's phone number matters). If no one can be reached, we contact the sender ` +
@@ -1723,13 +1734,21 @@ async function startServer() {
       const history = req.body.history || [];
       if (!message) return res.json({ reply: 'Hi! How can I help — order status, ingredients, delivery, or something else?' });
       if (!SF_ANTHROPIC_KEY) return res.json({ reply: 'Thanks for your message! Our team will jump in shortly.' });
+      // Change requests go to a person, never to the bot: hand the widget its "Change my order" flow.
+      if (/\b(change|edit|update|wrong|fix|cancel|reschedule|different|switch)\b/i.test(message) &&
+          /\b(order|address|date|day|message|note|delivery|basket|gift|item|name)\b/i.test(message)) {
+        return res.json({ reply: 'I can send that to our team. Tap "Change my order" below and tell me what to change, and a person will confirm it with you.', action: 'change' });
+      }
       const msgs = history.slice(-8).map((h: any) => ({ role: h.role === 'assistant' ? 'assistant' : 'user', content: String(h.content || '') }));
       msgs.push({ role: 'user', content: message });
       const nowMiami = new Date().toLocaleString('en-US', {
         timeZone: 'America/New_York', weekday: 'long', month: 'long', day: 'numeric',
         hour: 'numeric', minute: '2-digit', hour12: true,
       });
-      const systemNow = SF_SYSTEM + `\n\nCURRENT TIME: It is now ${nowMiami} in Miami. Use this for the ` +
+      const stWindowText = stWindowLive()
+        ? 'Our delivery window runs until 5 PM; the driver sets the route.'
+        : 'Deliveries run 10 AM-6 PM; the driver sets the route unless a specific time was requested at checkout.';
+      const systemNow = SF_SYSTEM.replace('__ST_WINDOW__', stWindowText) + `\n\nCURRENT TIME: It is now ${nowMiami} in Miami. Use this for the ` +
         `2 PM same-day cutoff and store-hours questions — never ask the customer what time it is. If it's ` +
         `past 2 PM, same-day delivery is no longer available today; offer the next delivery day instead.`;
       const r = await fetch('https://api.anthropic.com/v1/messages', {
@@ -1769,6 +1788,225 @@ async function startServer() {
     res.sendFile(EMAIL_LOGO_PATH);
   });
   
+
+  // ── ORDER CONFIRMATION TEXT + CUSTOMER CHANGE REQUESTS (2026-09-09) ─────────────
+  // Shopify's own confirmation text cannot be edited, so we send our own for
+  // phone-only orders (the ones Shopify cannot email). Inert until
+  // CONFIRM_SMS_ENABLED=true and the Twilio env vars exist. CONFIRM_SMS_TEST_PHONES
+  // (comma-separated) restricts sends to those numbers while Mike tests on his own order.
+  async function sendTwilioSms(to: string, body: string): Promise<{ ok: boolean; to: string; sid?: string; error?: string }> {
+    const TW_SID = process.env.TWILIO_ACCOUNT_SID || '';
+    const TW_TOKEN = process.env.TWILIO_AUTH_TOKEN || '';
+    const TW_FROM = process.env.TWILIO_FROM || '';
+    const digits = String(to || '').replace(/\D/g, '');
+    if (digits.length < 10) return { ok: false, to: '', error: 'no usable phone' };
+    const e164 = digits.length === 10 ? `+1${digits}` : `+${digits}`;
+    if (!TW_SID || !TW_TOKEN || !TW_FROM) return { ok: false, to: e164, error: 'twilio not configured' };
+    try {
+      const params = new URLSearchParams({ To: e164, From: TW_FROM, Body: body });
+      const tw = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${TW_SID}/Messages.json`, {
+        method: 'POST',
+        headers: {
+          Authorization: 'Basic ' + Buffer.from(`${TW_SID}:${TW_TOKEN}`).toString('base64'),
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: params.toString(),
+      });
+      const d: any = await tw.json().catch(() => ({}));
+      const ok = tw.ok && !d.error_code;
+      return { ok, to: e164, sid: d.sid || undefined, error: ok ? undefined : (d.message || `HTTP ${tw.status}`) };
+    } catch (e: any) {
+      return { ok: false, to: e164, error: String(e?.message || e) };
+    }
+  }
+
+  const stMask = (v: string) => (v ? v.replace(/.(?=.{4})/g, '*') : '');
+  const stLast10 = (v: string) => String(v || '').replace(/\D/g, '').slice(-10);
+  const stTestPhones = () => (process.env.CONFIRM_SMS_TEST_PHONES || '').split(',').map(stLast10).filter((d) => d.length === 10);
+  const stOrderNum = (o: any) => String(o?.name || '').replace(/^#/, '').trim();
+  const stOrderPhone = (o: any) => o?.phone || o?.billing_address?.phone || o?.customer?.phone || o?.shipping_address?.phone || '';
+  const stFirstName = (o: any) => (o?.customer?.first_name || o?.billing_address?.first_name || o?.shipping_address?.first_name || '').trim();
+  const stShipTitle = (o: any) => ((o?.shipping_lines || [])[0]?.title || '').toLowerCase();
+  const stIsPickup = (o: any) => (sfAttr(o, 'Delivery Method') || '').toLowerCase().includes('pick') || stShipTitle(o).includes('pick');
+  const stIsLocal = (o: any) => !stIsPickup(o) && ((sfAttr(o, 'Delivery Method') || '').toLowerCase().includes('deliver') ||
+    stShipTitle(o).includes('local') || (o?.tags || '').toLowerCase().includes('local delivery'));
+  function stDeliveryDayText(o: any) {
+    const ddStr = sfAttr(o, 'Delivery Date');
+    const dday = sfAttr(o, 'Delivery Day');
+    const p = ddStr ? new Date(ddStr) : null;
+    if (p && !isNaN(p.getTime())) return p.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+    return [dday, ddStr].filter(Boolean).join(', ');
+  }
+  const stTrackUrl = (num: string) => `https://thesweettooth.com/?track=${num}`;
+
+  function stBuildConfirmText(o: any): string {
+    const num = stOrderNum(o);
+    const first = stFirstName(o);
+    const hi = first ? `thanks, ${first}!` : 'thanks!';
+    const day = stDeliveryDayText(o);
+    if (stIsPickup(o)) {
+      return `The Sweet Tooth: ${hi} Order #${num} is set for pickup${day ? ' on ' + day : ''} at 18435 NE 19th Ave, ` +
+             `North Miami Beach. Questions any time: ${stTrackUrl(num)}`;
+    }
+    if (stIsLocal(o)) {
+      const to = (o?.shipping_address?.name || '').trim();
+      let gift = String(sfAttr(o, 'Gift Message') || '').replace(/\s+/g, ' ').trim();
+      if (gift.length > 80) gift = gift.slice(0, 77).trim() + '...';
+      const driver = sfTag(o, 'st_drivername:') || 'Katie';
+      return `The Sweet Tooth: ${hi} Order #${num} is set for local delivery${day ? ' on ' + day : ''}${to ? ' to ' + to : ''}. ` +
+             (gift ? `Gift note: "${gift}". ` : '') +
+             `Your driver is ${driver}. Track your order or ask a question any time: ${stTrackUrl(num)}`;
+    }
+    return `The Sweet Tooth: ${hi} Order #${num} is confirmed and ships by UPS in insulated packaging with ice packs. ` +
+           `Tracking arrives when it ships. Questions any time: ${stTrackUrl(num)}`;
+  }
+
+  const ST_ORDER_FIELDS = 'id,name,email,phone,note_attributes,shipping_address,billing_address,customer,shipping_lines,tags,line_items,total_price,created_at';
+  async function stFetchOrderById(orderId: number | string) {
+    const r = await fetch(`${SF_API}/orders/${orderId}.json?fields=${ST_ORDER_FIELDS}`, {
+      headers: { 'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN },
+    });
+    if (!r.ok) return null;
+    const d: any = await r.json();
+    return d.order || null;
+  }
+
+  async function stSendOrderConfirm(o: any, force: boolean) {
+    const num = stOrderNum(o);
+    const body = stBuildConfirmText(o);
+    const phone = stOrderPhone(o);
+    const base = { sent: false, order: num, to: stMask(stLast10(phone)), body };
+    if (stLast10(phone).length < 10) return { ...base, reason: 'no phone on order' };
+    if (!force && String(o.email || '').trim()) return { ...base, reason: 'order has an email; Shopify emails the confirmation' };
+    if (process.env.CONFIRM_SMS_ENABLED !== 'true') { console.log(`📱 [confirm-sms disabled] would text ${stMask(stLast10(phone))}: ${body}`); return { ...base, reason: 'disabled (CONFIRM_SMS_ENABLED is not true)' }; }
+    const test = stTestPhones();
+    if (test.length && !test.includes(stLast10(phone))) return { ...base, reason: 'phone not in CONFIRM_SMS_TEST_PHONES' };
+    const smsKey = `sms_log:${num}`;
+    const smsLog: any = (await getKV(smsKey)) || { sends: [] };
+    if (!Array.isArray(smsLog.sends)) smsLog.sends = [];
+    if (smsLog.sends.some((x: any) => x?.success === true && x?.kind === 'confirm')) return { ...base, reason: 'already sent' };
+    const r = await sendTwilioSms(phone, body);
+    smsLog.sends.push({ kind: 'confirm', to: r.to, body, sid: r.sid || null, success: r.ok, error: r.error || null, timestamp: new Date().toISOString() });
+    if (smsLog.sends.length > 20) smsLog.sends = smsLog.sends.slice(-20);
+    await setKV(smsKey, smsLog);
+    console.log(r.ok ? `✅ Confirmation text sent for #${num} to ${stMask(stLast10(phone))}` : `⚠️ Confirmation text failed for #${num}: ${r.error}`);
+    return { ...base, sent: r.ok, reason: r.ok ? undefined : r.error };
+  }
+
+  app.post('/api/order-confirm', async (req: any, res: any) => {
+    try {
+      const { orderId, orderNumber, force } = req.body || {};
+      const o = orderId ? await stFetchOrderById(orderId) : await sfFetchOrder(String(orderNumber || ''));
+      if (!o) return res.status(404).json({ sent: false, reason: 'order not found' });
+      return res.json(await stSendOrderConfirm(o, !!force));
+    } catch (e: any) {
+      console.error('order-confirm error', e);
+      return res.status(500).json({ sent: false, reason: String(e?.message || e) });
+    }
+  });
+
+  app.get('/api/order-confirm/preview/:orderNumber', async (req: any, res: any) => {
+    try {
+      const o = await sfFetchOrder(req.params.orderNumber);
+      if (!o) return res.status(404).json({ error: 'order not found' });
+      const phone = stOrderPhone(o);
+      return res.json({
+        order: stOrderNum(o), to: stMask(stLast10(phone)), hasEmail: !!String(o.email || '').trim(),
+        kind: stIsPickup(o) ? 'pickup' : stIsLocal(o) ? 'local' : 'shipping',
+        body: stBuildConfirmText(o), chars: stBuildConfirmText(o).length,
+      });
+    } catch (e: any) { return res.status(500).json({ error: String(e?.message || e) }); }
+  });
+
+  app.get('/api/order-confirm/status', (_req: any, res: any) => {
+    res.json({
+      enabled: process.env.CONFIRM_SMS_ENABLED === 'true',
+      twilioConfigured: !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_FROM),
+      testPhones: stTestPhones().map(stMask),
+      alertPhone: stMask(stLast10(process.env.CHANGE_ALERT_PHONE || '+19543001774')),
+      windowWordingLive: stWindowLive(),
+    });
+  });
+
+  // "Change my order" from the storefront chat: verified like /track, then handed to a
+  // person three ways (orders@ email, text to Mike, red bar on the employee dashboard).
+  // Nothing on the order is edited here.
+  const stInternalOk = (req: any) => !process.env.INTERNAL_KEY || req.get('x-internal-key') === process.env.INTERNAL_KEY;
+
+  app.post('/api/storefront/change-request', async (req: any, res: any) => {
+    try {
+      const order = String(req.body.order || '').trim();
+      const contact = String(req.body.contact || '').trim();
+      const message = String(req.body.message || '').replace(/\s+/g, ' ').trim().slice(0, 500);
+      if (!order) return res.json({ status: 'needs_order', reply: "Sure. What's your order number? It's the 5-digit number in your confirmation." });
+      if (!contact) return res.json({ status: 'needs_contact', reply: "To pull up your order securely, what's the email or phone number you used at checkout?" });
+      if (!message) return res.json({ status: 'needs_message', reply: 'What would you like to change? Tell me in a sentence.' });
+      const o = await sfFetchOrder(order);
+      if (!o) return res.json({ status: 'not_found', reply: "I couldn't find an order with that number. Double-check it against your confirmation text or email." });
+      if (!sfContactMatches(o, contact)) return res.json({ status: 'mismatch', reply: "Hmm, that email/phone doesn't match this order number. Please use the exact email or phone from your checkout." });
+      const num = stOrderNum(o);
+      const list: any[] = ((await getKV('change_requests')) || []).filter((c: any) => c && c.id);
+      const today = stMiamiYmd();
+      const todayCount = list.filter((c: any) => c.orderNumber === num && String(c.createdAt || '').slice(0, 10) === today).length;
+      if (todayCount >= 3) return res.json({ status: 'ok', reply: `We already have your requests for order #${num} today and a person is on it. They will confirm with you by text or email shortly.` });
+      const addr = o.shipping_address || {};
+      const card = {
+        id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
+        createdAt: new Date().toISOString(),
+        orderNumber: num, orderId: o.id,
+        customerName: [o.customer?.first_name || o.billing_address?.first_name, o.customer?.last_name || o.billing_address?.last_name].filter(Boolean).join(' ').trim(),
+        customerPhone: stOrderPhone(o), customerEmail: o.email || o.customer?.email || '',
+        recipientName: addr.name || '',
+        shipToAddress: [addr.address1, addr.address2, addr.city, addr.province_code, addr.zip].filter(Boolean).join(', '),
+        recipientPhone: addr.phone || '',
+        deliveryMethod: stIsPickup(o) ? 'Pickup' : stIsLocal(o) ? 'Local Delivery' : 'UPS',
+        deliveryDate: stDeliveryDayText(o),
+        giftMessage: String(sfAttr(o, 'Gift Message') || ''),
+        items: (o.line_items || []).map((li: any) => `${li.quantity} x ${li.title}${li.variant_title ? ' (' + li.variant_title + ')' : ''}`),
+        total: o.total_price || '',
+        request: message, status: 'open',
+      };
+      list.unshift(card);
+      await setKV('change_requests', list.slice(0, 50));
+      const lines = [
+        `CHANGE REQUEST for order #${card.orderNumber}`, '',
+        `They asked: "${card.request}"`, '',
+        `Customer: ${card.customerName}`, `Phone: ${card.customerPhone}`, `Email: ${card.customerEmail}`, '',
+        `Recipient: ${card.recipientName}`, `Ship to: ${card.shipToAddress}`, `Recipient phone: ${card.recipientPhone}`,
+        `Method: ${card.deliveryMethod}`, `Delivery date: ${card.deliveryDate}`, `Gift message: ${card.giftMessage}`,
+        `Items: ${card.items.join('; ')}`, `Total: $${card.total}`, '',
+        `Shopify: https://admin.shopify.com/store/thesweettoothfl/orders/${card.orderId}`,
+        `Sent from the website chat at ${new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })} ET.`,
+      ];
+      sendEmail('orders@thesweettooth.com', `CHANGE REQUEST order #${card.orderNumber} - ${card.customerName || 'customer'}`, lines.join('\n'))
+        .catch((e) => console.error('change-request email failed', e));
+      const alertTo = process.env.CHANGE_ALERT_PHONE || '+19543001774';
+      sendTwilioSms(alertTo, `Sweet Tooth CHANGE REQUEST #${card.orderNumber} ${card.customerName} ${card.customerPhone}: "${card.request.slice(0, 120)}"`)
+        .then((r) => console.log(r.ok ? `📱 change-request alert texted` : `📱 change-request alert not sent: ${r.error}`))
+        .catch(() => {});
+      return res.json({ status: 'ok', reply: `Got it. Our team has your request for order #${num} and will confirm the change with you by text or email shortly. Nothing changes on the order until we confirm it.` });
+    } catch (e) {
+      console.error('storefront/change-request error', e);
+      return res.json({ status: 'error', reply: 'Sorry, I hit a snag sending that. Please try again in a moment, or email orders@thesweettooth.com.' });
+    }
+  });
+
+  app.get('/api/change-requests', async (req: any, res: any) => {
+    if (!stInternalOk(req)) return res.status(401).json({ error: 'unauthorized' });
+    const list: any[] = ((await getKV('change_requests')) || []).filter((c: any) => c && c.status === 'open');
+    res.json(list);
+  });
+
+  app.post('/api/change-requests/:id/handled', async (req: any, res: any) => {
+    if (!stInternalOk(req)) return res.status(401).json({ error: 'unauthorized' });
+    const list: any[] = (await getKV('change_requests')) || [];
+    const c = list.find((x: any) => x && x.id === req.params.id);
+    if (!c) return res.status(404).json({ error: 'not found' });
+    c.status = 'handled'; c.handledAt = new Date().toISOString();
+    await setKV('change_requests', list);
+    res.json({ ok: true });
+  });
+
   // Log memory usage every 5 minutes
   setInterval(() => {
     const mem = getMemoryMB();
