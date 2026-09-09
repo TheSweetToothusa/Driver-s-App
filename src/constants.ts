@@ -54,7 +54,7 @@ export const DELIVERY_FEES: Record<string, number> = {
   "33128": 25, "33192": 40, "33496": 55,
   "33129": 25, "33193": 40, "33498": 30,
   "33130": 25, "33194": 40,
-  "33199": 35
+  "33174": 30, "33199": 35
 };
 
 export const ADDITIONAL_BASKET_SAME_OFFICE = 3;
