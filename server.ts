@@ -1852,10 +1852,9 @@ async function startServer() {
       const to = (o?.shipping_address?.name || '').trim();
       let gift = String(sfAttr(o, 'Gift Message') || '').replace(/\s+/g, ' ').trim();
       if (gift.length > 80) gift = gift.slice(0, 77).trim() + '...';
-      const driver = sfTag(o, 'st_drivername:') || 'Katie';
       return `The Sweet Tooth: ${hi} Order #${num} is set for local delivery${day ? ' on ' + day : ''}${to ? ' to ' + to : ''}. ` +
              (gift ? `Gift note: "${gift}". ` : '') +
-             `Your driver is ${driver}. Track your order or ask a question any time: ${stTrackUrl(num)}`;
+             `You will get a delivery confirmation after it's delivered. Questions or changes? Text Katie at ${KATIE_PHONE}.`;
     }
     return `The Sweet Tooth: ${hi} Order #${num} is confirmed and ships by UPS in insulated packaging with ice packs. ` +
            `Tracking arrives when it ships. Questions any time: ${stTrackUrl(num)}`;
