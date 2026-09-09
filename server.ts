@@ -1854,6 +1854,7 @@ async function startServer() {
       if (gift.length > 80) gift = gift.slice(0, 77).trim() + '...';
       return `The Sweet Tooth: ${hi} Order #${num} is set for local delivery${day ? ' on ' + day : ''}${to ? ' to ' + to : ''}. ` +
              (gift ? `Gift note: "${gift}". ` : '') +
+             (stWindowLive() ? 'Our delivery window runs until 5 PM. ' : '') +
              `You will get a delivery confirmation after it's delivered. Questions or changes? Text Katie at ${KATIE_PHONE}.`;
     }
     return `The Sweet Tooth: ${hi} Order #${num} is confirmed and ships by UPS in insulated packaging with ice packs. ` +
