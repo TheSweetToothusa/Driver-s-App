@@ -1392,7 +1392,7 @@ async function startServer() {
   const stMiamiYmd = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
   const stWindowLive = () => stMiamiYmd() >= '2026-09-13';
   const ST_WINDOW_LINE = "Our delivery window runs until 5 PM. You will receive a delivery confirmation with a time stamp after it's delivered.";
-  const ST_CHANGE_HINT = 'Need to change something? Tap "Change my order" below.';
+  const ST_CHANGE_HINT = 'Need to change something? Text Katie at 305-994-4070.';
 
   function sfBuildStatus(order: any) {
     const name = order.name || '';
@@ -1402,7 +1402,7 @@ async function startServer() {
     const dday = sfAttr(order, 'Delivery Day');
     const method = (sfAttr(order, 'Delivery Method') || '').toLowerCase();
     const isLocal = method.includes('deliver') || (order.tags || '').toLowerCase().includes('local delivery');
-    const phoneClause = `text your driver ${driver} directly at ${KATIE_PHONE}`;
+    const phoneClause = `text Katie at ${KATIE_PHONE}`;
 
     if (status === 'CANCELLED') {
       return `Our records show order ${name} was cancelled. If that doesn't look right or you have any ` +
@@ -1734,11 +1734,6 @@ async function startServer() {
       const history = req.body.history || [];
       if (!message) return res.json({ reply: 'Hi! How can I help — order status, ingredients, delivery, or something else?' });
       if (!SF_ANTHROPIC_KEY) return res.json({ reply: 'Thanks for your message! Our team will jump in shortly.' });
-      // Change requests go to a person, never to the bot: hand the widget its "Change my order" flow.
-      if (/\b(change|edit|update|wrong|fix|cancel|reschedule|different|switch)\b/i.test(message) &&
-          /\b(order|address|date|day|message|note|delivery|basket|gift|item|name)\b/i.test(message)) {
-        return res.json({ reply: 'I can send that to our team. Tap "Change my order" below and tell me what to change, and a person will confirm it with you.', action: 'change' });
-      }
       const msgs = history.slice(-8).map((h: any) => ({ role: h.role === 'assistant' ? 'assistant' : 'user', content: String(h.content || '') }));
       msgs.push({ role: 'user', content: message });
       const nowMiami = new Date().toLocaleString('en-US', {
