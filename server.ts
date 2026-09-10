@@ -2771,6 +2771,16 @@ async function startServer() {
           }]
         : priorAttempts;
 
+      // The driver ASSIGNED to this order and the person who taps DELIVERED are
+      // two different people. Katie confirms most deliveries from the office, and
+      // this route used to write HER into the driver slot — erasing the assigned
+      // driver both here and on the Shopify tag. On Sep 10 2026, 75 of 116
+      // delivered orders had been rewritten to Katie, so those deliveries were
+      // credited to the wrong driver. Keep the assigned driver; record whoever
+      // confirmed it in its own field.
+      const assignedDriverId = existingPod.driverId || driverId || '';
+      const assignedDriverName = existingPod.driverName || driverName || '';
+
       const updated = {
         ...existingPod,
         photo: finalPhoto,
@@ -2784,8 +2794,10 @@ async function startServer() {
         completedAt,
         submittedAt: new Date().toISOString(),
         status,
-        driverId,
-        driverName,
+        driverId: assignedDriverId,
+        driverName: assignedDriverName,
+        confirmedById: driverId || null,
+        confirmedByName: driverName || null,
         failureReason,
         attempts
       };
@@ -2813,8 +2825,10 @@ async function startServer() {
               completedAt: completedAt || new Date().toISOString(),
               confirmationPhoto: photo || null,
               driverNotes: notes || null,
-              driverId: driverId || manualOrders[idx].driverId,
-              driverName: driverName || manualOrders[idx].driverName,
+              driverId: manualOrders[idx].driverId || driverId,
+              driverName: manualOrders[idx].driverName || driverName,
+              confirmedById: driverId || null,
+              confirmedByName: driverName || null,
             };
             await dbSet('manual_orders', manualOrders);
           }
@@ -2835,11 +2849,17 @@ async function startServer() {
           // Idempotency: on retry, preserve the original st_completed timestamp so
           // the customer-facing delivery time doesn't drift later with each retry.
           const existingCompletedTag = allTags.find((t: string) => t.startsWith('st_completed:'));
+          // Keep whatever driver is already on the order. Only fill these in when
+          // the order was never assigned. See the assignedDriver note above.
+          const keptDriverTag = allTags.find((t: string) => t.startsWith('st_driver:'));
+          const keptDriverNameTag = allTags.find((t: string) => t.startsWith('st_drivername:'));
           const tagsList = allTags.filter((t: string) => !t.startsWith('st_status:') && !t.startsWith('st_completed:') && !t.startsWith('st_driver:') && !t.startsWith('st_drivername:'));
           tagsList.push(`st_status:DELIVERED`);
           tagsList.push(existingCompletedTag || `st_completed:${(completedAt || new Date().toISOString()).replace(/:/g,'-')}`);
-          if (driverId) tagsList.push(`st_driver:${driverId}`);
-          if (driverName) tagsList.push(`st_drivername:${driverName.replace(/,/g, '')}`);
+          if (keptDriverTag) tagsList.push(keptDriverTag);
+          else if (assignedDriverId) tagsList.push(`st_driver:${assignedDriverId}`);
+          if (keptDriverNameTag) tagsList.push(keptDriverNameTag);
+          else if (assignedDriverName) tagsList.push(`st_drivername:${assignedDriverName.replace(/,/g, '')}`);
           await fetch(`https://${SHOPIFY_STORE_URL}/admin/api/2025-01/orders/${orderId}.json`, {
             method: 'PUT',
             headers: { 'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN, 'Content-Type': 'application/json' },
@@ -2884,11 +2904,18 @@ async function startServer() {
           });
           const existingData = await existing.json();
           const currentTags = existingData.order?.tags || '';
-          const tagsList = currentTags.split(',').map((t: string) => t.trim())
-            .filter((t: string) => t && !t.startsWith('st_status:') && !t.startsWith('st_driver:') && !t.startsWith('st_drivername:'));
+          const allFailedTags = currentTags.split(',').map((t: string) => t.trim()).filter(Boolean);
+          // Keep the assigned driver. A failed attempt reported by whoever is
+          // logged in must not reassign the order to them.
+          const keptFailedDriverTag = allFailedTags.find((t: string) => t.startsWith('st_driver:'));
+          const keptFailedDriverNameTag = allFailedTags.find((t: string) => t.startsWith('st_drivername:'));
+          const tagsList = allFailedTags
+            .filter((t: string) => !t.startsWith('st_status:') && !t.startsWith('st_driver:') && !t.startsWith('st_drivername:'));
           tagsList.push('st_status:FAILED');
-          if (driverId) tagsList.push(`st_driver:${driverId}`);
-          if (driverName) tagsList.push(`st_drivername:${driverName.replace(/,/g, '')}`);
+          if (keptFailedDriverTag) tagsList.push(keptFailedDriverTag);
+          else if (assignedDriverId) tagsList.push(`st_driver:${assignedDriverId}`);
+          if (keptFailedDriverNameTag) tagsList.push(keptFailedDriverNameTag);
+          else if (assignedDriverName) tagsList.push(`st_drivername:${assignedDriverName.replace(/,/g, '')}`);
           await fetch(`https://${SHOPIFY_STORE_URL}/admin/api/2025-01/orders/${orderId}.json`, {
             method: 'PUT',
             headers: { 'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN, 'Content-Type': 'application/json' },
