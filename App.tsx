@@ -1644,8 +1644,8 @@ const OrderDetail: React.FC<{
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ driverId: driver.id, driverName: driver.name })
       });
-      onUpdate(order.id, { driverId: driver.id, driverName: driver.name });
       if (r.ok) {
+        onUpdate(order.id, { driverId: driver.id, driverName: driver.name });
         logAudit('DRIVER_REASSIGN', 'driver', prevDriver, driver.name);
         setStatusSaveToast('saved');
         setTimeout(() => setStatusSaveToast(null), 2500);
@@ -7480,6 +7480,11 @@ export default function App() {
   const [zipRate, setZipRate] = useState<number | null | undefined>(undefined);
   const [showZipBar, setShowZipBar] = useState(false);
   const [defaultDriver, setDefaultDriver] = useState<{ driverId: string | null; driverName: string | null }>({ driverId: null, driverName: null });
+  // A driver change saved here is held until a refresh brings that same driver
+  // back from the server. /api/orders takes 6-30s, so a refresh that started
+  // BEFORE the save used to land after it and repaint the old (or default)
+  // driver — the "it saved but it went back to Katie" bug.
+  const pendingDriverRef = useRef<Record<string, { driverId: string; driverName: string }>>({});
   // Global manual delivery state — accessible from any tab
   const [showGlobalAddManual, setShowGlobalAddManual] = useState(false);
   const [globalManualForm, setGlobalManualForm] = useState({ recipientName: '', recipientPhone: '', recipientEmail: '', street: '', unit: '', city: '', zip: '', deliveryFee: '', deliveryDate: new Date(Date.now() + 86400000).toISOString().split('T')[0], deliveryInstructions: '', itemDescription: '', orderTotal: '', giftSenderName: '', giftSenderPhone: '', giftSenderEmail: '', giftMessage: '', driverId: '', driverName: '' });
@@ -7562,7 +7567,15 @@ export default function App() {
         }
         return d;
       });
-      setDeliveries(withDriver);
+      // Re-apply any driver change that this refresh is too old to know about.
+      const pending = pendingDriverRef.current;
+      const finalOrders = withDriver.map((d: Delivery) => {
+        const p = pending[d.id];
+        if (!p) return d;
+        if (d.driverId === p.driverId) { delete pending[d.id]; return d; }
+        return { ...d, driverName: p.driverName, driverId: p.driverId };
+      });
+      setDeliveries(finalOrders);
       if (dd) setDefaultDriver(dd);
       setDataSource(isMock ? 'MOCK' : 'LIVE');
       setLastSync(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
@@ -7570,7 +7583,7 @@ export default function App() {
       // CACHE: Save orders for instant load next time
       try {
         localStorage.setItem('ordersCache', JSON.stringify({
-          orders: withDriver,
+          orders: finalOrders,
           timestamp: new Date().toISOString()
         }));
       } catch { /* localStorage full or disabled - no problem */ }
@@ -7590,6 +7603,9 @@ export default function App() {
   };
 
   const handleUpdateOrder = useCallback((id: string, updates: Partial<Delivery>) => {
+    if (updates.driverId) {
+      pendingDriverRef.current[id] = { driverId: updates.driverId, driverName: updates.driverName || '' };
+    }
     setDeliveries(prev => prev.map(d => d.id === id ? { ...d, ...updates } : d));
     if (selectedOrder?.id === id) setSelectedOrder(prev => prev ? { ...prev, ...updates } : null);
   }, [selectedOrder]);
