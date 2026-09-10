@@ -1696,8 +1696,8 @@ async function startServer() {
     `PROBLEMS & CHANGES TO AN ORDER\n` +
     `- Something arrived damaged or wrong: email orders@thesweettooth.com right away with a photo and the ` +
     `order number — we stand behind everything we make and will make it right.\n` +
-    `- Changing an order (address, items, date): email orders@thesweettooth.com with the order number. For ` +
-    `delivery scheduling changes, they can also call or text Katie, our delivery manager, at 305-994-4070.\n` +
+    `- Changing an order (address, items, date): text Katie, our delivery manager, at 305-994-4070 with the ` +
+    `order number. They can also email orders@thesweettooth.com if they prefer.\n` +
     `- Urgent gift-message change: call the store at 305-682-1400 and email orders@thesweettooth.com.\n` +
     `- Those are the ONLY two phone numbers you may ever give, only in those situations.\n\n` +
     `RULES\n` +
@@ -1706,8 +1706,8 @@ async function startServer() {
     `CHANGE or add something to an existing order, don't track it — give them the change instructions ` +
     `from PROBLEMS & CHANGES instead. Examples: "Where is my order?" -> TRACK_ORDER. "Can I still add a ` +
     `gift message to my order?" -> email orders@thesweettooth.com with the order number (call the store at ` +
-    `305-682-1400 if urgent) — NOT TRACK_ORDER. "I need to change the address on my order" -> change ` +
-    `instructions, NOT TRACK_ORDER.\n` +
+    `305-682-1400 if urgent) — NOT TRACK_ORDER. "I need to change the address on my order" -> text Katie at ` +
+    `305-994-4070, NOT TRACK_ORDER.\n` +
     `- If the conversation shows the customer JUST received a tracking result and they're confused or ` +
     `dispute it, do NOT reply TRACK_ORDER again, and never say you lack access — that result came from our ` +
     `live order system and is accurate. Re-explain it in plain words (e.g. "your order #123 was delivered ` +
