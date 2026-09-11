@@ -2919,8 +2919,10 @@ const OrdersView: React.FC<OrdersViewProps> = ({
   const [ordersDriverFilter, setOrdersDriverFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState<'OPEN'|'CLOSED'>('OPEN');
   const [showDateFilter, setShowDateFilter] = useState(false);
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
+  // Open on today only. With no date set, To Deliver listed every open order from
+  // every day, which read as "all days" (Mike, Sep 11 2026). Clear shows all days.
+  const [dateFrom, setDateFrom] = useState(localDateStr());
+  const [dateTo, setDateTo] = useState(localDateStr());
   const [rescheduleOrder, setRescheduleOrder] = useState<Delivery | null>(null);
   const [rescheduleDate, setRescheduleDate] = useState('');
   const [rescheduleSaved, setRescheduleSaved] = useState(false);
