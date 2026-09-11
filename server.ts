@@ -1251,6 +1251,12 @@ async function logEmailSend(orderNumber: string, recipient: string, subject: str
   }
 }
 
+// Corporate bulk child orders are manual orders numbered master-stop (e.g. 36506-3).
+// They get no per-stop delivered/failed email or text (Mike, Sep 11 2026).
+function isCorporateChildNumber(orderNumber: any): boolean {
+  return /^#?\d+-\d+$/.test(String(orderNumber || '').trim());
+}
+
 // Has a delivery confirmation email already gone out for this order? Audit trail
 // lives in email_log:{orderNumber}. We match on every subject pattern we've ever
 // used so older sends still count as already-sent. On a lookup failure we return
@@ -2712,7 +2718,10 @@ async function startServer() {
       // A new failed attempt gets its own photo. Only reuse the stored key when
       // this is a retry of the same attempt.
       const photoBelongsToPriorAttempt = !!existingPod.photoR2Key && priorAttempts.some((a: any) => a.photoR2Key === existingPod.photoR2Key);
-      const forceFreshPhoto = status === 'FAILED' && !duplicateAttempt && photoBelongsToPriorAttempt;
+      // A no-photo delivery (corporate child orders) must not reuse a failed try's photo as its proof.
+      const forceFreshPhoto = photoBelongsToPriorAttempt && (
+        (status === 'FAILED' && !duplicateAttempt) || (status === 'DELIVERED' && !photo)
+      );
 
       // Upload new photo/signature to R2 if configured and we got base64 data.
       // If R2 upload fails, we fall back to storing base64 in the DB (legacy path).
@@ -2846,12 +2855,20 @@ async function startServer() {
 
       // For manual orders (stored in DB only) — update the manual_orders record directly
       const isManualOrder = isManual || String(orderId).startsWith('manual_');
-      if (isManualOrder && status === 'DELIVERED') {
+      const isCorporateChild = isManualOrder && isCorporateChildNumber(orderNumber);
+      // The list reads manual orders from manual_orders, not the POD row, so a
+      // FAILED report must land here too or it vanishes on the next refresh.
+      if (isManualOrder && (status === 'DELIVERED' || status === 'FAILED')) {
         try {
           const manualOrders = await dbGet('manual_orders') || [];
           const idx = manualOrders.findIndex((o: any) => o.id === orderId);
           if (idx !== -1) {
-            manualOrders[idx] = {
+            manualOrders[idx] = status === 'FAILED' ? {
+              ...manualOrders[idx],
+              status: 'FAILED',
+              failureReason: failureReason || null,
+              driverNotes: notes || null,
+            } : {
               ...manualOrders[idx],
               status: 'DELIVERED',
               completedAt: completedAt || new Date().toISOString(),
@@ -2962,7 +2979,7 @@ async function startServer() {
       // ── AUTO-SEND FAILED-ATTEMPT EMAIL TO THE GIFT GIVER ─────────────────────────────
       // One email per failed attempt, straight to the buyer on the Shopify order,
       // photo inline, signed by Katie. Never mentions payment.
-      if (status === 'FAILED' && attemptKey && !duplicateAttempt) {
+      if (status === 'FAILED' && attemptKey && !duplicateAttempt && !isCorporateChild) {
         try {
           let to = customerEmail || '';
           let senderFirst = '';
@@ -3027,12 +3044,13 @@ async function startServer() {
 
       // Log why email might not be sent
       if (status === 'DELIVERED') {
-        if (!customerEmail) console.log(`📧 No email for order ${orderId} — cannot send POD confirmation`);
+        if (isCorporateChild) console.log(`📧 Corporate child order ${orderNumber} — no per-stop POD email`);
+        else if (!customerEmail) console.log(`📧 No email for order ${orderId} — cannot send POD confirmation`);
         else if (!SMTP_PASS) console.log(`📧 SMTP_PASS not set — cannot send POD confirmation to ${customerEmail}`);
         else if (alreadySentPodEmail) console.log(`📧 POD email already sent for ${orderId} — skipping duplicate`);
         else console.log(`📧 Attempting to send POD email to ${customerEmail} for order ${orderId}`);
       }
-      if (status === 'DELIVERED' && customerEmail && SMTP_PASS && !alreadySentPodEmail) {
+      if (status === 'DELIVERED' && customerEmail && SMTP_PASS && !alreadySentPodEmail && !isCorporateChild) {
         try {
           const deliveryTime = new Date(completedAt || Date.now()).toLocaleString('en-US', {
             timeZone: 'America/New_York',
@@ -3096,7 +3114,7 @@ async function startServer() {
       // Email and text are either/or, never both: the email above already went to
       // everyone who left one, so the text is only for phone-only orders.
       let textedByServer = false;
-      if (status === 'DELIVERED' && !customerEmail && TW_SID && TW_TOKEN && TW_FROM) {
+      if (status === 'DELIVERED' && !customerEmail && TW_SID && TW_TOKEN && TW_FROM && !isCorporateChild) {
         try {
           const smsKey = `sms_log:${String(orderNumber || orderId)}`;
           const smsLog: any = (await getKV(smsKey)) || { sends: [] };
@@ -3467,6 +3485,11 @@ async function startServer() {
       // must never email a customer who already got their confirmation. Keyed on
       // orderNumber first so it matches the key the auto-send writes.
       const logKey = String(o.orderNumber || o.orderId);
+      if (String(o.orderId).startsWith('manual_') && isCorporateChildNumber(o.orderNumber)) {
+        results.push({ orderId: o.orderId, email: o.email, sent: false, skipped: true });
+        console.log(`📧 Bulk POD skipped for ${o.orderId} — corporate child order, no per-stop email`);
+        continue;
+      }
       if (await podEmailAlreadySent(logKey)) {
         await markPodNotified(String(o.orderId));
         results.push({ orderId: o.orderId, email: o.email, sent: false, skipped: true });

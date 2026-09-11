@@ -34,6 +34,9 @@ const STATUSES_FOR_DROPDOWN = [
   { value: 'CANCELLED',          label: 'Cancelled',          color: '#ef4444' },
   { value: 'CLOSED',             label: 'Closed',             color: '#9ca3af' },
 ];
+// Corporate bulk child orders are manual orders numbered master-stop (e.g. 36506-3).
+// They need no delivery photo (Mike, Sep 11 2026).
+const isCorporateChild = (o: any) => !!o?.isManual && /^#?\d+-\d+$/.test(String(o?.orderNumber || '').trim());
 const formatTime = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 const formatDate = (iso: string) => new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 // Local YYYY-MM-DD (NOT UTC). Order delivery dates are local calendar dates ("May 12" → "2026-05-12"),
@@ -864,7 +867,8 @@ const FailedDeliveryFlow: React.FC<FailedFlowProps> = ({ order, currentUser, onS
     reader.readAsDataURL(file);
   };
 
-  const canSubmit = notes.trim().length > 0 && photo !== null;
+  const photoOptional = isCorporateChild(order);
+  const canSubmit = notes.trim().length > 0 && (photo !== null || photoOptional);
 
   return (
     <div className="fixed inset-0 bg-black/75 z-[200] flex items-end">
@@ -890,7 +894,7 @@ const FailedDeliveryFlow: React.FC<FailedFlowProps> = ({ order, currentUser, onS
               </div>
               <div className="flex items-start gap-2">
                 <span className="text-amber-700 font-black text-base mt-0.5">2.</span>
-                <p className="text-sm font-bold text-amber-800">Take a photo of the property (required — proof you were there)</p>
+                <p className="text-sm font-bold text-amber-800">{photoOptional ? 'Take a photo of the property (optional for this order)' : 'Take a photo of the property (required — proof you were there)'}</p>
               </div>
               <div className="flex items-start gap-2">
                 <span className="text-amber-700 font-black text-base mt-0.5">3.</span>
@@ -987,7 +991,7 @@ const FailedDeliveryFlow: React.FC<FailedFlowProps> = ({ order, currentUser, onS
                       🖼️ Upload
                     </button>
                   </div>
-                  <p className="text-[10px] font-black text-red-500 mt-1 text-center">You must take a photo before submitting</p>
+                  {!photoOptional && <p className="text-[10px] font-black text-red-500 mt-1 text-center">You must take a photo before submitting</p>}
                 </>
               )}
             </div>
@@ -1017,7 +1021,7 @@ const FailedDeliveryFlow: React.FC<FailedFlowProps> = ({ order, currentUser, onS
             </button>
             {!canSubmit && (
               <p className="text-center text-[11px] font-bold text-stone-400">
-                {!photo && !notes.trim() ? 'Photo + notes required' : !photo ? 'Photo required' : 'Notes required'}
+                {photoOptional ? 'Notes required' : !photo && !notes.trim() ? 'Photo + notes required' : !photo ? 'Photo required' : 'Notes required'}
               </p>
             )}
           </div>
@@ -1116,7 +1120,7 @@ const RescheduleModal: React.FC<RescheduleModalProps> = ({ order, failureReason,
 
         {/* Text the gift giver from this phone. The email to them goes out on its
             own when the failed report is saved; the text is the second channel. */}
-        {senderDigits.length >= 10 && (
+        {senderDigits.length >= 10 && !isCorporateChild(order) && (
           <a
             href={`sms:${senderDigits}?body=${encodeURIComponent(failedAttemptText(order, failureReason, photo ? podPhotoLink(String(order.id)) : null))}`}
             onClick={() => setTexted(true)}
@@ -1300,6 +1304,7 @@ const OrderDetail: React.FC<{
   const [showRevertConfirm, setShowRevertConfirm] = useState(false);
   const [showSendConfirm, setShowSendConfirm] = useState(false);
   const [showAdminOverrideConfirm, setShowAdminOverrideConfirm] = useState(false);
+  const noPhotoNeeded = isCorporateChild(order);
   const [showNavChoice, setShowNavChoice] = useState(false);
   const [statusSaveToast, setStatusSaveToast] = useState<'saved' | 'error' | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -1421,7 +1426,7 @@ const OrderDetail: React.FC<{
     // Nobody ever gets two messages.
     const customerEmail = order.customer?.email || '';
     const senderPhone = order.giftSenderPhone || '';
-    if (!customerEmail && senderPhone && !podResult.textedByServer) {
+    if (!noPhotoNeeded && !customerEmail && senderPhone && !podResult.textedByServer) {
       const cleanPhone = senderPhone.replace(/\D/g, '');
       const receiverName = order.giftReceiverName || 'the recipient';
       const photoLink = photoData ? `\n\nSee the delivery photo: ${podPhotoLink(String(order.id))}` : '';
@@ -2392,8 +2397,8 @@ const OrderDetail: React.FC<{
 
             {/* Action buttons */}
             <button
-              onClick={(photoData && !isSavingPOD) ? handleComplete : undefined}
-              disabled={!photoData || isSavingPOD}
+              onClick={((photoData || noPhotoNeeded) && !isSavingPOD) ? handleComplete : undefined}
+              disabled={(!photoData && !noPhotoNeeded) || isSavingPOD}
               style={{
                 width: '100%',
                 padding: '16px',
@@ -2405,13 +2410,13 @@ const OrderDetail: React.FC<{
                 alignItems: 'center',
                 justifyContent: 'center',
                 gap: 8,
-                cursor: (photoData && !isSavingPOD) ? 'pointer' : 'not-allowed',
+                cursor: ((photoData || noPhotoNeeded) && !isSavingPOD) ? 'pointer' : 'not-allowed',
                 marginBottom: 8,
-                background: (photoData && !isSavingPOD) ? '#22C55E' : '#E5E7EB',
-                color: (photoData && !isSavingPOD) ? 'white' : '#9CA3AF'
+                background: ((photoData || noPhotoNeeded) && !isSavingPOD) ? '#22C55E' : '#E5E7EB',
+                color: ((photoData || noPhotoNeeded) && !isSavingPOD) ? 'white' : '#9CA3AF'
               }}
             >
-              <CheckCircle2 size={20} /> {isSavingPOD ? 'Saving…' : (podSaveError ? 'Retry Mark Delivered' : (photoData ? 'Mark Delivered' : 'Photo Required'))}
+              <CheckCircle2 size={20} /> {isSavingPOD ? 'Saving…' : (podSaveError ? 'Retry Mark Delivered' : ((photoData || noPhotoNeeded) ? 'Mark Delivered' : 'Photo Required'))}
             </button>
 
             <button
@@ -5802,10 +5807,11 @@ const AdminPanel: React.FC<{ role: AppRole; deliveries: Delivery[]; allUsers: Us
     setBulkResult(null);
     
     // Find delivered orders with email that haven't been notified
-    const deliveredWithEmail = deliveries.filter(d => 
-      d.status === 'DELIVERED' && 
-      d.customer?.email && 
-      !d.successNotificationSent
+    const deliveredWithEmail = deliveries.filter(d =>
+      d.status === 'DELIVERED' &&
+      d.customer?.email &&
+      !d.successNotificationSent &&
+      !isCorporateChild(d)
     );
     
     if (deliveredWithEmail.length === 0) {
