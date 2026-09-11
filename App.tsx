@@ -3932,11 +3932,10 @@ const ScheduleView: React.FC<{
             if (dateTo && orderDate > dateTo) return false;
           }
         }
-        // Status filter — skip when date range is active (show all statuses)
-        if (!(dateFrom || dateTo)) {
-          if (statusFilter === 'OPEN' && !OPEN_STATUSES.includes(d.status)) return false;
-          if (statusFilter === 'DONE' && !DONE_STATUSES.includes(d.status)) return false;
-        }
+        // Status filter — always applies when not searching. Before, a date filter
+        // turned it off, so Delivered orders came back into the to-deliver list.
+        if (statusFilter === 'OPEN' && !OPEN_STATUSES.includes(d.status)) return false;
+        if (statusFilter === 'DONE' && !DONE_STATUSES.includes(d.status)) return false;
         return true;
       }
       // Search active — match against many fields, ignore date/status filters
