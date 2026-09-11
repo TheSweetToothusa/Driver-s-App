@@ -4010,11 +4010,12 @@ const ScheduleView: React.FC<{
     });
   }, [filtered, routingDate]);
 
-  // Quick sort by distance from store (no map needed)
-  const sortByDistance = async () => {
+  // Quick sort by distance from store (no map needed).
+  // byZone: group stops by city, nearest city first, nearest stop first inside each city.
+  const sortByDistance = async (byZone = false) => {
     if (optimizableStops.length === 0) return;
     setRouteLoading(true);
-    setRouteStatus('Sorting by distance...');
+    setRouteStatus(byZone ? 'Sorting by zone...' : 'Sorting by distance...');
 
     // Store location
     const storeLat = 25.946;
@@ -4053,6 +4054,13 @@ const ScheduleView: React.FC<{
       }
       // Sort by distance ascending
       withDist.sort((a, b) => a.dist - b.dist);
+      if (byZone) {
+        // Zone = the order's city. Each zone keeps the rank of its nearest stop.
+        const zoneOf = (id: string) => (optimizableStops.find(d => d.id === id)?.address?.city || '').trim().toLowerCase();
+        const zoneRank: Record<string, number> = {};
+        withDist.forEach((x, i) => { const z = zoneOf(x.id); if (!(z in zoneRank)) zoneRank[z] = i; });
+        withDist.sort((a, b) => zoneRank[zoneOf(a.id)] - zoneRank[zoneOf(b.id)] || a.dist - b.dist);
+      }
       setCustomOrder(withDist.map(x => x.id));
     } catch {
       console.error('Sort by distance failed');
@@ -4890,12 +4898,20 @@ const ScheduleView: React.FC<{
           {/* Sort buttons */}
           <div className="px-4 py-3 bg-white border-b border-stone-200 flex gap-2">
             <button
-              onClick={sortByDistance}
+              onClick={() => sortByDistance()}
               disabled={routeLoading}
               className="flex-1 py-3 rounded-xl font-black text-sm flex items-center justify-center gap-2 active:scale-95 transition-all border-2 border-stone-300"
               style={{ background: '#fff', color: '#374151' }}
             >
               {routeLoading ? routeStatus : '📍 Sort by Distance'}
+            </button>
+            <button
+              onClick={() => sortByDistance(true)}
+              disabled={routeLoading}
+              className="flex-1 py-3 rounded-xl font-black text-sm flex items-center justify-center gap-2 active:scale-95 transition-all border-2 border-stone-300"
+              style={{ background: '#fff', color: '#374151' }}
+            >
+              {routeLoading ? routeStatus : '🗺️ Sort by Zone'}
             </button>
           </div>
 
