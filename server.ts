@@ -1728,6 +1728,34 @@ async function startServer() {
     `- Never volunteer limitations or negatives (no PO boxes, no weekend shipping, closed Saturday, ` +
     `cross-contamination, etc.) unless the customer asked about that exact thing.`;
 
+  // Chatbot Knowledge: extra facts kept on a hidden Shopify page (handle "chatbot-knowledge").
+  // Edit that page in Shopify Admin > Online Store > Pages and the chat picks it up within
+  // 10 minutes. No code change or deploy needed. A failed load keeps the last good copy.
+  let sfKnowledge = '';
+  let sfKnowledgeAt = '';
+  const sfHtmlToText = (html: string) => html
+    .replace(/<li[^>]*>/gi, '- ')
+    .replace(/<\/(p|li|h[1-6]|div)>|<br\s*\/?>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ').replace(/&quot;|&ldquo;|&rdquo;/g, '"').replace(/&#39;|&rsquo;|&lsquo;/g, "'")
+    .replace(/&amp;/g, '&')
+    .replace(/[ \t]+\n/g, '\n').replace(/\n{2,}/g, '\n').trim();
+  async function sfLoadKnowledge() {
+    try {
+      const r = await fetch(`${SF_API}/pages.json?handle=chatbot-knowledge&published_status=any&fields=body_html`, {
+        headers: { 'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN },
+      });
+      if (!r.ok) throw new Error(`Shopify ${r.status}`);
+      const page = ((await r.json()).pages || [])[0];
+      sfKnowledge = page ? sfHtmlToText(String(page.body_html || '')).slice(0, 12000) : '';
+      sfKnowledgeAt = new Date().toISOString();
+    } catch (e) {
+      console.error('chatbot knowledge load error', e);
+    }
+  }
+  sfLoadKnowledge();
+  setInterval(() => { sfLoadKnowledge(); }, 10 * 60 * 1000);
+
   app.post('/api/storefront/chat', async (req: any, res: any) => {
     try {
       const message = (req.body.message || '').trim();
@@ -1743,7 +1771,10 @@ async function startServer() {
       const stWindowText = stWindowLive()
         ? 'Our delivery window runs until 5 PM; the driver sets the route.'
         : 'Deliveries run 10 AM-6 PM; the driver sets the route unless a specific time was requested at checkout.';
-      const systemNow = SF_SYSTEM.replace('__ST_WINDOW__', stWindowText) + `\n\nCURRENT TIME: It is now ${nowMiami} in Miami. Use this for the ` +
+      const systemNow = SF_SYSTEM.replace('__ST_WINDOW__', stWindowText) +
+        (sfKnowledge ? `\n\nMORE FACTS (from the store's Chatbot Knowledge page. These count as FACTS, and they win ` +
+          `if they conflict with anything above):\n${sfKnowledge}` : '') +
+        `\n\nCURRENT TIME: It is now ${nowMiami} in Miami. Use this for the ` +
         `2 PM same-day cutoff and store-hours questions — never ask the customer what time it is. If it's ` +
         `past 2 PM, same-day delivery is no longer available today; offer the next delivery day instead.`;
       const r = await fetch('https://api.anthropic.com/v1/messages', {
@@ -2096,7 +2127,8 @@ async function startServer() {
   // ── HEALTH CHECK (keeps server warm) ───────────────────────────────────────
   app.get("/api/health", (_req, res) => {
     const mem = getMemoryMB();
-    res.json({ status: 'ok', timestamp: new Date().toISOString(), memory: mem });
+    res.json({ status: 'ok', timestamp: new Date().toISOString(), memory: mem,
+      chatKnowledge: { chars: sfKnowledge.length, loadedAt: sfKnowledgeAt } });
   });
 
   // ── ORDERS ──────────────────────────────────────────────────────────────────
