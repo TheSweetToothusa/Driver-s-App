@@ -2937,7 +2937,7 @@ const OrdersView: React.FC<OrdersViewProps> = ({
   const [activeTab, setActiveTab] = useState<'active' | 'done'>('active');
   const [search, setSearch] = useState('');
   const [ordersDriverFilter, setOrdersDriverFilter] = useState('ALL');
-  const [statusFilter, setStatusFilter] = useState<'OPEN'|'CLOSED'>('CLOSED');
+  const [statusFilter, setStatusFilter] = useState<'OPEN'|'CLOSED'>('OPEN');
   const [showDateFilter, setShowDateFilter] = useState(false);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
@@ -3057,6 +3057,18 @@ const OrdersView: React.FC<OrdersViewProps> = ({
                 </button>
               )}
             </div>
+          </div>
+
+          {/* To Deliver / Delivered switch — this list shows one or the other */}
+          <div className="flex gap-2 mb-3">
+            {([['OPEN','To Deliver'],['CLOSED','Delivered']] as const).map(([value, label]) => (
+              <button
+                key={value}
+                onClick={() => setStatusFilter(value)}
+                className={`flex-1 px-3 py-2 rounded-xl text-xs font-black uppercase ${statusFilter === value ? 'bg-black text-white' : 'bg-stone-100 text-stone-600'}`}>
+                {label}
+              </button>
+            ))}
           </div>
 
           {/* Driver filter */}
