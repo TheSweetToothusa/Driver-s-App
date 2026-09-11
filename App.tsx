@@ -3842,10 +3842,13 @@ const ScheduleView: React.FC<{
   const [search, setSearch] = useState('');
   const [driverFilter, setDriverFilter] = useState('ALL');
   const [showPlanRoute, setShowPlanRoute] = useState(false);
-  const [stopNumbers, setStopNumbers] = useState<Record<string, string>>({});
   const [statusFilter, setStatusFilter] = useState<'OPEN'|'DONE'|'ALL'>('OPEN');
   const [sortBy, setSortBy] = useState<'date'|'city'|'zip'|'name'|'driver'>('date');
-  const [customOrder, setCustomOrder] = useState<string[]>([]); // manual sort by order ID
+  // manual sort by order ID; starts from the order last saved on this phone
+  const [customOrder, setCustomOrder] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem('st_saved_route_order') || '[]'); } catch { return []; }
+  });
+  const [undoOrder, setUndoOrder] = useState<string[] | null>(null); // order before sorting, until Save or Undo
   const [showDateFilter, setShowDateFilter] = useState(false);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
@@ -4011,7 +4014,7 @@ const ScheduleView: React.FC<{
   }, [filtered, routingDate]);
 
   // Quick sort by distance from store (no map needed).
-  // byZone: group stops by city, nearest city first, nearest stop first inside each city.
+  // byZone: group stops by ZIP code, nearest ZIP first, nearest stop first inside each ZIP.
   const sortByDistance = async (byZone = false) => {
     if (optimizableStops.length === 0) return;
     setRouteLoading(true);
@@ -4055,12 +4058,13 @@ const ScheduleView: React.FC<{
       // Sort by distance ascending
       withDist.sort((a, b) => a.dist - b.dist);
       if (byZone) {
-        // Zone = the order's city. Each zone keeps the rank of its nearest stop.
-        const zoneOf = (id: string) => (optimizableStops.find(d => d.id === id)?.address?.city || '').trim().toLowerCase();
+        // Zone = the order's 5-digit ZIP. Each zone keeps the rank of its nearest stop.
+        const zoneOf = (id: string) => (optimizableStops.find(d => d.id === id)?.address?.zip || '').toString().trim().slice(0, 5);
         const zoneRank: Record<string, number> = {};
         withDist.forEach((x, i) => { const z = zoneOf(x.id); if (!(z in zoneRank)) zoneRank[z] = i; });
         withDist.sort((a, b) => zoneRank[zoneOf(a.id)] - zoneRank[zoneOf(b.id)] || a.dist - b.dist);
       }
+      setUndoOrder(prev => prev ?? customOrder);
       setCustomOrder(withDist.map(x => x.id));
     } catch {
       console.error('Sort by distance failed');
@@ -4880,14 +4884,7 @@ const ScheduleView: React.FC<{
             </button>
             <p className="font-black text-sm" style={{ color: '#374151' }}>Plan Route</p>
             <button
-              onClick={() => {
-                const numbered = optimizableStops
-                  .map(o => ({ ...o, _num: parseInt(stopNumbers[o.id] || '0', 10) || 9999 }))
-                  .sort((a, b) => a._num - b._num);
-                const ids = numbered.map(o => o.id);
-                setCustomOrder(ids);
-                setTimeout(() => printRouteSheet(), 100);
-              }}
+              onClick={() => printRouteSheet()}
               className="px-4 py-2 rounded-xl font-black text-xs active:scale-95 transition-all"
               style={{ background: '#374151', color: '#fff' }}
             >
@@ -4914,6 +4911,29 @@ const ScheduleView: React.FC<{
               {routeLoading ? routeStatus : '🗺️ Sort by Zone'}
             </button>
           </div>
+
+          {/* Keep or undo the sort */}
+          {undoOrder !== null && (
+            <div className="px-4 py-3 bg-white border-b border-stone-200 flex gap-2">
+              <button
+                onClick={() => {
+                  try { localStorage.setItem('st_saved_route_order', JSON.stringify(customOrder)); } catch {}
+                  setUndoOrder(null);
+                }}
+                className="flex-1 py-3 rounded-xl font-black text-sm active:scale-95 transition-all"
+                style={{ background: '#16a34a', color: '#fff' }}
+              >
+                ✓ Save Order
+              </button>
+              <button
+                onClick={() => { setCustomOrder(undoOrder); setUndoOrder(null); }}
+                className="flex-1 py-3 rounded-xl font-black text-sm active:scale-95 transition-all border-2 border-stone-300"
+                style={{ background: '#fff', color: '#374151' }}
+              >
+                ↩ Undo
+              </button>
+            </div>
+          )}
 
           {/* Draggable order list */}
           <div ref={planRouteListRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
