@@ -1305,12 +1305,43 @@ function getMemoryMB() {
   };
 }
 
+// One-time repair (Sep 11 2026): drivers Katie picked on manual orders landed in
+// the POD row only (see /api/orders/:id/assign), so the records still said Katie.
+// Copy the POD-row driver onto today's and future untouched (PENDING) records.
+// A kv flag makes it run once.
+async function repairManualDriversFromPodRows(): Promise<void> {
+  if (!pool) return;
+  const FLAG = 'manual_driver_repair_2026_09_11';
+  if (await getKV(FLAG)) return;
+  const todayET = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+  const manualOrders = await dbGet('manual_orders');
+  if (!Array.isArray(manualOrders)) return;
+  const users = await readUsersDB();
+  const changed: string[] = [];
+  for (const o of manualOrders) {
+    if (o.status !== 'PENDING') continue;
+    if (String(o.deliveryDate || '').slice(0, 10) < todayET) continue;
+    if (o.driverId && o.driverId !== 'manager_1') continue;
+    const pod = await readPodOrder(o.id);
+    if (!pod || pod.__dbError || !pod.driverId || pod.driverId === 'manager_1') continue;
+    const u = users.find((x: any) => x.id === pod.driverId && x.isActive !== false);
+    if (!u) continue;
+    o.driverId = u.id;
+    o.driverName = u.name;
+    changed.push(`${o.orderNumber} -> ${u.name}`);
+  }
+  if (changed.length) await dbSet('manual_orders', manualOrders);
+  await setKV(FLAG, { ranAt: new Date().toISOString(), changed });
+  console.log(`Manual driver repair: ${changed.length} record(s) updated. ${changed.join(', ')}`);
+}
+
 async function startServer() {
   try {
     await initDB();
   } catch (e) {
     console.error('⚠️ initDB failed — server starting without DB init. DB writes/reads will retry on each request.', e);
   }
+  try { await repairManualDriversFromPodRows(); } catch (e) { console.error('manual driver repair error:', e); }
   const app = express();
   const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000;
   app.use(express.json({ limit: '10mb' })); // Reduced from 50mb to prevent memory spikes
@@ -2289,6 +2320,20 @@ async function startServer() {
     existing.driverId = driverId;
     existing.driverName = driverName;
     await writePodOrder(orderId, existing);
+
+    // Manual orders (corporate stops, walk-ins) are listed from the manual_orders
+    // record, not the POD row. An assign that only wrote the POD row never showed
+    // up, so the stop went back to Katie on the next refresh (36917-1..13,
+    // Sep 11 2026). Write the record too. No Shopify order sits behind a manual id.
+    if (String(orderId).startsWith('manual_')) {
+      const manualOrders = await dbGet('manual_orders');
+      if (!Array.isArray(manualOrders)) return res.status(503).json({ error: 'Database unavailable — please retry' });
+      const idx = manualOrders.findIndex((o: any) => o.id === orderId);
+      if (idx === -1) return res.status(404).json({ error: 'Manual order not found' });
+      manualOrders[idx] = { ...manualOrders[idx], driverId, driverName };
+      await dbSet('manual_orders', manualOrders);
+      return res.json({ success: true });
+    }
 
     // Persist to Shopify tags so assignment survives page refresh
     if (SHOPIFY_STORE_URL && SHOPIFY_ACCESS_TOKEN) {
