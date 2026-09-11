@@ -2917,12 +2917,12 @@ const OrdersView: React.FC<OrdersViewProps> = ({
   const [activeTab, setActiveTab] = useState<'active' | 'done'>('active');
   const [search, setSearch] = useState('');
   const [ordersDriverFilter, setOrdersDriverFilter] = useState('ALL');
-  const [statusFilter, setStatusFilter] = useState<'OPEN'|'CLOSED'>('OPEN');
+  // History is delivered orders only, every day, newest first. It was switched to
+  // open on To Deliver on Sep 11 2026 and Mike had it put back the same day.
+  const [statusFilter] = useState<'OPEN'|'CLOSED'>('CLOSED');
   const [showDateFilter, setShowDateFilter] = useState(false);
-  // Open on today only. With no date set, To Deliver listed every open order from
-  // every day, which read as "all days" (Mike, Sep 11 2026). Clear shows all days.
-  const [dateFrom, setDateFrom] = useState(localDateStr());
-  const [dateTo, setDateTo] = useState(localDateStr());
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [rescheduleOrder, setRescheduleOrder] = useState<Delivery | null>(null);
   const [rescheduleDate, setRescheduleDate] = useState('');
   const [rescheduleSaved, setRescheduleSaved] = useState(false);
@@ -3039,18 +3039,6 @@ const OrdersView: React.FC<OrdersViewProps> = ({
                 </button>
               )}
             </div>
-          </div>
-
-          {/* To Deliver / Delivered switch — this list shows one or the other */}
-          <div className="flex gap-2 mb-3">
-            {([['OPEN','To Deliver'],['CLOSED','Delivered']] as const).map(([value, label]) => (
-              <button
-                key={value}
-                onClick={() => setStatusFilter(value)}
-                className={`flex-1 px-3 py-2 rounded-xl text-xs font-black uppercase ${statusFilter === value ? 'bg-black text-white' : 'bg-stone-100 text-stone-600'}`}>
-                {label}
-              </button>
-            ))}
           </div>
 
           {/* Driver filter */}
@@ -3858,8 +3846,10 @@ const ScheduleView: React.FC<{
   const [sortBy, setSortBy] = useState<'date'|'city'|'zip'|'name'|'driver'>('date');
   const [customOrder, setCustomOrder] = useState<string[]>([]); // manual sort by order ID
   const [showDateFilter, setShowDateFilter] = useState(false);
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
+  // Deliveries opens on today only (Mike, Sep 11 2026). The Dates button still
+  // reaches other days; Clear shows every day.
+  const [dateFrom, setDateFrom] = useState(todayStr);
+  const [dateTo, setDateTo] = useState(todayStr);
 
   // Route optimization state
   const [routeLoading, setRouteLoading] = useState(false);
