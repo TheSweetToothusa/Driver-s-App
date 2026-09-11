@@ -273,8 +273,9 @@ function showPrintPreview(opts: {
   css: string;           // raw CSS rules (auto-scoped to #sweet-print-scroll via nesting)
   title: string;         // toolbar title
   pageSize?: string;     // CSS @page size, default '4in 6in'
+  pageMargin?: string;   // CSS @page margin, default '0'
 }) {
-  const { content, css, title, pageSize = '4in 6in' } = opts;
+  const { content, css, title, pageSize = '4in 6in', pageMargin = '0' } = opts;
 
   document.getElementById('sweet-print-overlay')?.remove();
   document.getElementById('sweet-print-styles')?.remove();
@@ -343,7 +344,7 @@ function showPrintPreview(opts: {
 
     /* Print: hide app, show only labels */
     @media print {
-      @page { size: ${pageSize}; margin: 0; }
+      @page { size: ${pageSize}; margin: ${pageMargin}; }
       body > *:not(#sweet-print-overlay) { display: none !important; }
       #sweet-print-overlay {
         position: static !important;
@@ -3827,6 +3828,18 @@ const OrderAdminRow: React.FC<{
   );
 };
 
+// Delivery zones for the printed zone pages, by ZIP (from the Sep 10 and Sep 11 route sheets).
+// A ZIP not listed here prints on an "OTHER ZIP CODES — CHECK ZONE" page.
+const ROUTE_ZONES = [
+  { n: 1, t: 'NMB · Aventura · Sunny Isles · Golden Beach · North Miami', zips: ['33179', '33162', '33181', '33180', '33160', '33056'] },
+  { n: 2, t: 'Surfside · Bal Harbour · Bay Harbor · Miami Beach', zips: ['33154', '33141', '33140', '33139'] },
+  { n: 3, t: 'Miami mainland · Downtown · Brickell · Grove · Gables · Pinecrest · Kendall', zips: ['33127', '33130', '33131', '33133', '33137', '33143', '33146', '33156', '33175'] },
+  { n: 4, t: 'Hollywood · Pembroke Pines · Fort Lauderdale', zips: ['33019', '33021', '33024', '33312', '33316'] },
+  { n: 5, t: 'Plantation · Weston', zips: ['33324', '33326', '33327'] },
+  { n: 6, t: 'Coral Springs · Parkland', zips: ['33065', '33071', '33076'] },
+  { n: 7, t: 'Boca Raton · Highland Beach', zips: ['33433', '33487', '33496'] },
+];
+
 const ScheduleView: React.FC<{
   deliveries: Delivery[];
   role: AppRole;
@@ -3844,11 +3857,7 @@ const ScheduleView: React.FC<{
   const [showPlanRoute, setShowPlanRoute] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'OPEN'|'DONE'|'ALL'>('OPEN');
   const [sortBy, setSortBy] = useState<'date'|'city'|'zip'|'name'|'driver'>('date');
-  // manual sort by order ID; starts from the order last saved on this phone
-  const [customOrder, setCustomOrder] = useState<string[]>(() => {
-    try { return JSON.parse(localStorage.getItem('st_saved_route_order') || '[]'); } catch { return []; }
-  });
-  const [undoOrder, setUndoOrder] = useState<string[] | null>(null); // order before sorting, until Save or Undo
+  const [customOrder, setCustomOrder] = useState<string[]>([]); // manual sort by order ID
   const [showDateFilter, setShowDateFilter] = useState(false);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
@@ -4013,12 +4022,11 @@ const ScheduleView: React.FC<{
     });
   }, [filtered, routingDate]);
 
-  // Quick sort by distance from store (no map needed).
-  // byZone: group stops by ZIP code, nearest ZIP first, nearest stop first inside each ZIP.
-  const sortByDistance = async (byZone = false) => {
+  // Quick sort by distance from store (no map needed)
+  const sortByDistance = async () => {
     if (optimizableStops.length === 0) return;
     setRouteLoading(true);
-    setRouteStatus(byZone ? 'Sorting by zone...' : 'Sorting by distance...');
+    setRouteStatus('Sorting by distance...');
 
     // Store location
     const storeLat = 25.946;
@@ -4057,14 +4065,6 @@ const ScheduleView: React.FC<{
       }
       // Sort by distance ascending
       withDist.sort((a, b) => a.dist - b.dist);
-      if (byZone) {
-        // Zone = the order's 5-digit ZIP. Each zone keeps the rank of its nearest stop.
-        const zoneOf = (id: string) => (optimizableStops.find(d => d.id === id)?.address?.zip || '').toString().trim().slice(0, 5);
-        const zoneRank: Record<string, number> = {};
-        withDist.forEach((x, i) => { const z = zoneOf(x.id); if (!(z in zoneRank)) zoneRank[z] = i; });
-        withDist.sort((a, b) => zoneRank[zoneOf(a.id)] - zoneRank[zoneOf(b.id)] || a.dist - b.dist);
-      }
-      setUndoOrder(prev => prev ?? customOrder);
       setCustomOrder(withDist.map(x => x.id));
     } catch {
       console.error('Sort by distance failed');
@@ -4533,6 +4533,77 @@ const ScheduleView: React.FC<{
     });
   };
 
+  // Letter-size route sheet: the day's open stops, one zone per page.
+  const printZonePages = () => {
+    const esc = (s: any) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const ph = (p: string) => {
+      const d = String(p || '').replace(/\D/g, '');
+      const t = d.length === 11 && d[0] === '1' ? d.slice(1) : d;
+      return t.length === 10 ? `(${t.slice(0, 3)}) ${t.slice(3, 6)}-${t.slice(6)}` : p;
+    };
+    const zipOf = (d: Delivery) => String(d.address?.zip || '').trim().slice(0, 5);
+    const stops = optimizableStops.filter(d => (d.status as string) !== 'CANCELLED');
+    const dateLabel = new Date(`${routingDate}T12:00:00`).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+    const groups = [
+      ...ROUTE_ZONES.map(z => ({ label: `ZONE ${z.n}`, title: `ZONE ${z.n} — ${z.t}`, list: stops.filter(d => z.zips.includes(zipOf(d))) })),
+      { label: 'Other ZIP codes', title: 'OTHER ZIP CODES — CHECK ZONE', list: stops.filter(d => !ROUTE_ZONES.some(z => z.zips.includes(zipOf(d)))) },
+    ].filter(g => g.list.length > 0);
+
+    const pages = groups.map((g, gi) => {
+      const list = [...g.list].sort((a, b) =>
+        zipOf(a).localeCompare(zipOf(b)) ||
+        (a.address?.city || '').toLowerCase().localeCompare((b.address?.city || '').toLowerCase()) ||
+        (a.address?.street || '').toLowerCase().localeCompare((b.address?.street || '').toLowerCase()));
+      const rows = list.map((o, i) => {
+        const line2 = [o.address?.unit, o.address?.company].filter(Boolean).join(' · ');
+        const items = (o.items || []).filter(it => !(it.name || '').toLowerCase().includes('tip')).map(it => `${it.quantity}x ${it.name}`).join('; ');
+        const note = (o.deliveryInstructions || '').replace(/\s+/g, ' ').trim();
+        return `<tr><td><span class="box"></span></td><td>${i + 1}</td><td class="num">#${esc((o.orderNumber || o.id).replace(/^#+/, ''))}</td>
+          <td><div class="who">${esc(o.giftReceiverName || o.customer?.name)}</div><div>${esc(o.address?.street)}${line2 ? ' — ' + esc(line2) : ''}</div>
+          <div class="city">${esc(o.address?.city)} ${esc(zipOf(o))}${o.giftSenderName ? ' · from ' + esc(o.giftSenderName) : ''}</div>
+          ${o.driverName ? `<div class="city">Assigned: ${esc(o.driverName)}</div>` : ''}</td>
+          <td class="tel">${esc(ph(o.customer?.phone || ''))}</td>
+          <td><div class="it">${esc(items.slice(0, 150))}</div>${note ? `<div class="note">${esc(note.slice(0, 160))}</div>` : ''}</td></tr>`;
+      }).join('');
+      const header = gi === 0
+        ? `<h1>Delivery Routes — ${esc(dateLabel)}</h1><div class="sub">The Sweet Tooth · 18435 NE 19th Ave, North Miami Beach FL 33179 · (305) 682-1400 · <b>${stops.length} stops</b></div>`
+        : '';
+      return `<div class="zp">${header}
+        <div class="zh">${esc(g.title)}<span>${list.length} stops · Driver: ______________</span></div>
+        <table><tr><th style="width:20px"></th><th style="width:26px">#</th><th style="width:64px">Order</th><th>Recipient &amp; address</th><th style="width:96px">Phone</th><th style="width:210px">Items / notes</th></tr>${rows}</table>
+        <div class="foot">${esc(g.label)} · ${list.length} stops · printed for ${esc(dateLabel)}</div></div>`;
+    }).join('');
+
+    const css = `
+      .zp { width: 100%; max-width: 8.5in; padding: 0.4in; box-sizing: border-box; font: 12px/1.35 -apple-system, Helvetica, Arial, sans-serif; color: #000; break-after: page; page-break-after: always; }
+      .zp:last-child { break-after: auto; page-break-after: auto; }
+      .zp h1 { font-size: 18px; margin: 0 0 2px; }
+      .zp .sub { font-size: 11px; color: #444; margin-bottom: 12px; }
+      .zp .zh { display: flex; justify-content: space-between; gap: 8px; font-size: 15px; font-weight: 700; margin: 0 0 4px; padding-bottom: 3px; border-bottom: 2px solid #000; }
+      .zp .zh span { font-weight: 500; white-space: nowrap; }
+      .zp table { width: 100%; border-collapse: collapse; }
+      .zp th { text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; border-bottom: 2px solid #000; padding: 5px 4px; }
+      .zp td { font-size: 12px; border-bottom: 1px solid #bbb; padding: 6px 4px; vertical-align: top; }
+      .zp tr { break-inside: avoid; page-break-inside: avoid; }
+      .zp .box { width: 15px; height: 15px; border: 1.5px solid #000; display: block; }
+      .zp .num { font-weight: 700; white-space: nowrap; }
+      .zp .who { font-weight: 700; font-size: 13px; }
+      .zp .city { color: #333; font-size: 11px; }
+      .zp .it { font-size: 10px; color: #333; }
+      .zp .note { font-size: 10px; font-weight: 700; font-style: italic; margin-top: 2px; }
+      .zp .tel { white-space: nowrap; font-size: 11px; }
+      .zp .foot { margin-top: 10px; font-size: 10px; color: #555; }
+      @media print { .zp { padding: 0; max-width: none; } }
+    `;
+    showPrintPreview({
+      content: pages,
+      css,
+      title: `Zone Pages · ${stops.length} stops · ${dateLabel}`,
+      pageSize: 'letter',
+      pageMargin: '0.4in',
+    });
+  };
+
   const startNavigation = (app: 'waze' | 'google') => {
     // Build ordered stops from routeStops (already in customOrder sequence)
     const stops = routeStops.filter((s: any) => s.lat !== 0 && s.lng !== 0);
@@ -4694,6 +4765,15 @@ const ScheduleView: React.FC<{
           >
             <MapIcon size={16} /> Plan Today's Route
           </button>
+          {isAdmin && (
+            <button
+              onClick={printZonePages}
+              className="w-full mt-2 py-4 rounded-2xl font-black text-sm flex items-center justify-center gap-2 active:scale-95 transition-all border-2 border-stone-300"
+              style={{ background: '#fff', color: '#374151' }}
+            >
+              🖨️ Print Zone Pages
+            </button>
+          )}
         </div>
       )}
 
@@ -4895,45 +4975,14 @@ const ScheduleView: React.FC<{
           {/* Sort buttons */}
           <div className="px-4 py-3 bg-white border-b border-stone-200 flex gap-2">
             <button
-              onClick={() => sortByDistance()}
+              onClick={sortByDistance}
               disabled={routeLoading}
               className="flex-1 py-3 rounded-xl font-black text-sm flex items-center justify-center gap-2 active:scale-95 transition-all border-2 border-stone-300"
               style={{ background: '#fff', color: '#374151' }}
             >
               {routeLoading ? routeStatus : '📍 Sort by Distance'}
             </button>
-            <button
-              onClick={() => sortByDistance(true)}
-              disabled={routeLoading}
-              className="flex-1 py-3 rounded-xl font-black text-sm flex items-center justify-center gap-2 active:scale-95 transition-all border-2 border-stone-300"
-              style={{ background: '#fff', color: '#374151' }}
-            >
-              {routeLoading ? routeStatus : '🗺️ Sort by Zone'}
-            </button>
           </div>
-
-          {/* Keep or undo the sort */}
-          {undoOrder !== null && (
-            <div className="px-4 py-3 bg-white border-b border-stone-200 flex gap-2">
-              <button
-                onClick={() => {
-                  try { localStorage.setItem('st_saved_route_order', JSON.stringify(customOrder)); } catch {}
-                  setUndoOrder(null);
-                }}
-                className="flex-1 py-3 rounded-xl font-black text-sm active:scale-95 transition-all"
-                style={{ background: '#16a34a', color: '#fff' }}
-              >
-                ✓ Save Order
-              </button>
-              <button
-                onClick={() => { setCustomOrder(undoOrder); setUndoOrder(null); }}
-                className="flex-1 py-3 rounded-xl font-black text-sm active:scale-95 transition-all border-2 border-stone-300"
-                style={{ background: '#fff', color: '#374151' }}
-              >
-                ↩ Undo
-              </button>
-            </div>
-          )}
 
           {/* Draggable order list */}
           <div ref={planRouteListRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
