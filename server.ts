@@ -2971,11 +2971,25 @@ async function startServer() {
             hour: 'numeric', minute: '2-digit', hour12: true 
           });
           const noteText = `📦✅ DELIVERED — ${deliveryTime}\nDriver: ${driverName || 'Unknown'}${notes ? `\nNote: ${notes}` : ''}${photo ? '\n📷 POD photo attached (timestamped)' : ''}${signature ? '\n✍️ Signature captured' : ''}`;
-          
+
+          // The note field also holds the customer's checkout instructions.
+          // Read it first and keep it — only a previous POD block is replaced.
+          let customerNote = '';
+          try {
+            const cur = await fetch(`https://${SHOPIFY_STORE_URL}/admin/api/2025-01/orders/${orderId}.json?fields=note`, {
+              headers: { 'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN }
+            });
+            const curData = await cur.json();
+            customerNote = String(curData.order?.note || '').split('📦')[0].trim();
+          } catch (readErr) {
+            console.error('Could not read existing order note (non-fatal):', readErr);
+          }
+          const fullNote = customerNote ? `${customerNote}\n\n${noteText}` : noteText;
+
           await fetch(`https://${SHOPIFY_STORE_URL}/admin/api/2025-01/orders/${orderId}.json`, {
             method: 'PUT',
             headers: { 'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ order: { id: orderId, note: noteText } })
+            body: JSON.stringify({ order: { id: orderId, note: fullNote } })
           });
           console.log(`POD note added to Shopify order ${orderId}`);
         } catch (noteErr) {
