@@ -126,6 +126,17 @@ function parseNoteInstructions(note: string): string {
   return out.join('\n').trim();
 }
 
+// The order note is shared ground: the customer's checkout instructions, and the
+// POD block the driver app appends on delivery. Only the customer's own text may
+// stand in for a missing gift message.
+function noteAsGiftMessage(note: string): string {
+  const customerPart = (note || '').split('📦')[0].trim();
+  if (!customerPart) return '';
+  // The basket builder page stamped its own label here; that is not a gift message.
+  if (/^basket builder/i.test(customerPart)) return '';
+  return customerPart;
+}
+
 // Merge instruction text from several sources into one block, dropping blank and
 // duplicate lines so the same instruction never shows twice (e.g. when it lives
 // in both the Local Delivery field and the order note).
@@ -228,7 +239,7 @@ const mapShopifyOrder = (order: any): Delivery => {
     driverId: order._st_driverId || '',
     driverName: order._st_driverName || '',
     internalNotes: [],
-    giftMessage: attributes['gift message'] || attributes['giftmessage'] || attributes['message'] || order.note || '',
+    giftMessage: attributes['gift message'] || attributes['giftmessage'] || attributes['message'] || noteAsGiftMessage(order.note || ''),
     giftSenderName: `${buyer.first_name || ''} ${buyer.last_name || ''}`.trim() || 'Customer',
     giftSenderPhone: buyer.phone || billing.phone || shipping.phone || '',
     giftSenderEmail: buyer.email || '',
