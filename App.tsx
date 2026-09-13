@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from 'react';
 import {
   Package, ChevronRight, X, Check, RefreshCw,
   LogOut, Calendar, MapPin, Phone,
@@ -7690,6 +7690,16 @@ export default function App() {
     return deliveries.filter(d => d.driverId === currentUser.id);
   }, [deliveries, currentUser]);
 
+  // Opening an order used to replace the whole tab layout, which threw away the
+  // History/Deliveries driver + date filters and the list position every time
+  // Mike tapped back. The tabs now stay mounted (hidden) under the order screen.
+  const listScrollRef = useRef(0);
+  const openOrder = useCallback((o: Delivery) => { listScrollRef.current = window.scrollY; setSelectedOrder(o); }, []);
+  useLayoutEffect(() => {
+    if (selectedOrder) window.scrollTo(0, 0);
+    else window.scrollTo(0, listScrollRef.current);
+  }, [selectedOrder?.id]);
+
   const logout = () => {
     if (!window.confirm(`Log out as ${currentUser?.name}?`)) return;
     localStorage.removeItem('currentUser');
@@ -7702,8 +7712,18 @@ export default function App() {
     return <LoginGate onAuthorized={user => { setCurrentUser(user); localStorage.setItem('currentUser', JSON.stringify(user)); }} />;
   }
 
-  if (selectedOrder) {
-    return (
+  // Stats for orders tab header
+  const todayStr = localDateStr();
+  const OPEN_STATUSES_BADGE = [DeliveryStatus.PENDING, DeliveryStatus.SCHEDULED, DeliveryStatus.ASSIGNED, DeliveryStatus.IN_TRANSIT, DeliveryStatus.SECOND_ATTEMPT, DeliveryStatus.FAILED, DeliveryStatus.PENDING_RESCHEDULE];
+  const activeOrders = visibleDeliveries.filter(d => OPEN_STATUSES_BADGE.includes(d.status));
+  const pendingCount = visibleDeliveries.filter(d => d.status === DeliveryStatus.PENDING || d.status === DeliveryStatus.ASSIGNED).length;
+  const inTransitCount = visibleDeliveries.filter(d => d.status === DeliveryStatus.IN_TRANSIT).length;
+  const deliveredTodayCount = visibleDeliveries.filter(d => d.status === DeliveryStatus.DELIVERED && (d.completedAt || '').startsWith(todayStr)).length;
+  const isSameDayWindow = new Date().getHours() < 14;
+
+  return (
+    <>
+    {selectedOrder && (
       <div className="max-w-md mx-auto min-h-screen bg-white">
         <OrderDetail
           order={selectedOrder}
@@ -7715,20 +7735,8 @@ export default function App() {
           onBack={() => { setSelectedOrder(null); fetchOrders(); }}
         />
       </div>
-    );
-  }
-
-  // Stats for orders tab header
-  const todayStr = localDateStr();
-  const OPEN_STATUSES_BADGE = [DeliveryStatus.PENDING, DeliveryStatus.SCHEDULED, DeliveryStatus.ASSIGNED, DeliveryStatus.IN_TRANSIT, DeliveryStatus.SECOND_ATTEMPT, DeliveryStatus.FAILED, DeliveryStatus.PENDING_RESCHEDULE];
-  const activeOrders = visibleDeliveries.filter(d => OPEN_STATUSES_BADGE.includes(d.status));
-  const pendingCount = visibleDeliveries.filter(d => d.status === DeliveryStatus.PENDING || d.status === DeliveryStatus.ASSIGNED).length;
-  const inTransitCount = visibleDeliveries.filter(d => d.status === DeliveryStatus.IN_TRANSIT).length;
-  const deliveredTodayCount = visibleDeliveries.filter(d => d.status === DeliveryStatus.DELIVERED && (d.completedAt || '').startsWith(todayStr)).length;
-  const isSameDayWindow = new Date().getHours() < 14;
-
-  return (
-    <div className="max-w-md mx-auto min-h-screen bg-white flex flex-col">
+    )}
+    <div className="max-w-md mx-auto min-h-screen bg-white flex flex-col" style={selectedOrder ? { display: 'none' } : undefined}>
       {/* Top bar */}
       <div className="bg-white border-b border-[#e0e0e0] py-3 px-4 flex items-center justify-between shadow-sm sticky top-0 z-50">
         <div className="flex items-center gap-2.5">
@@ -7961,7 +7969,7 @@ export default function App() {
             role={currentUser.role}
             currentUserId={currentUser.id}
             allUsers={allUsers}
-            onSelectOrder={setSelectedOrder}
+            onSelectOrder={openOrder}
             onUpdateOrder={handleUpdateOrder}
           />
         )}
@@ -7973,7 +7981,7 @@ export default function App() {
             role={currentUser.role}
             currentUserId={currentUser.id}
             allUsers={allUsers}
-            onSelectOrder={setSelectedOrder}
+            onSelectOrder={openOrder}
             onUpdateOrder={handleUpdateOrder}
           />
         )}
@@ -7989,7 +7997,7 @@ export default function App() {
             pendingCount={pendingCount}
             inTransitCount={inTransitCount}
             deliveredTodayCount={deliveredTodayCount}
-            onSelectOrder={setSelectedOrder}
+            onSelectOrder={openOrder}
             onUpdateOrder={handleUpdateOrder}
           />
         )}
@@ -8023,5 +8031,6 @@ export default function App() {
 
       </main>
     </div>
+    </>
   );
 }
