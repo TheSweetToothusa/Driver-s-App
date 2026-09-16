@@ -1,0 +1,4055 @@
+<!-- cache-bust 2026-07-19b no-promo-banners no-gf-disclaimer -->
+<style>
+
+        .basket-builder * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        .basket-builder {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #ffffff;
+            color: #111111;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 28px 20px 40px;
+        }
+        
+        .section {
+            display: none;
+        }
+        
+        .section.active {
+            display: block;
+        }
+        
+        h2 {
+            font-size: 2.8rem;
+            font-weight: 700;
+            text-align: center;
+            margin-bottom: 10px;
+            color: #111111;
+        }
+        
+        .subtitle {
+            text-align: center;
+            font-size: 1.1rem;
+            color: #6b7280;
+            margin-bottom: 40px;
+        }
+        
+        /* Keep steps the same height so the page doesn't jump between steps (2026-07-19) */
+        #app { min-height: 680px; }
+
+        /* Right-side info rail — desktop only (2026-07-19, per Mikey's original design) */
+        .bb-rail { display: none; background: #f7f1ea; border-radius: 16px; padding: 4px 18px 16px; }
+        @media (min-width: 1024px) {
+            .bb-rail { display: block; }
+            #step-occasions.active {
+                display: flex;
+                gap: 32px;
+                align-items: flex-start;
+                max-width: 1400px;
+                margin: 0 auto;
+            }
+            #step-occasions.active .bb-s1-left { flex: 1 1 auto; min-width: 0; }
+            #step-occasions.active > .bb-rail { flex: 0 0 320px; position: sticky; top: 40px; height: fit-content; }
+            .basket-builder:has(#step-occasions.active) .bb-tracker { transform: translateX(-176px); }
+        }
+        .bb-rail details {
+            border: none;
+            border-bottom: 1px solid #e6dbcd;
+            border-radius: 0;
+            background: transparent;
+            margin: 0;
+        }
+        .bb-rail summary {
+            list-style: none;
+            -webkit-appearance: none;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 14px 0;
+            font-size: 1.4rem;
+            font-weight: 600;
+            color: #111;
+        }
+        .bb-rail summary::-webkit-details-marker { display: none; }
+        .bb-rail summary::after { content: "+"; font-size: 1.9rem; font-weight: 300; color: #555; }
+        .bb-rail details[open] summary::after { content: "\2013"; }
+        .bb-rail .bb-rail-body { padding: 0 0 14px; font-size: 1.35rem; line-height: 1.55; color: #374151; }
+        .bb-rail .bb-rail-body ul { margin: 0; padding-left: 16px; }
+        .bb-rail .bb-rail-body li { margin-bottom: 6px; }
+        .bb-rail .bb-rail-body p { margin: 0 0 10px; }
+        .bb-rail-gift { margin-top: 0; padding-top: 13px; font-size: 1.3rem; color: #111; line-height: 1.5; }
+
+        /* Occasions Grid */
+        .occasion-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(218px, 1fr));
+            gap: 16px;
+            max-width: 1010px;
+            margin: 0 auto;
+        }
+
+        .occasion-card {
+            background: white;
+            border: 2px solid #e5e7eb;
+            border-radius: 14px;
+            padding: 26px 12px;
+            min-height: 140px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            cursor: pointer;
+            transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
+        }
+
+        .occasion-card:hover {
+            border-color: #111111;
+            transform: translateY(-3px);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.08);
+        }
+
+        .occasion-card.selected {
+            border-color: #111111;
+            background: #f8f8f8;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
+
+        .occasion-card .icon {
+            font-size: 3.6rem;
+            margin-bottom: 10px;
+            line-height: 1;
+        }
+
+        .occasion-card h3 {
+            font-size: 1.6rem;
+            line-height: 1.25;
+            font-weight: 600;
+            color: #111111;
+        }
+
+        
+        /* Special Occasion Info Banner */
+        .occasion-info-banner {
+            display: none;
+            background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+            border: 2px solid #0ea5e9;
+            border-radius: 16px;
+            padding: 20px 24px;
+            margin: 20px auto 0;
+            max-width: 700px;
+            text-align: left;
+        }
+        
+        .occasion-info-banner.visible {
+            display: block;
+        }
+        
+        .occasion-info-banner h4 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #0369a1;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .occasion-info-banner p {
+            color: #0c4a6e;
+            font-size: 0.95rem;
+            margin-bottom: 12px;
+        }
+        
+        .occasion-info-banner input {
+            width: 100%;
+            max-width: 400px;
+            padding: 12px 16px;
+            border: 2px solid #0ea5e9;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-family: 'Inter', sans-serif;
+        }
+        
+        .occasion-info-banner input:focus {
+            outline: none;
+            border-color: #0369a1;
+        }
+        
+        /* Basket Grid */
+        .basket-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+        
+        .basket-card {
+            background: white;
+            border: 3px solid #e5e7eb;
+            border-radius: 20px;
+            overflow: hidden;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            position: relative;
+        }
+        
+        .basket-card:hover {
+            border-color: #111111;
+            transform: translateY(-10px) scale(1.02);
+            box-shadow: 0 16px 32px rgba(0,0,0,0.12);
+        }
+        
+        .basket-card.selected {
+            border-color: #111111;
+            border-width: 4px;
+            background: #fafafa;
+            transform: translateY(-6px);
+            box-shadow: 0 12px 28px rgba(0,0,0,0.15);
+        }
+        
+        .basket-card.selected::after {
+            content: '✓';
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            width: 32px;
+            height: 32px;
+            background: #111111;
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            font-weight: bold;
+            z-index: 20;
+        }
+        
+        /* Popular Badge */
+        .popular-badge-overlay {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            background: #1A1A1A;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 999px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            z-index: 10;
+        }
+        
+        /* Info Icon for Tooltip */
+        .info-icon {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            width: 28px;
+            height: 28px;
+            background: rgba(0,0,0,0.6);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: help;
+            z-index: 15;
+            transition: all 0.2s;
+        }
+        
+        .info-icon:hover {
+            background: #111111;
+            transform: scale(1.1);
+        }
+        
+        .basket-card.selected .info-icon {
+            right: 55px;
+        }
+        
+        /* Tooltip */
+        .tooltip {
+            position: absolute;
+            top: 50px;
+            right: 10px;
+            width: 280px;
+            background: #111111;
+            color: white;
+            padding: 16px;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            line-height: 1.5;
+            z-index: 100;
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(-10px);
+            transition: all 0.2s;
+            pointer-events: none;
+        }
+        
+        .info-icon:hover + .tooltip,
+        .tooltip:hover {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+            pointer-events: auto;
+        }
+        
+        .tooltip h5 {
+            font-size: 0.9rem;
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: #f1a4ba;
+        }
+        
+        .tooltip ul {
+            list-style: none;
+            padding: 0;
+            margin: 0 0 10px 0;
+        }
+        
+        .tooltip ul li {
+            padding: 3px 0;
+            padding-left: 16px;
+            position: relative;
+        }
+        
+        .tooltip ul li::before {
+            content: '•';
+            position: absolute;
+            left: 0;
+            color: #f1a4ba;
+        }
+        
+        .tooltip .tooltip-note {
+            font-size: 0.8rem;
+            color: #9ca3af;
+            font-style: italic;
+            border-top: 1px solid #333;
+            padding-top: 10px;
+            margin-top: 10px;
+        }
+        
+        /* Chocolate Type Selection Container */
+        .chocolate-type-container {
+            background: #FDF8F3;
+            border: 2px solid #F5E6D3;
+            border-radius: 16px;
+            padding: 24px 32px 28px;
+            max-width: 480px;
+            margin: 30px auto 40px;
+            text-align: center;
+        }
+        
+        .chocolate-type-label {
+            font-family: 'Inter', sans-serif;
+            font-size: 18px;
+            font-weight: 600;
+            color: #1A1A1A;
+            margin: 0 0 16px 0;
+            letter-spacing: -0.01em;
+        }
+        
+        /* Dairy/Vegan Selection Pills */
+        .diet-selection {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 12px;
+            margin: 0;
+        }
+        
+        .diet-pill {
+            padding: 16px 24px;
+            border-radius: 28px;
+            font-weight: 600;
+            font-size: 17px;
+            font-family: 'Inter', sans-serif;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            min-width: 130px;
+            justify-content: center;
+        }
+        
+        .diet-pill .diet-icon {
+            font-size: 20px;
+            line-height: 1;
+        }
+        
+        .diet-pill .checkmark {
+            display: none;
+            font-size: 16px;
+            margin-left: 4px;
+        }
+        
+        .diet-pill.selected .checkmark {
+            display: inline;
+        }
+        
+        .diet-pill.selected {
+            background: #D4AF37;
+            color: #FFFFFF;
+            border: 2px solid #D4AF37;
+            box-shadow: 0 4px 12px rgba(212, 175, 55, 0.35);
+        }
+        
+        .diet-pill:not(.selected) {
+            background: #FFFFFF;
+            color: #1A1A1A;
+            border: 2px solid #CCCCCC;
+        }
+        
+        .diet-pill:not(.selected):hover {
+            border-color: #1A1A1A;
+            background: #FAFAFA;
+        }
+        
+        /* Info icon - external to buttons */
+        .diet-info-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 24px;
+            height: 24px;
+            font-size: 14px;
+            font-weight: 600;
+            background: #555555;
+            color: white;
+            border-radius: 50%;
+            cursor: help;
+            position: relative;
+            margin-left: 4px;
+            flex-shrink: 0;
+        }
+        
+        .diet-info-tooltip {
+            position: absolute;
+            bottom: calc(100% + 10px);
+            left: 50%;
+            transform: translateX(-50%);
+            background: #1A1A1A;
+            color: white;
+            padding: 12px 16px;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 400;
+            white-space: normal;
+            width: 260px;
+            text-align: left;
+            line-height: 1.5;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.2s ease;
+            z-index: 100;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+        
+        .diet-info-icon:hover .diet-info-tooltip {
+            opacity: 1;
+            visibility: visible;
+        }
+        
+        /* Legacy styles for backwards compatibility */
+        .diet-help {
+            display: none;
+        }
+        
+        .diet-help-tooltip {
+            display: none;
+        }
+        
+        @media (max-width: 480px) {
+            .chocolate-type-container {
+                position: relative;
+                max-width: 300px;
+                margin: 20px auto 28px;
+                padding: 14px 16px 16px;
+                border-radius: 14px;
+            }
+
+            .chocolate-type-label {
+                font-size: 12px;
+                font-weight: 600;
+                text-transform: uppercase;
+                letter-spacing: 0.08em;
+                margin-bottom: 10px;
+            }
+
+            .diet-selection {
+                gap: 8px;
+            }
+
+            .diet-pill {
+                flex: 1 1 0;
+                min-width: 0;
+                padding: 10px 8px;
+                font-size: 14px;
+                border-radius: 22px;
+            }
+
+            .diet-pill.selected {
+                box-shadow: 0 2px 8px rgba(212, 175, 55, 0.3);
+            }
+
+            .diet-info-icon {
+                position: absolute;
+                right: 12px;
+                top: 12px;
+                width: 20px;
+                height: 20px;
+                font-size: 12px;
+            }
+
+            .diet-info-tooltip {
+                left: auto;
+                right: -6px;
+                transform: none;
+            }
+        }
+        
+        /* Mobile What's Inside Accordion */
+        .whats-inside-accordion {
+            display: none;
+            max-width: 800px;
+            margin: 0 auto 30px;
+        }
+
+        @media (max-width: 768px) {
+            .whats-inside-accordion {
+                display: block;
+            }
+            .info-icon, .tooltip {
+                display: none !important;
+            }
+        }
+        
+        .accordion-toggle {
+            width: 100%;
+            background: #f8f8f8;
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 16px 20px;
+            font-family: 'Inter', sans-serif;
+            font-size: 1rem;
+            font-weight: 600;
+            color: #111111;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.2s;
+        }
+        
+        .accordion-toggle:hover {
+            border-color: #111111;
+        }
+        
+        .accordion-toggle .arrow {
+            transition: transform 0.2s;
+        }
+        
+        .accordion-toggle.open .arrow {
+            transform: rotate(180deg);
+        }
+        
+        .accordion-content {
+            display: none;
+            background: #fafafa;
+            border: 2px solid #e5e7eb;
+            border-top: none;
+            border-radius: 0 0 12px 12px;
+            padding: 20px;
+            margin-top: -2px;
+        }
+        
+        .accordion-content.open {
+            display: block;
+        }
+        
+        .accordion-content h5 {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: #111111;
+        }
+        
+        .accordion-content ul {
+            list-style: none;
+            padding: 0;
+            margin: 0 0 15px 0;
+        }
+        
+        .accordion-content ul li {
+            padding: 6px 0;
+            padding-left: 20px;
+            position: relative;
+            color: #374151;
+        }
+        
+        .accordion-content ul li::before {
+            content: '🍫';
+            position: absolute;
+            left: 0;
+            font-size: 0.85rem;
+        }
+        
+        .accordion-content .note {
+            font-size: 0.9rem;
+            color: #6b7280;
+            font-style: italic;
+            border-top: 1px solid #e5e7eb;
+            padding-top: 12px;
+            margin-top: 12px;
+        }
+        
+        /* Image */
+        .basket-image {
+            width: 100%;
+            height: 280px;
+            object-fit: contain;
+            display: block;
+            background: #fafafa;
+            padding: 20px;
+        }
+        
+        /* Card Content */
+        .basket-content {
+            padding: 20px;
+        }
+        
+        .basket-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        
+        .basket-name {
+            font-size: 32px;
+            font-weight: 600;
+            color: #111111;
+            line-height: 1.3;
+        }
+        
+        .basket-price {
+            font-size: 28px;
+            font-weight: 500;
+            color: #111111;
+            white-space: nowrap;
+            margin-left: 10px;
+        }
+        
+        .serving-pill {
+            display: inline-block;
+            background: #111111;
+            color: #FFFFFF;
+            padding: 8px 16px;
+            border-radius: 999px;
+            font-size: 16px;
+            font-weight: 500;
+            margin-bottom: 12px;
+        }
+        
+        .basket-details {
+            font-size: 20px;
+            font-weight: 400;
+            color: #666666;
+            line-height: 1.5;
+        }
+        
+        /* Upsells */
+        .upsells-section {
+            max-width: 900px;
+            margin: 0 auto 10px;
+        }
+        
+        .upsells-section h3 {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 10px;
+            color: #111111;
+        }
+        
+        .upsells-section > p {
+            color: #6b7280;
+            margin-bottom: 30px;
+            font-size: 1.1rem;
+        }
+        
+        .upsell-item {
+            background: white;
+            border: 2px solid #e5e7eb;
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        
+        .upsell-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            flex: 1;
+        }
+        
+        .upsell-emoji {
+            font-size: 5rem;
+            min-width: 100px;
+            text-align: center;
+        }
+        
+        .upsell-info img {
+            width: 140px !important;
+            height: 140px !important;
+            object-fit: contain !important;
+        }
+        
+        .upsell-details h4 {
+            font-size: 1.4rem;
+            font-weight: 600;
+            color: #111111;
+            margin-bottom: 5px;
+        }
+        
+        .upsell-details p {
+            color: #6b7280;
+            font-size: 1.15rem;
+        }
+        
+        .upsell-price {
+            font-size: 1.75rem;
+            font-weight: 700;
+            color: #111111;
+            margin-right: 10px;
+        }
+        
+        .quantity-controls {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .qty-btn {
+            width: 40px;
+            height: 40px;
+            border: 2px solid #111111;
+            border-radius: 50%;
+            background: white;
+            font-size: 1.3rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+        
+        .qty-btn:hover {
+            background: #111111;
+            color: white;
+        }
+        
+        .qty-display {
+            font-size: 1.3rem;
+            font-weight: 600;
+            min-width: 30px;
+            text-align: center;
+        }
+        
+        /* Buttons */
+        .btn {
+            padding: 15px 40px;
+            border: none;
+            border-radius: 12px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: 'Inter', sans-serif;
+        }
+        
+        .btn-primary {
+            background: #111111;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #333333;
+            transform: translateY(-2px);
+        }
+        
+        .btn-primary:disabled {
+            background: #cccccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .btn-secondary {
+            background: white;
+            color: #111111;
+            border: 2px solid #111111;
+        }
+        
+        .btn-secondary:hover {
+            background: #f9fafb;
+        }
+        
+        /* Continue Button Area */
+        .continue-section {
+            text-align: center;
+            margin-top: 40px;
+            padding: 30px;
+            background: #f8f8f8;
+            border-radius: 16px;
+        }
+        
+        .selection-display {
+            font-size: 1.1rem;
+            color: #666;
+            margin-bottom: 20px;
+        }
+        
+        .selection-display strong {
+            color: #111111;
+        }
+        
+        /* Total Box */
+        .total-box {
+            background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+            border: 3px solid #f59e0b;
+            border-radius: 20px;
+            padding: 14px 20px;
+            text-align: center;
+            max-width: 500px;
+            margin: 10px auto;
+        }
+        
+        .total-box h3 {
+            font-size: 1.3rem;
+            color: #92400e;
+            margin-bottom: 10px;
+        }
+        
+        .total-price {
+            font-size: 3rem;
+            font-weight: 700;
+            color: #111111;
+            margin-bottom: 20px;
+        }
+        
+        /* Plaque Section */
+        .plaque-option {
+            background: white;
+            border: 3px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 15px;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: 'Inter', sans-serif;
+        }
+        
+        .plaque-option:hover {
+            border-color: #111111;
+        }
+        
+        textarea {
+            width: 100%;
+            min-height: 100px;
+            padding: 15px;
+            border: 3px solid #e5e7eb;
+            border-radius: 12px;
+            font-size: 1rem;
+            font-family: 'Inter', sans-serif;
+            resize: vertical;
+        }
+        
+
+        /* Container Toggle (Basket vs Bassinet) - More prominent styling */
+        .container-toggle {
+            display: none;
+            max-width: 520px;
+            margin: 0 auto 30px;
+            background: linear-gradient(135deg, #fff5f7 0%, #fdf2f4 100%);
+            border: 2px solid #fecdd3;
+            border-radius: 16px;
+            padding: 8px;
+            box-shadow: 0 4px 12px rgba(251, 113, 133, 0.15);
+        }
+        
+        .container-toggle.visible {
+            display: flex;
+        }
+        
+        .container-toggle button {
+            flex: 1;
+            padding: 16px 24px;
+            border: none;
+            border-radius: 10px;
+            background: transparent;
+            font-family: 'Inter', sans-serif;
+            font-size: 1.05rem;
+            font-weight: 600;
+            color: #666;
+            cursor: pointer;
+            transition: all 0.25s ease;
+        }
+        
+        .container-toggle button.active {
+            background: #111111;
+            color: white;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+        
+        .container-toggle button:hover:not(.active) {
+            background: rgba(0,0,0,0.08);
+            color: #111;
+        }
+        
+        /* Gentle pulse animation for bassinet tab to draw attention */
+        .container-toggle button#toggle-bassinet:not(.active) {
+            animation: gentlePulse 2.5s ease-in-out infinite;
+        }
+        
+        @keyframes gentlePulse {
+            0%, 100% { background: transparent; }
+            50% { background: rgba(251, 113, 133, 0.2); }
+        }
+        
+        /* Baby Gender Selection (for Bassinets) */
+        .gender-selection {
+            display: none;
+            max-width: 400px;
+            margin: 0 auto 30px;
+        }
+        
+        .gender-selection.visible {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+        }
+        
+        /* Baby Gender Selection for Traditional Baskets */
+        .baby-gender-traditional {
+            display: none;
+            max-width: 500px;
+            margin: 0 auto 30px;
+            background: linear-gradient(135deg, #fff5f7 0%, #fdf2f4 100%);
+            border: 2px solid #fecdd3;
+            border-radius: 16px;
+            padding: 20px;
+            text-align: center;
+        }
+        
+        .baby-gender-traditional.visible {
+            display: block;
+        }
+        
+        .baby-gender-traditional h4 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #111111;
+            margin-bottom: 15px;
+        }
+        
+        .baby-gender-traditional .gender-buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+        }
+        
+        .gender-btn {
+            flex: 1;
+            max-width: 180px;
+            padding: 20px;
+            border: 3px solid #e5e7eb;
+            border-radius: 16px;
+            background: white;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: center;
+            font-family: 'Inter', sans-serif;
+        }
+        
+        .gender-btn:hover {
+            border-color: #111111;
+            transform: translateY(-4px);
+        }
+        
+        .gender-btn.selected {
+            border-color: #111111;
+            background: #f8f8f8;
+        }
+        
+        .gender-btn.selected-girl {
+            border-color: #ec4899;
+            background: linear-gradient(135deg, #fdf2f8 0%, #fce7f3 100%);
+            box-shadow: 0 4px 12px rgba(236, 72, 153, 0.2);
+        }
+        
+        .gender-btn.selected-boy {
+            border-color: #3b82f6;
+            background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+        }
+        
+        /* Container background changes for gender */
+        .baby-gender-traditional.gender-girl {
+            background: linear-gradient(135deg, #fdf2f8 0%, #fce7f3 100%);
+            border-color: #f9a8d4;
+        }
+        
+        .baby-gender-traditional.gender-boy {
+            background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+            border-color: #93c5fd;
+        }
+        
+        .gender-confirmation {
+            display: none;
+            margin-top: 12px;
+            padding: 10px 16px;
+            border-radius: 10px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            animation: fadeSlideIn 0.3s ease-out;
+        }
+        
+        .gender-confirmation.visible {
+            display: block;
+        }
+        
+        .gender-confirmation.girl {
+            background: #fce7f3;
+            color: #be185d;
+            border: 1px solid #f9a8d4;
+        }
+        
+        .gender-confirmation.boy {
+            background: #dbeafe;
+            color: #1d4ed8;
+            border: 1px solid #93c5fd;
+        }
+        
+        @keyframes fadeSlideIn {
+            from { opacity: 0; transform: translateY(-8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .gender-btn .emoji {
+            font-size: 2.5rem;
+            margin-bottom: 8px;
+        }
+        
+        .gender-btn span {
+            display: block;
+            font-weight: 600;
+            color: #111111;
+        }
+        
+        /* Bassinet Grid */
+        .bassinet-grid {
+            display: none;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 25px;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        
+        .bassinet-grid.visible {
+            display: grid;
+        }
+        
+        /* Single Bassinet Card Styles */
+        .bassinet-single-card {
+            display: none;
+            max-width: 500px;
+            margin: 0 auto;
+        }
+        
+        .bassinet-single-card.visible {
+            display: block;
+        }
+        
+        .bassinet-card-container {
+            background: white;
+            border: 3px solid #e5e7eb;
+            border-radius: 20px;
+            overflow: hidden;
+            position: relative;
+            transition: all 0.3s ease;
+        }
+        
+        .bassinet-card-container:hover {
+            border-color: #111111;
+            box-shadow: 0 12px 28px rgba(0,0,0,0.12);
+        }
+        
+        .bassinet-main-image {
+            width: 100%;
+            height: 350px;
+            object-fit: contain;
+            background: #fafafa;
+            padding: 20px;
+        }
+        
+        .bassinet-card-content {
+            padding: 25px;
+            text-align: center;
+        }
+        
+        .bassinet-title {
+            font-size: 32px;
+            font-weight: 600;
+            color: #111111;
+            margin-bottom: 8px;
+        }
+        
+        .bassinet-subtitle {
+            font-size: 18px;
+            color: #666666;
+            margin-bottom: 20px;
+        }
+        
+        .bassinet-size-label {
+            font-size: 16px;
+            font-weight: 500;
+            color: #111111;
+            margin-bottom: 12px;
+        }
+        
+        .bassinet-size-pills {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+        
+        .bassinet-size-pill {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 12px 24px;
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
+            background: white;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            min-width: 100px;
+            position: relative;
+        }
+        
+        .bassinet-size-pill:hover {
+            border-color: #111111;
+        }
+        
+        .bassinet-size-pill.active {
+            border-color: #111111;
+            background: #111111;
+        }
+        
+        .bassinet-size-pill.active .pill-size,
+        .bassinet-size-pill.active .pill-price {
+            color: white;
+        }
+        
+        .pill-size {
+            font-size: 16px;
+            font-weight: 600;
+            color: #111111;
+        }
+        
+        .pill-price {
+            font-size: 20px;
+            font-weight: 700;
+            color: #111111;
+            margin-top: 4px;
+        }
+        
+        .pill-popular {
+            position: absolute;
+            top: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #1A1A1A;
+            color: white;
+            font-size: 10px;
+            font-weight: 600;
+            padding: 3px 8px;
+            border-radius: 10px;
+            white-space: nowrap;
+        }
+        
+        .bassinet-selected-info {
+            margin-top: 15px;
+        }
+        
+        .bassinet-serving {
+            display: inline-block;
+            background: #111111;
+            color: white;
+            padding: 8px 20px;
+            border-radius: 999px;
+            font-size: 16px;
+            font-weight: 500;
+        }
+        
+        @media (max-width: 768px) {
+            .bassinet-main-image {
+                height: 280px;
+            }
+            
+            .bassinet-title {
+                font-size: 24px;
+            }
+            
+            .bassinet-size-pills {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            .bassinet-size-pill {
+                width: 100%;
+                max-width: 200px;
+            }
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            h2 {
+                font-size: 2rem;
+            }
+            
+            .basket-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .basket-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 8px;
+            }
+            
+            .basket-price {
+                margin-left: 0;
+                font-size: 24px;
+            }
+            
+            .basket-name {
+                font-size: 24px;
+            }
+            
+            .basket-details {
+                font-size: 18px;
+            }
+            
+            .serving-pill {
+                font-size: 14px;
+            }
+            
+            .upsell-item {
+                flex-direction: column;
+                text-align: center;
+            }
+            
+            .upsell-item {
+                flex-direction: column;
+                text-align: center;
+            }
+        }
+
+        /* Step tracker (1 Occasion · 2 Size · 3 Add-Ons) */
+        .bb-tracker { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 14px auto 0; padding: 0 12px; flex-wrap: wrap; }
+        .bb-tstep { display: flex; align-items: center; gap: 7px; background: none; border: none; cursor: pointer; font-family: 'Inter', sans-serif; padding: 4px 6px; }
+        .bb-tstep .n { width: 26px; height: 26px; border-radius: 50%; border: 2px solid #d1d5db; color: #6b7280; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; }
+        .bb-tstep .l { font-size: 13.5px; color: #6b7280; font-weight: 600; }
+        .bb-tstep.active .n { background: #111111; border-color: #111111; color: #ffffff; }
+        .bb-tstep.active .l { color: #111111; }
+        .bb-tline { width: 26px; height: 2px; background: #e5e7eb; }
+        /* Steps you haven't earned yet: dimmed and not clickable-looking */
+        .bb-tstep.locked { cursor: not-allowed; }
+        .bb-tstep.locked .n, .bb-tstep.locked .l { opacity: 0.45; }
+
+        @media (max-width: 480px) {
+            .bb-tracker { gap: 4px; margin-top: 12px; padding: 0 8px; }
+            .bb-tstep { padding: 4px 3px; }
+            .bb-tline { width: 14px; }
+        }
+
+</style>
+<div class="basket-builder">
+<style>
+  .basket-builder h1.bb-page-title { display:block !important; }
+  .bb-page-title { text-align:center; font-size:2.5rem; line-height:1.15; font-weight:700;
+                   color:#111111; margin:26px auto 2px; padding:0 16px; max-width:1100px; }
+  @media (max-width:749px){ .bb-page-title { font-size:1.6rem; margin:16px auto 2px; } }
+</style>
+<style>
+  /* Rosh page: the callout box replaces the per-tile (i) hover */
+  .basket-card .info-icon, .basket-card .tooltip { display: none !important; }
+</style>
+<style>
+  /* ---- Compact Rosh hero: title + what we add + the wrapped basket ---- */
+  .rh-hero{max-width:1200px;margin:6px auto 0;padding:0 20px;display:none;}
+  body.rh-hero-on .rh-hero{display:block;}
+  body.rh-hero-on .bb-page-title{display:none !important;}
+  .basket-builder .rh-hero h1{display:block !important;}   /* theme hides every h1 in the builder */
+  body.rh-hero-on .rh-callout{display:none !important;}
+  /* Add-Ons step: no top header, same as the regular builder */
+  body:has(#step-upsells.active) .rh-hero{display:none !important;}
+  body:has(#step-upsells.active) #bb-choose-title{display:none !important;}
+  /* Supreme is 30" vs Penultimate 24" — photos render them near-equal, so scale Supreme up ~12% (reads ~20% bigger overall). Desktop only. */
+  @media (min-width: 750px) {
+    #size-supreme .basket-image { transform: scale(1.12); transform-origin: center; }
+  }
+  .rh-hero__grid{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:26px;align-items:center;}
+  .rh-hero h1{margin:0;font-size:28px;line-height:1.12;font-weight:800;color:#111111;letter-spacing:-0.02em;text-wrap:balance;}
+  .rh-hero__lede{margin:8px 0 0;font-size:15px;line-height:1.5;color:#4b5563;max-width:64ch;}
+  .rh-hero__added{margin:9px 0 0;padding:8px 0 0;border-top:1px solid #ece6d8;}
+  .rh-hero__label{margin:0 0 9px;font-size:13px;font-weight:700;color:#7d6218;}
+  .rh-chips{display:flex;flex-wrap:wrap;gap:7px;margin:0;padding:0;list-style:none;}
+  .rh-chips li{background:#FBF3DC;border:1px solid #EADCB4;border-radius:999px;
+               padding:7px 13px;font-size:13.5px;font-weight:600;color:#54430f;line-height:1.25;}
+  .rh-hero__plus{margin:8px 0 0;font-size:13.5px;line-height:1.55;color:#525a66;max-width:78ch;}
+  .rh-hero__plus b{color:#374151;font-weight:700;}
+  .rh-hero__shot{margin:0;}
+  .rh-hero__shot img{width:100%;aspect-ratio:1/1;height:auto;object-fit:contain;
+                     border-radius:12px;display:block;background:#f5f2ec;}
+  .rh-hero__cap{margin:8px 0 0;font-size:12.5px;color:#616a77;text-align:center;}
+  @media (max-width:900px){
+    .rh-hero__grid{grid-template-columns:1fr;gap:16px;}
+    .rh-hero__shot{order:-1;max-width:420px;margin:0 auto;}
+  }
+  @media (max-width:749px){
+    .rh-hero{margin:10px auto 2px;padding:0 16px;}
+    .rh-hero h1{font-size:22px;}
+    .rh-hero__lede{font-size:13.5px;line-height:1.4;margin-top:6px;}
+    .rh-hero__added{margin-top:10px;padding-top:9px;}
+    .rh-hero__label{margin-bottom:7px;font-size:12.5px;}
+    .rh-chips{gap:6px;}
+    .rh-chips li{font-size:12.5px;padding:5px 10px;}
+    .rh-hero__plus{font-size:12.5px;line-height:1.45;margin-top:9px;}
+    .rh-hero__cap{margin-top:6px;font-size:12px;}
+  }
+</style>
+<section class="rh-hero" aria-labelledby="rh-hero-title">
+  <div class="rh-hero__grid">
+    <div>
+      <h1 id="rh-hero-title">Rosh Hashanah Basket Builder</h1>
+            <div class="rh-hero__added">
+        <p class="rh-hero__label">Added for the holiday</p>
+        <ul class="rh-chips">
+          <li>Chocolate &ldquo;Happy New Year&rdquo; plaque or bar</li>
+          <li>Mini chocolate apple</li>
+          <li>Mini chocolate shofars</li>
+          <li>Mini honey jar</li>
+          <li>Holiday-themed foiled chocolates</li>
+        </ul>
+        <p class="rh-hero__plus"><b>Plus our signature assortment:</b> chocolate-dipped Oreos &amp; pretzels, 30+ rotating handmade truffle flavors, dipped graham crackers, wafers &amp; tea biscuits, our famous chocolate bark, chocolate-dipped dried fruit.</p>
+      </div>
+    </div>
+    <figure class="rh-hero__shot">
+      <img src="{{ 'bbr-wrapped-hero.jpg' | asset_url }}" alt="Rosh Hashanah chocolate gift basket wrapped in cellophane with a blue and gold bow, on a holiday table" width="760" height="696" loading="eager">
+      <figcaption class="rh-hero__cap">Every basket is professionally wrapped and finished with a hand-tied bow</figcaption>
+    </figure>
+  </div>
+</section>
+<script>
+  // Approved by Mikey 2026-08-14 — hero is on for everyone.
+  document.body.classList.add('rh-hero-on');
+</script>
+<!-- Duplicate H1 removed 2026-08-23: body.rh-hero-on hides .bb-page-title permanently (see line ~1312), so this was invisible markup creating a second H1. The hero H1 #rh-hero-title is the page H1. -->
+<h2 id="bb-choose-title" style="text-align:center;font-size:2.4rem;font-weight:700;color:#111111;margin:12px 16px 0;">Choose Your Size</h2>
+<div class="bb-tracker" id="bb-tracker">
+    <button type="button" class="bb-tstep active" data-step="step-size" onclick="trackerGo('step-size')"><span class="n">1</span><span class="l">Size</span></button>
+    <span class="bb-tline"></span>
+    <button type="button" class="bb-tstep" data-step="step-upsells" onclick="trackerGo('step-upsells')"><span class="n">2</span><span class="l">Add-Ons</span></button>
+</div>
+<div id="bb-step-nudge" style="display:none;max-width:560px;margin:10px auto 0;padding:10px 14px;text-align:center;background:#fff7ed;border:1.5px solid #f59e0b;border-radius:10px;color:#92400e;font-weight:600;font-size:0.92rem;">Choose your basket size first.</div>
+<div class="container">
+        <!-- Gluten-Free Mode Banner (shown when ?gf=1 or user toggles GF on) -->
+        <div id="gf-mode-banner" style="display: none; max-width: 800px; margin: 0 auto 20px; background: #f0fdf4; border: 2px solid #15803d; border-radius: 12px; padding: 14px 20px; text-align: center;">
+            <div style="display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap;">
+                <span style="font-size: 1.4rem;">🌾</span>
+                <span style="color: #15803d; font-weight: 700; font-size: 1rem;">You're building a gluten-free basket</span>
+                <span style="color: #166534; font-size: 0.9rem;">— all items will be swapped for gluten-free versions ($20 included)</span>
+                <a href="#" onclick="event.preventDefault(); setGlutenFree(false);" style="color: #6b7280; font-size: 0.85rem; text-decoration: underline; margin-left: 8px;">Remove</a>
+            </div>
+        </div>
+        <div style="height:16px;"></div>
+        <div id="app">
+            <!-- STEP 1: Choose Occasion -->
+            <div id="step-occasions" class="section" style="display:none !important;">
+              <div class="bb-s1-left">
+                <h2>What's the Occasion?</h2>
+
+                <div class="occasion-grid">
+                    <div class="occasion-card" onclick="selectOccasion(this, 'Just Because')">
+                        <div class="icon">🎁</div>
+                        <h3>Just Because</h3>
+                    </div>
+                    
+                    <div class="occasion-card" onclick="selectOccasion(this, 'Birthday')">
+                        <div class="icon">🎂</div>
+                        <h3>Birthday</h3>
+                    </div>
+                    
+                    <div class="occasion-card" onclick="selectOccasion(this, 'Sympathy/Shiva')">
+                        <div class="icon">🕊️</div>
+                        <h3>Sympathy/Shiva</h3>
+                    </div>
+                    
+                    <div class="occasion-card" onclick="selectOccasion(this, 'Baby')">
+                        <div class="icon">👶</div>
+                        <h3>Baby</h3>
+                    </div>
+                    
+                    <div class="occasion-card" onclick="selectOccasion(this, 'Thank You')">
+                        <div class="icon">🙏</div>
+                        <h3>Thank You</h3>
+                    </div>
+                    
+                    <div class="occasion-card" onclick="selectOccasion(this, 'Get Well')">
+                        <div class="icon">💐</div>
+                        <h3>Get Well</h3>
+                    </div>
+                    
+                    <div class="occasion-card" onclick="selectOccasion(this, 'Congratulations')">
+                        <div class="icon">🎉</div>
+                        <h3>Congratulations</h3>
+                    </div>
+                    
+                    <div class="occasion-card" onclick="selectOccasion(this, 'Anniversary')">
+                        <div class="icon">💑</div>
+                        <h3>Anniversary</h3>
+                    </div>
+                    
+                    <div class="occasion-card" onclick="selectOccasion(this, 'Housewarming')">
+                        <div class="icon">🏡</div>
+                        <h3>Housewarming</h3>
+                    </div>
+                    
+                    <div class="occasion-card" onclick="selectOccasion(this, 'Graduation')">
+                        <div class="icon">🎓</div>
+                        <h3>Graduation</h3>
+                    </div>
+                    
+                    <div class="occasion-card" onclick="selectOccasion(this, 'College Acceptance')">
+                        <div class="icon">📚</div>
+                        <h3>College Acceptance<br>& College Bed Party</h3>
+                    </div>
+                    
+                    <div class="occasion-card" onclick="selectOccasion(this, 'Teacher Appreciation')">
+                        <div class="icon">🍎</div>
+                        <h3>Teacher Appreciation</h3>
+                    </div>
+
+                    <div class="occasion-card" onclick="selectOccasion(this, 'Rosh Hashanah')">
+                        <div class="icon">🍯</div>
+                        <h3>Rosh Hashanah</h3>
+                    </div>
+                </div>
+                
+                <!-- Special Occasion Info Banners -->
+                <div class="occasion-info-banner" id="college-info" style="background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%); border-color: #7c3aed;">
+                    <h4 style="color: #5b21b6;">🎓 Includes a Chocolate Bar with Your School Logo!</h4>
+                    <p style="color: #4c1d95; margin-bottom:14px;">Handcrafted in their school colors. Custom ribbon, wrapping, and a chocolate bar with their school logo.</p>
+                    <div style="display:flex; gap:10px; margin-bottom:16px; justify-content:center;">
+                        <img src="https://cdn.shopify.com/s/files/1/0559/8498/0141/t/78/assets/college-acceptance-vanderbilt.png?v=1771767037"
+                             alt="Vanderbilt University college acceptance gift basket in black and gold school colors"
+                             style="width:32%; aspect-ratio:1/1; object-fit:cover; border-radius:10px; box-shadow:0 2px 8px rgba(0,0,0,0.12);">
+                        <img src="https://cdn.shopify.com/s/files/1/0559/8498/0141/t/78/assets/college-acceptance-miami.png?v=1771767038"
+                             alt="University of Miami college acceptance gift basket in green and orange school colors"
+                             style="width:32%; aspect-ratio:1/1; object-fit:cover; border-radius:10px; box-shadow:0 2px 8px rgba(0,0,0,0.12);">
+                        <img src="{{ 'bb-College_Acceptance_Basket-Syracuse_University.png' | asset_url }}"
+                             alt="Syracuse University college acceptance gift basket in orange school colors"
+                             style="width:32%; aspect-ratio:1/1; object-fit:cover; border-radius:10px; box-shadow:0 2px 8px rgba(0,0,0,0.12);">
+                    </div>
+                    <input type="text" id="school-name-input" placeholder="Enter school name (e.g., SMU, Harvard, UCLA)" required>
+                    <p id="school-name-error" style="color: #dc2626; font-size: 0.85rem; margin-top: 6px; display: none; font-weight: 600;">⚠️ Please enter the school name — we need it to customize your basket!</p>
+                </div>
+
+                <div class="occasion-info-banner" id="rosh-info" style="display:none !important;">
+                    <h4 style="color: #92400e;">🍯 Rosh Hashanah Chocolates Included — On Top of Everything Else!</h4>
+                    <p style="color: #78350f; margin-bottom:14px;">Every Rosh Hashanah basket gets our holiday chocolates <strong>in addition to</strong> the regular lineup: a mini honey jar, a chocolate &ldquo;Happy New Year&rdquo; plaque, chocolate shofars, chocolate apples, and more.</p>
+                    <div style="display:flex; gap:10px; justify-content:center;">
+                        <img src="https://cdn.shopify.com/s/files/1/0559/8498/0141/files/rhminibasket_c.jpg?width=400"
+                             alt="Rosh Hashanah gift basket with chocolate shofar, chocolate apple and mini honey jar"
+                             loading="lazy"
+                             style="width:32%; aspect-ratio:1/1; object-fit:cover; border-radius:10px; box-shadow:0 2px 8px rgba(0,0,0,0.12);">
+                        <img src="https://cdn.shopify.com/s/files/1/0559/8498/0141/files/Chocolate_hand_outs_mini_shofar_for_Jewish_New_Year_c.jpg?width=400"
+                             alt="Mini chocolate shofars handcrafted for the Jewish New Year"
+                             loading="lazy"
+                             style="width:32%; aspect-ratio:1/1; object-fit:cover; border-radius:10px; box-shadow:0 2px 8px rgba(0,0,0,0.12);">
+                        <img src="https://cdn.shopify.com/s/files/1/0559/8498/0141/files/Screenshot2025-08-24at7.05.36PM_c.jpg?width=400"
+                             alt="Rosh Hashanah chocolate extras with shofar, chocolate apple and honey gift box"
+                             loading="lazy"
+                             style="width:32%; aspect-ratio:1/1; object-fit:cover; border-radius:10px; box-shadow:0 2px 8px rgba(0,0,0,0.12);">
+                    </div>
+                </div>
+                
+                <div class="continue-section" id="occasion-continue" style="display: none;">
+                    <p class="selection-display">Selected: <strong id="selected-occasion-display"></strong></p>
+                    <button class="btn btn-primary" onclick="validateAndContinue()">Continue to Select Size →</button>
+                </div>
+              </div>
+
+                <aside class="bb-rail" aria-label="Good to know">
+                    <details>
+                        <summary>What's included in every basket?</summary>
+                        <div class="bb-rail-body">
+                            <ul>
+                                <li><strong>Rosh Hashanah exclusives in every basket:</strong> mini honey jar, &ldquo;Happy New Year&rdquo; chocolate plaque, chocolate shofars, chocolate apples &amp; gelt &mdash; included free</li>
+                                <li>Chocolate-dipped Oreos &amp; pretzels</li>
+                                <li>Our seasonal collection of handmade truffles (30+ rotating flavors)</li>
+                                <li>Chocolate-dipped graham crackers, wafers &amp; tea biscuits</li>
+                                <li>A medley of our signature chocolate bark flavors</li>
+                                <li>Chocolate-dipped dried fruit</li>
+                                <li>A mix of milk, white &amp; dark chocolate (Vegan/Parve = dark only)</li>
+                                <li><strong>Jumbo, Penultimate &amp; Supreme</strong> baskets also include pecan pralines</li>
+                            </ul>
+                            <p style="margin-top:10px;">Most baskets include a free chocolate occasion plaque. Larger baskets = more variety, not just more quantity.</p>
+                        </div>
+                    </details>
+                    <details>
+                        <summary>What are my delivery options?</summary>
+                        <div class="bb-rail-body">
+                            <p><strong>Same-day hand delivery — South Florida.</strong> Order by 2 PM and one of our drivers personally brings your basket to their door today.</p>
+                            <p><strong>Nationwide shipping.</strong> Every box travels in temperature-controlled packaging; your exact rate shows at checkout.</p>
+                            <p><strong>Free in-store pickup.</strong> 18435 NE 19th Ave, North Miami Beach — Monday&ndash;Friday, 10&ndash;5.</p>
+                        </div>
+                    </details>
+                    <p class="bb-rail-gift"><span style="margin-right:7px" aria-hidden="true">🎁</span>A <strong>free personalized gift message card</strong> is included with every order.</p>
+                </aside>
+            </div>
+            
+            <!-- STEP 2: Choose Basket Size -->
+            <div id="step-size" class="section active">
+
+                <!-- Rosh Hashanah "what's special" callout -->
+                <style>
+                  .rh-callout{max-width:1000px;margin:0 auto 22px;background:#fff;border:1px solid #e7e2d4;
+                    border-top:4px solid #D4AF37;border-radius:14px;box-shadow:0 3px 16px rgba(0,0,0,.06);overflow:hidden;}
+                  .rh-callout__head{padding:0;text-align:center;}
+                  /* Collapsed by default: a slim bar. Opens on click. */
+                  .rh-callout__bar{width:100%;display:flex;align-items:center;justify-content:center;gap:12px;
+                    background:#fff;border:none;cursor:pointer;padding:14px 22px;font-family:'Inter',sans-serif;}
+                  .rh-callout__bar h3{font-size:1.02rem;font-weight:700;color:#111;margin:0;line-height:1.2;}
+                  .rh-callout__bar .rh-chev{color:#8a6d1f;font-size:.78rem;transition:transform .18s;}
+                  .rh-callout.is-open .rh-callout__bar .rh-chev{transform:rotate(180deg);}
+                  .rh-callout__panel{display:none;border-top:1px solid #efeade;}
+                  .rh-callout.is-open .rh-callout__panel{display:block;}
+                  .rh-callout__sub{font-size:.9rem;color:#6b7280;margin:14px 26px 0;font-style:italic;text-align:center;}
+                  /* The gold bar now covers mobile too — drop the older duplicate accordion */
+                  .whats-inside-accordion{display:none !important;}
+                  .rh-callout__eyebrow{display:inline-block;font-size:.7rem;letter-spacing:.14em;text-transform:uppercase;
+                    font-weight:800;color:#8a6d1f;background:#FBF3DC;border-radius:999px;padding:5px 13px;flex:0 0 auto;}
+                  .rh-callout__head h3{font-size:1.35rem;font-weight:700;color:#111;margin:0 0 6px;line-height:1.25;}
+                  .rh-callout__head p{font-size:.9rem;color:#6b7280;margin:0;font-style:italic;}
+                  .rh-callout__cols{display:flex;gap:0;padding:14px 26px 6px;}
+                  .rh-col{flex:1;padding:6px 20px;}
+                  .rh-col + .rh-col{border-left:1px solid #ececec;}
+                  .rh-col h4{font-size:.78rem;letter-spacing:.09em;text-transform:uppercase;font-weight:800;margin:0 0 12px;}
+                  .rh-col--holiday h4{color:#8a6d1f;}
+                  .rh-col--core h4{color:#6b7280;}
+                  .rh-col ul{list-style:none;margin:0;padding:0;}
+                  .rh-col li{position:relative;padding-left:20px;margin-bottom:9px;font-size:.94rem;line-height:1.45;color:#1f2937;}
+                  .rh-col li::before{content:"";position:absolute;left:0;top:.55em;width:7px;height:7px;border-radius:50%;}
+                  .rh-col--holiday li::before{background:#D4AF37;}
+                  .rh-col--core li::before{background:#d1d5db;}
+                  .rh-col--holiday li{font-weight:600;}
+                  .rh-callout__foot{padding:8px 26px 20px;text-align:center;font-size:.85rem;color:#6b7280;font-style:italic;}
+                  @media (max-width:749px){
+                    .rh-callout{margin-bottom:22px;border-radius:12px;}
+                    .rh-callout__bar{padding:13px 16px;}
+                    .rh-callout__bar h3{font-size:.95rem;}
+                    .rh-callout__cols{flex-direction:column;padding:10px 18px 4px;}
+                    .rh-col{padding:8px 0;}
+                    .rh-col + .rh-col{border-left:none;border-top:1px solid #ececec;}
+                    .rh-col li{font-size:.9rem;}
+                    .rh-callout__foot{padding:6px 18px 16px;}
+                  }
+                </style>
+                <section class="rh-callout" aria-label="What's inside every Rosh Hashanah basket">
+                  <button type="button" class="rh-callout__bar" aria-expanded="false" aria-controls="rh-callout-panel" onclick="toggleRoshCallout(this)">
+                    <span class="rh-callout__eyebrow">Shana Tova</span>
+                    <h3>What's Inside Every Rosh Hashanah Basket</h3>
+                    <span class="rh-chev">&#9660;</span>
+                  </button>
+                  <div class="rh-callout__panel" id="rh-callout-panel">
+                  <p class="rh-callout__sub">All baskets include a mix of milk, dark and white chocolate. (Vegan/Parve baskets are dark chocolate only.)</p>
+                  <div class="rh-callout__cols">
+                    <div class="rh-col rh-col--holiday">
+                      <h4>The Holiday Additions</h4>
+                      <ul>
+                        <li>Chocolate &ldquo;Happy New Year&rdquo; plaque or bar</li>
+                        <li>Mini chocolate apple</li>
+                        <li>Mini chocolate shofars</li>
+                        <li>Mini honey jar</li>
+                        <li>Holiday-themed foiled chocolates</li>
+                      </ul>
+                    </div>
+                    <div class="rh-col rh-col--core">
+                      <h4>Plus Our Signature Assortment</h4>
+                      <ul>
+                        <li>Chocolate-dipped Oreos &amp; pretzels</li>
+                        <li>30+ rotating handmade truffle flavors</li>
+                        <li>Dipped graham crackers, wafers &amp; tea biscuits</li>
+                        <li>A medley of our signature bark flavors</li>
+                        <li>Chocolate-dipped dried fruit</li>
+                        <li>Pecan pralines</li>
+                      </ul>
+                    </div>
+                  </div>
+                  <div class="rh-callout__foot">Larger baskets = more variety, not just more quantity.</div>
+                  </div>
+                </section>
+                <script>
+                  function toggleRoshCallout(btn) {
+                    var box = btn.closest('.rh-callout');
+                    var open = box.classList.toggle('is-open');
+                    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+                  }
+                </script>
+
+                <!-- Mobile-only sticky pill bar (populated by JS) -->
+                <nav class="bb-mobile-pillbar" aria-label="Jump to basket size"></nav>
+
+                <!-- Mobile-only size comparison strip (populated by JS) -->
+                <div class="bb-mobile-strip" aria-label="Size comparison"></div>
+
+                <!-- What's Inside Accordion (Mobile) -->
+                <div class="whats-inside-accordion bb-mobile-accordion-card">
+                    <button class="accordion-toggle" onclick="toggleAccordion(this)">
+                        <span class="bb-accordion-label">
+                            <svg class="bb-eye-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                                <circle cx="12" cy="12" r="3"/>
+                            </svg>
+                            What's inside every basket? Tap to see
+                        </span>
+                        <span class="arrow">▼</span>
+                    </button>
+                    <div class="accordion-content">
+                        <h5>Every basket includes our signature mix:</h5>
+                        <ul>
+                            <li><strong>Rosh Hashanah exclusives:</strong> mini honey jar, "Happy New Year" plaque, chocolate shofars, apples & gelt — free in every basket</li>
+                            <li>Chocolate-dipped Oreos & pretzels</li>
+                            <li>Our seasonal collection of handmade truffles (30+ rotating flavors)</li>
+                            <li>Chocolate-dipped graham crackers, wafers & tea biscuits</li>
+                                <li>A medley of our signature chocolate bark flavors</li>
+                                <li>Chocolate dipped dried fruit</li>
+                            </ul>
+                        <p>All items feature a mix of milk, white, and dark chocolate.<br>Vegan/Parve options use dark chocolate only.</p>
+                        <p class="note">Larger baskets = more variety, not just more quantity.</p>
+                        <a href="/pages/flavors" class="bb-flavor-guide-link">See our complete flavor guide →</a>
+                    </div>
+                </div>
+                
+                <!-- Container Toggle (shows only for Baby) - MOVED UP for visibility -->
+                <div class="container-toggle" id="container-toggle">
+                    <button id="toggle-basket" class="active" onclick="toggleContainer('basket')">🧺 Traditional Basket</button>
+                    <button id="toggle-bassinet" onclick="toggleContainer('bassinet')">🍼 BABY BASSINET</button>
+                </div>
+
+                <!-- Inline nudge if they try to continue without picking a gender -->
+                <div id="baby-gender-error" style="display:none;max-width:520px;margin:0 auto 16px;background:#fef2f2;border:2px solid #f87171;color:#b91c1c;border-radius:10px;padding:12px 16px;text-align:center;font-weight:600;">👆 Almost there! Please pick <strong>Baby Boy</strong> or <strong>Baby Girl</strong> to continue.</div>
+                
+                <!-- Baby Gender Selection for Traditional Baskets (shows only for Baby occasion with Traditional Basket selected) -->
+                <div class="baby-gender-traditional" id="baby-gender-traditional">
+                    <h4>👶 Is this for a Baby Boy or Baby Girl?</h4>
+                    <div class="gender-buttons">
+                        <button class="gender-btn" onclick="selectTraditionalBabyGender('Girl')">
+                            <div class="emoji">👧</div>
+                            <span>Baby Girl</span>
+                        </button>
+                        <button class="gender-btn" onclick="selectTraditionalBabyGender('Boy')">
+                            <div class="emoji">👦</div>
+                            <span>Baby Boy</span>
+                        </button>
+                    </div>
+                    <div class="gender-confirmation" id="traditional-gender-confirm"></div>
+                </div>
+                
+
+<!-- ===== RH WRAP SHOWCASE ===== -->
+<style>
+  /* -- "See it wrapped" toggle.
+        A full-width BAR across the bottom of the card, in normal flow.
+        44-46px tall so it is easy to hit; a miss used to select the basket
+        and jump the page. Square corners, so it is never confused with the
+        "Serves X people" pill. One pill per card, always. -- */
+  .basket-card{position:relative;}
+  .basket-card .rh-flip{position:static;flex:0 0 100%;width:100%;order:99;
+    display:flex;align-items:center;justify-content:center;gap:8px;
+    min-height:46px;margin:12px 0 0;padding:0 10px;
+    border:0;border-top:1px solid #ece6d8;background:#fbf7ee;color:#7d6218;
+    cursor:pointer;font:800 13px/1.1 inherit;letter-spacing:.02em;
+    -webkit-tap-highlight-color:transparent;transition:background .15s ease,color .15s ease;}
+  .basket-card .rh-flip:hover{background:#f3ead6;color:#111;}
+  .basket-card .rh-flip:active{background:#ecdfc2;}
+  .basket-card .rh-flip svg{flex:0 0 auto;}
+  @media (max-width:600px){
+    .basket-card{flex-wrap:wrap;}
+    .basket-card .rh-flip{min-height:44px;font-size:12px;margin-top:10px;}
+    .basket-card .rh-flip svg{width:12px;height:12px;}
+  }
+
+  /* -- "The big ones" band -- */
+  .rh-scale{max-width:1100px;margin:26px auto 0;padding:18px;background:#fffdf7;
+    border:1px solid #ece6d8;border-radius:16px;
+    display:grid;grid-template-columns:1fr 500px;gap:24px;align-items:center;}
+  .rh-scale__label{margin:0 0 4px;font-size:12px;font-weight:800;letter-spacing:.08em;
+    text-transform:uppercase;color:#7d6218;}
+  .rh-scale__h{margin:0;font-size:19px;font-weight:800;color:#111;letter-spacing:-.01em;}
+  .rh-scale__p{margin:8px 0 0;font-size:14px;line-height:1.5;color:#4b5563;}
+  .rh-scale__pics{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .rh-scale__pics figure{margin:0;}
+  .rh-scale__pics img{width:100%;height:auto;aspect-ratio:4/3;object-fit:contain;
+    border-radius:12px;display:block;background:#fff;border:1px solid #f0eade;}
+  @media (max-width:860px){
+    .rh-scale{grid-template-columns:1fr;gap:14px;margin-top:20px;padding:15px;}
+    .rh-scale__h{font-size:17px;}
+    .rh-scale__p{font-size:13px;}
+  }
+</style>
+<script>
+/* card id -> wrapped photo. These are Mikey's uploads, unedited. */
+window.RH_WRAPPED = {
+    'size-small':  "{{ 'bbr-small_round_rosh_wrapped.jpg' | asset_url }}",
+    'size-medium': "{{ 'bbr-medium_round_rosh_wrapped.jpg' | asset_url }}",
+    'size-large':  "{{ 'bbr-large_oval_rosh_wrapped.jpg' | asset_url }}",
+    'size-xl':     "{{ 'bbr-extra_large_rosh_wrapped.jpg' | asset_url }}",
+    'size-grand':  "{{ 'bbr-grand_oval_rosh_wrapped.jpg' | asset_url }}",
+    'size-jumbo':  "{{ 'bbr-jumbo_rosh_wrapped.jpg' | asset_url }}"
+};
+(function(){
+  var ICON='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg>';
+  function build(){
+    var map=window.RH_WRAPPED||{};
+    Object.keys(map).forEach(function(id){
+      var card=document.getElementById(id); if(!card) return;
+      var img=card.querySelector('.basket-image');
+      if(!img || card.querySelector('.rh-flip')) return;
+      var openSrc=img.getAttribute('src'), wrapSrc=map[id];
+      var probe=new Image();
+      probe.onload=function(){
+        var btn=document.createElement('button');
+        btn.type='button'; btn.className='rh-flip'; btn.setAttribute('aria-pressed','false');
+        btn.innerHTML=ICON+'<span>See it wrapped</span>';
+        btn.addEventListener('click',function(e){
+          e.stopPropagation(); e.preventDefault();
+          var on=card.classList.toggle('is-wrapped');
+          img.setAttribute('src', on?wrapSrc:openSrc);
+          btn.setAttribute('aria-pressed', on?'true':'false');
+          btn.querySelector('span').textContent = on ? "See what's inside" : 'See it wrapped';
+        });
+        card.appendChild(btn);
+      };
+      probe.src=wrapSrc;
+    });
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',build); else build();
+})();
+</script>
+<!-- ===== /RH WRAP SHOWCASE ===== -->
+
+                <div class="basket-grid">
+                    <!-- Small Round -->
+                    <div class="basket-card" id="size-small" onclick="selectBasket(this, 'Small Round', 27, 69)">
+                        <span class="info-icon">ⓘ</span>
+                        <div class="tooltip">
+                            <h5>What's Inside Every Basket</h5>
+                            <p style="font-size: 13px; color: #555; margin-bottom: 10px; font-style: italic;">All baskets include a mix of milk, dark, and white chocolate.<br>(Vegan/Parve baskets are dark chocolate only.)</p>
+                            <ul>
+                                <li><strong>Chocolate &ldquo;Happy New Year&rdquo; plaque or bar</strong></li>
+                                <li><strong>Mini chocolate apple &amp; mini chocolate shofars</strong></li>
+                                <li><strong>Mini honey jar</strong></li>
+                                <li><strong>Holiday-themed foiled chocolates</strong></li>
+                                <li>Chocolate-dipped Oreos & pretzels</li>
+                                <li>Our seasonal collection of handmade truffles (30+ rotating flavors)</li>
+                                <li>Chocolate-dipped graham crackers, wafers & tea biscuits</li>
+                                <li>A medley of our signature chocolate bark flavors</li>
+                                <li>Chocolate dipped dried fruit</li>
+                            </ul>
+                            <p class="tooltip-note">Larger baskets = more variety, not just more quantity.</p>
+                        </div>
+                        <img src="{{ 'bbr-small_round_rosh.jpg' | asset_url }}" alt="Small Round Basket" class="basket-image">
+                        <div class="basket-content">
+                            <div class="basket-header">
+                                <div class="basket-name">Small Round</div>
+                                <div class="basket-price">$69</div>
+                            </div>
+                            <div class="serving-pill">Serves 4-5 people</div>
+                            <div class="basket-details">27 pieces · 10" Round Basket</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Medium Round -->
+                    <div class="basket-card" id="size-medium" onclick="selectBasket(this, 'Medium Round', 40, 89)">
+                        <span class="info-icon">ⓘ</span>
+                        <div class="tooltip">
+                            <h5>What's Inside Every Basket</h5>
+                            <p style="font-size: 13px; color: #555; margin-bottom: 10px; font-style: italic;">All baskets include a mix of milk, dark, and white chocolate.<br>(Vegan/Parve baskets are dark chocolate only.)</p>
+                            <ul>
+                                <li><strong>Chocolate &ldquo;Happy New Year&rdquo; plaque or bar</strong></li>
+                                <li><strong>Mini chocolate apple &amp; mini chocolate shofars</strong></li>
+                                <li><strong>Mini honey jar</strong></li>
+                                <li><strong>Holiday-themed foiled chocolates</strong></li>
+                                <li>Chocolate-dipped Oreos & pretzels</li>
+                                <li>Our seasonal collection of handmade truffles (30+ rotating flavors)</li>
+                                <li>Chocolate-dipped graham crackers, wafers & tea biscuits</li>
+                                <li>A medley of our signature chocolate bark flavors</li>
+                                <li>Chocolate dipped dried fruit</li>
+                            </ul>
+                            <p class="tooltip-note">Larger baskets = more variety, not just more quantity.</p>
+                        </div>
+                        <img src="{{ 'bbr-medium_round_rosh.jpg' | asset_url }}" alt="Medium Round Basket" class="basket-image">
+                        <div class="basket-content">
+                            <div class="basket-header">
+                                <div class="basket-name">Medium Round</div>
+                                <div class="basket-price">$89</div>
+                            </div>
+                            <div class="serving-pill">Serves 6-8 people</div>
+                            <div class="basket-details">40 pieces · 12" Round Basket</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Large Oval - MOST POPULAR -->
+                    <div class="basket-card" id="size-large" onclick="selectBasket(this, 'Large Oval', 60, 129)">
+                        <span class="info-icon" style="left: auto; right: 15px;">ⓘ</span>
+                        <div class="tooltip">
+                            <h5>What's Inside Every Basket</h5>
+                            <p style="font-size: 13px; color: #555; margin-bottom: 10px; font-style: italic;">All baskets include a mix of milk, dark, and white chocolate.<br>(Vegan/Parve baskets are dark chocolate only.)</p>
+                            <ul>
+                                <li><strong>Chocolate &ldquo;Happy New Year&rdquo; plaque or bar</strong></li>
+                                <li><strong>Mini chocolate apple &amp; mini chocolate shofars</strong></li>
+                                <li><strong>Mini honey jar</strong></li>
+                                <li><strong>Holiday-themed foiled chocolates</strong></li>
+                                <li>Chocolate-dipped Oreos & pretzels</li>
+                                <li>Our seasonal collection of handmade truffles (30+ rotating flavors)</li>
+                                <li>Chocolate-dipped graham crackers, wafers & tea biscuits</li>
+                                <li>A medley of our signature chocolate bark flavors</li>
+                                <li>Chocolate dipped dried fruit</li>
+                            </ul>
+                            <p class="tooltip-note">Larger baskets = more variety, not just more quantity.</p>
+                        </div>
+                        <img src="{{ 'bbr-large_oval_rosh.jpg' | asset_url }}" alt="Large Oval Basket" class="basket-image">
+                        <div class="basket-content">
+                            <div class="basket-header">
+                                <div class="basket-name">Large Oval</div>
+                                <div class="basket-price">$129</div>
+                            </div>
+                            <div class="serving-pill">Serves 10-12 people</div>
+                            <div class="basket-details">60 pieces · 16" Oval Basket</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Extra Large -->
+                    <div class="basket-card" id="size-xl" onclick="selectBasket(this, 'Extra Large', 99, 179)">
+                        <span class="info-icon">ⓘ</span>
+                        <div class="tooltip">
+                            <h5>What's Inside Every Basket</h5>
+                            <p style="font-size: 13px; color: #555; margin-bottom: 10px; font-style: italic;">All baskets include a mix of milk, dark, and white chocolate.<br>(Vegan/Parve baskets are dark chocolate only.)</p>
+                            <ul>
+                                <li><strong>Chocolate &ldquo;Happy New Year&rdquo; plaque or bar</strong></li>
+                                <li><strong>Mini chocolate apple &amp; mini chocolate shofars</strong></li>
+                                <li><strong>Mini honey jar</strong></li>
+                                <li><strong>Holiday-themed foiled chocolates</strong></li>
+                                <li>Chocolate-dipped Oreos & pretzels</li>
+                                <li>Our seasonal collection of handmade truffles (30+ rotating flavors)</li>
+                                <li>Chocolate-dipped graham crackers, wafers & tea biscuits</li>
+                                <li>A medley of our signature chocolate bark flavors</li>
+                                <li>Chocolate dipped dried fruit</li>
+                            </ul>
+                            <p class="tooltip-note">Larger baskets = more variety, not just more quantity.</p>
+                        </div>
+                        <img src="{{ 'bbr-extra_large_rosh.jpg' | asset_url }}" alt="Extra Large Basket" class="basket-image">
+                        <div class="basket-content">
+                            <div class="basket-header">
+                                <div class="basket-name">Extra Large</div>
+                                <div class="basket-price">$179</div>
+                            </div>
+                            <div class="serving-pill">Serves 16-20 people</div>
+                            <div class="basket-details">99 pieces · 18" Round Basket</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Grand Oval -->
+                    <div class="basket-card" id="size-grand" onclick="selectBasket(this, 'Grand Oval', 126, 229)">
+                        <span class="info-icon">ⓘ</span>
+                        <div class="tooltip">
+                            <h5>What's Inside Every Basket</h5>
+                            <p style="font-size: 13px; color: #555; margin-bottom: 10px; font-style: italic;">All baskets include a mix of milk, dark, and white chocolate.<br>(Vegan/Parve baskets are dark chocolate only.)</p>
+                            <ul>
+                                <li><strong>Chocolate &ldquo;Happy New Year&rdquo; plaque or bar</strong></li>
+                                <li><strong>Mini chocolate apple &amp; mini chocolate shofars</strong></li>
+                                <li><strong>Mini honey jar</strong></li>
+                                <li><strong>Holiday-themed foiled chocolates</strong></li>
+                                <li>Chocolate-dipped Oreos & pretzels</li>
+                                <li>Our seasonal collection of handmade truffles (30+ rotating flavors)</li>
+                                <li>Chocolate-dipped graham crackers, wafers & tea biscuits</li>
+                                <li>A medley of our signature chocolate bark flavors</li>
+                                <li>Chocolate dipped dried fruit</li>
+                            </ul>
+                            <p class="tooltip-note">Larger baskets = more variety, not just more quantity.</p>
+                        </div>
+                        <img src="{{ 'bbr-grand_oval_rosh.jpg' | asset_url }}" alt="Grand Oval Basket" class="basket-image">
+                        <div class="basket-content">
+                            <div class="basket-header">
+                                <div class="basket-name">Grand Oval</div>
+                                <div class="basket-price">$229</div>
+                            </div>
+                            <div class="serving-pill">Serves 20-25 people</div>
+                            <div class="basket-details">126 pieces · 20" Oval Basket</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Jumbo -->
+                    <div class="basket-card" id="size-jumbo" onclick="selectBasket(this, 'Jumbo', 165, 279)">
+                        <span class="info-icon">ⓘ</span>
+                        <div class="tooltip">
+                            <h5>What's Inside Every Basket</h5>
+                            <p style="font-size: 13px; color: #555; margin-bottom: 10px; font-style: italic;">All baskets include a mix of milk, dark, and white chocolate.<br>(Vegan/Parve baskets are dark chocolate only.)</p>
+                            <ul>
+                                <li><strong>Chocolate &ldquo;Happy New Year&rdquo; plaque or bar</strong></li>
+                                <li><strong>Mini chocolate apple &amp; mini chocolate shofars</strong></li>
+                                <li><strong>Mini honey jar</strong></li>
+                                <li><strong>Holiday-themed foiled chocolates</strong></li>
+                                <li>Chocolate-dipped Oreos & pretzels</li>
+                                <li>Our seasonal collection of handmade truffles (30+ rotating flavors)</li>
+                                <li>Chocolate-dipped graham crackers, wafers & tea biscuits</li>
+                                <li>A medley of our signature chocolate bark flavors</li>
+                                <li>Chocolate dipped dried fruit</li>
+                                <li>Pecan pralines</li>
+                            </ul>
+                            <p class="tooltip-note">Larger baskets = more variety, not just more quantity.</p>
+                        </div>
+                        <img src="{{ 'bbr-jumbo_rosh.jpg' | asset_url }}" alt="Jumbo Basket" class="basket-image">
+                        <div class="basket-content">
+                            <div class="basket-header">
+                                <div class="basket-name">Jumbo</div>
+                                <div class="basket-price">$279</div>
+                            </div>
+                            <div class="serving-pill">Serves 28-33 people</div>
+                            <div class="basket-details">165 pieces · 24.5" x 17" Rectangle</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Penultimate -->
+                    <div class="basket-card" id="size-penultimate" onclick="selectBasket(this, 'Penultimate', 330, 399)">
+                        <span class="info-icon">ⓘ</span>
+                        <div class="tooltip">
+                            <h5>What's Inside Every Basket</h5>
+                            <p style="font-size: 13px; color: #555; margin-bottom: 10px; font-style: italic;">All baskets include a mix of milk, dark, and white chocolate.<br>(Vegan/Parve baskets are dark chocolate only.)</p>
+                            <ul>
+                                <li><strong>Chocolate &ldquo;Happy New Year&rdquo; plaque or bar</strong></li>
+                                <li><strong>Mini chocolate apple &amp; mini chocolate shofars</strong></li>
+                                <li><strong>Mini honey jar</strong></li>
+                                <li><strong>Holiday-themed foiled chocolates</strong></li>
+                                <li>Chocolate-dipped Oreos & pretzels</li>
+                                <li>Our seasonal collection of handmade truffles (30+ rotating flavors)</li>
+                                <li>Chocolate-dipped graham crackers, wafers & tea biscuits</li>
+                                <li>A medley of our signature chocolate bark flavors</li>
+                                <li>Chocolate dipped dried fruit</li>
+                                <li>Pecan pralines</li>
+                            </ul>
+                            <p class="tooltip-note">Larger baskets = more variety, not just more quantity.</p>
+                        </div>
+                        <img src="{{ 'bb-Penultimate_Basket_Sweet_Tooth_c.jpg' | asset_url }}" alt="Penultimate Basket" class="basket-image">
+                        <div class="basket-content">
+                            <div class="basket-header">
+                                <div class="basket-name">Penultimate</div>
+                                <div class="basket-price">$399</div>
+                            </div>
+                            <div class="serving-pill">Serves 55-65 people</div>
+                            <div class="basket-details">330 pieces · 24" Round</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Supreme -->
+                    <div class="basket-card" id="size-supreme" onclick="selectBasket(this, 'Supreme', 400, 629)">
+                        <span class="info-icon">ⓘ</span>
+                        <div class="tooltip">
+                            <h5>What's Inside Every Basket</h5>
+                            <p style="font-size: 13px; color: #555; margin-bottom: 10px; font-style: italic;">All baskets include a mix of milk, dark, and white chocolate.<br>(Vegan/Parve baskets are dark chocolate only.)</p>
+                            <ul>
+                                <li><strong>Chocolate &ldquo;Happy New Year&rdquo; plaque or bar</strong></li>
+                                <li><strong>Mini chocolate apple &amp; mini chocolate shofars</strong></li>
+                                <li><strong>Mini honey jar</strong></li>
+                                <li><strong>Holiday-themed foiled chocolates</strong></li>
+                                <li>Chocolate-dipped Oreos & pretzels</li>
+                                <li>Our seasonal collection of handmade truffles (30+ rotating flavors)</li>
+                                <li>Chocolate-dipped graham crackers, wafers & tea biscuits</li>
+                                <li>A medley of our signature chocolate bark flavors</li>
+                                <li>Chocolate dipped dried fruit</li>
+                                <li>Pecan pralines</li>
+                            </ul>
+                            <p class="tooltip-note">Larger baskets = more variety, not just more quantity.</p>
+                        </div>
+                        <img src="{{ 'bb-SUPREME_BASKET.png' | asset_url }}" alt="Supreme Basket" class="basket-image">
+                        <div class="basket-content">
+                            <div class="basket-header">
+                                <div class="basket-name">Supreme</div>
+                                <div class="basket-price">$629</div>
+                            </div>
+                            <div class="serving-pill">Serves 65-80 people</div>
+                            <div class="basket-details">400 pieces · 30" Round Basket</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Gender Selection (shows for Bassinet) -->
+                <div class="gender-selection" id="gender-selection">
+                    <button class="gender-btn" onclick="selectGender('girl')">
+                        <div class="emoji">👧</div>
+                        <span>Baby Girl</span>
+                    </button>
+                    <button class="gender-btn" onclick="selectGender('boy')">
+                        <div class="emoji">👦</div>
+                        <span>Baby Boy</span>
+                    </button>
+                </div>
+                <div class="gender-confirmation" id="bassinet-gender-confirm" style="max-width: 400px; margin: -15px auto 20px; text-align: center;"></div>
+                
+                <!-- Bassinet Grid (hidden by default) -->
+                <div class="bassinet-single-card" id="bassinet-grid">
+                    <div class="bassinet-card-container">
+                        <span class="info-icon">ⓘ</span>
+                        <div class="tooltip">
+                            <h5>What's Inside Every Bassinet</h5>
+                            <ul>
+                                <li>Baby-themed chocolates & chocolate lollipops</li>
+                                <li>Chocolate-dipped Oreos & pretzels</li>
+                                <li>Our seasonal collection of handmade truffles (30+ rotating flavors)</li>
+                                <li>Chocolate-dipped graham crackers, wafers & tea biscuits</li>
+                                <li>A medley of our signature chocolate bark flavors</li>
+                                <li>Chocolate dipped dried fruit</li>
+                            </ul>
+                            <p class="tooltip-note">Arrives in an adorable keepsake bassinet!</p>
+                        </div>
+                        <img id="bassinet-img" src="{{ 'bb-baby-girl-bassinet.jpg' | asset_url }}" alt="Baby Bassinet" class="bassinet-main-image">
+                        <div class="bassinet-card-content">
+                            <div class="bassinet-title">BABY BASSINET</div>
+                            <div class="bassinet-subtitle">Includes baby-themed chocolates & lollipops</div>
+                            
+                            <div class="bassinet-size-label">Select Size:</div>
+                            <div class="bassinet-size-pills">
+                                <button class="bassinet-size-pill" onclick="selectBassinetSize('Small', 46, 119, '8-12')" data-size="small">
+                                    <span class="pill-size">Small</span>
+                                    <span class="pill-price">$119</span>
+                                </button>
+                                <button class="bassinet-size-pill active" onclick="selectBassinetSize('Medium', 76, 169, '12-18')" data-size="medium">
+                                    <span class="pill-size">Medium</span>
+                                    <span class="pill-price">$169</span>
+                                    
+                                </button>
+                                <button class="bassinet-size-pill" onclick="selectBassinetSize('Large', 105, 219, '18-30')" data-size="large">
+                                    <span class="pill-size">Large</span>
+                                    <span class="pill-price">$219</span>
+                                </button>
+                            </div>
+                            
+                            <div class="bassinet-selected-info">
+                                <span class="bassinet-serving" id="bassinet-serving">76 treats · reusable keepsake bassinet</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div style="text-align: center; margin-top: 20px;">
+                    <button class="btn btn-secondary" onclick="goBack()">← Back</button>
+                </div>
+                
+                <!-- Dairy/Vegan Selection -->
+                <div class="chocolate-type-container">
+                    <p class="chocolate-type-label">Chocolate Type</p>
+                    <div class="diet-selection">
+                        <button class="diet-pill selected" id="diet-dairy" onclick="selectDiet('dairy')">
+                            Dairy
+                            <span class="checkmark">✓</span>
+                        </button>
+                        <button class="diet-pill" id="diet-vegan" onclick="selectDiet('vegan')">
+                            Vegan/Parve
+                            <span class="checkmark">✓</span>
+                        </button>
+                        <span class="diet-info-icon">ⓘ<span class="diet-info-tooltip">Dairy = Milk, white & dark chocolate mix.<br>Parve = No dairy. Dark chocolate only.</span></span>
+                    </div>
+                </div>
+                
+                <div id="basket-hint" style="max-width:520px;margin:0 auto 16px;padding:12px 16px;text-align:center;color:#6b7280;background:#f9fafb;border:1.5px dashed #d1d5db;border-radius:10px;font-weight:600;font-size:0.95rem;">👆 Tap a basket above to select it — the Continue button will appear here.</div>
+                <section class="rh-scale" aria-labelledby="rh-scale-h">
+                    <div>
+                        <p class="rh-scale__label">The big ones</p>
+                        <h3 class="rh-scale__h" id="rh-scale-h">Hard to picture until someone&rsquo;s holding it</h3>
+                        <p class="rh-scale__p">The Jumbo and the Penultimate are two-arm baskets. Real deliveries, wrapped and bowed, on the way to the door.</p>
+                    </div>
+                    <div class="rh-scale__pics">
+                        <figure>
+                            <img src="{{ 'bbr-held-penultimate.png' | asset_url }}" alt="Customer holding a Penultimate Rosh Hashanah chocolate basket wrapped in cellophane with a gold and blue bow" loading="lazy">
+                        </figure>
+                        <figure>
+                            <img src="{{ 'bbr-held-jumbo.png' | asset_url }}" alt="Customer holding a Jumbo rectangle Rosh Hashanah chocolate basket wrapped in cellophane with blue and silver bows" loading="lazy">
+                        </figure>
+                    </div>
+                </section>
+
+                <div class="continue-section" id="basket-continue" style="display: none;">
+                    <p class="selection-display">Selected: <strong id="selected-basket-display"></strong></p>
+                    <button class="btn btn-primary" onclick="goToStep('step-upsells')">Continue to Add-Ons →</button>
+                </div>
+            </div>
+            
+            <!-- STEP 3: Premium Add-Ons -->
+            <div id="step-upsells" class="section">
+                <div style="text-align: left; margin-bottom: 20px; max-width: 900px; margin-left: auto; margin-right: auto;">
+                    <button class="btn btn-secondary" onclick="goToStep('step-size')" style="font-size: 0.9rem; padding: 8px 16px;">← Back to Basket Selection</button>
+                </div>
+                <h2>Make it Extra Special</h2>
+                <p style="text-align:center;color:#666;font-size:15px;margin:0;"><span id="rh-lede-basket">Your Basket</span> &bull; <span id="rh-lede-diet" style="font-weight:600;color:#1D1D1F;">Dairy</span></p>
+                <p style="text-align:center;font-size:12.5px;color:#999;margin:6px 0 0;">Every add-on below follows your basket&rsquo;s Dairy or Parve/Vegan choice automatically.</p>
+                <div style="width:36px;height:2px;background:#D4AF37;margin:14px auto 24px;"></div>
+
+                <div class="upsells-section">
+
+                    <div class="upsell-item" id="ai-rh-plaque">
+                        <div class="upsell-info">
+                            <img id="aimg-rh-plaque" src="https://cdn.shopify.com/s/files/1/0559/8498/0141/files/RoshHashanaChocolateNewYearsBar.png?v=1785767181" alt="Large Happy New Year Chocolate Plaque" style="width:100px;height:100px;object-fit:cover;border-radius:8px;">
+                            <div class="upsell-details">
+                                <h4 id="atit-rh-plaque">Large &ldquo;Happy New Year&rdquo; Chocolate Plaque</h4>
+                                <p id="asub-rh-plaque">Molded with a rabbi blowing the shofar and &ldquo;Happy New Year&rdquo;</p>
+                            </div>
+                        </div>
+                        <div class="upsell-price">$12</div>
+                        <div class="quantity-controls">
+                            <button class="qty-btn" onclick="adjustQty('rh-plaque', -1, 12)">&minus;</button>
+                            <div class="qty-display" id="qty-rh-plaque">0</div>
+                            <button class="qty-btn" onclick="adjustQty('rh-plaque', 1, 12)">+</button>
+                        </div>
+                    </div>
+
+                    <div class="upsell-item" id="ai-rh-apple">
+                        <div class="upsell-info">
+                            <img id="aimg-rh-apple" src="https://cdn.shopify.com/s/files/1/0559/8498/0141/t/83/assets/bbr-apple-dairy.jpg" alt="Chocolate  Caramel Apple" style="width:100px;height:100px;object-fit:cover;border-radius:8px;">
+                            <div class="upsell-details">
+                                <h4 id="atit-rh-apple">Chocolate &amp; Caramel Apple</h4>
+                                <p id="asub-rh-apple">Granny Smith apple, caramel under a full chocolate shell</p>
+                            </div>
+                        </div>
+                        <div class="upsell-price">$12</div>
+                        <div class="quantity-controls">
+                            <button class="qty-btn" onclick="adjustQty('rh-apple', -1, 12)">&minus;</button>
+                            <div class="qty-display" id="qty-rh-apple">0</div>
+                            <button class="qty-btn" onclick="adjustQty('rh-apple', 1, 12)">+</button>
+                        </div>
+                    </div>
+
+                    <div class="upsell-item" id="ai-red-apple">
+                        <div class="upsell-info">
+                            <img id="aimg-red-apple" src="https://cdn.shopify.com/s/files/1/0559/8498/0141/files/RedCandyApple-1.jpg" alt="Classic Red Candy Apple" style="width:100px;height:100px;object-fit:cover;border-radius:8px;">
+                            <div class="upsell-details">
+                                <h4 id="atit-red-apple">Classic Red Candy Apple</h4>
+                                <p id="asub-red-apple">Crisp Granny Smith apple in a glossy red candy shell</p>
+                            </div>
+                        </div>
+                        <div class="upsell-price">$12</div>
+                        <div class="quantity-controls">
+                            <button class="qty-btn" onclick="adjustQty('red-apple', -1, 12)">&minus;</button>
+                            <div class="qty-display" id="qty-red-apple">0</div>
+                            <button class="qty-btn" onclick="adjustQty('red-apple', 1, 12)">+</button>
+                        </div>
+                    </div>
+
+                    <div class="upsell-item" id="ai-apple-sticks">
+                        <div class="upsell-info">
+                            <img id="aimg-apple-sticks" src="https://cdn.shopify.com/s/files/1/0559/8498/0141/t/83/assets/bbr-applesticks-crop.jpg" alt="Chocolate-Dipped Apple Sticks (6-pack)" style="width:100px;height:100px;object-fit:cover;border-radius:8px;">
+                            <div class="upsell-details">
+                                <h4 id="atit-apple-sticks">Chocolate-Dipped Apple Sticks (6-pack)</h4>
+                                <p id="asub-apple-sticks">Six fresh apple sticks hand-dipped in chocolate</p>
+                            </div>
+                        </div>
+                        <div class="upsell-price">$18</div>
+                        <div class="quantity-controls">
+                            <button class="qty-btn" onclick="adjustQty('apple-sticks', -1, 18)">&minus;</button>
+                            <div class="qty-display" id="qty-apple-sticks">0</div>
+                            <button class="qty-btn" onclick="adjustQty('apple-sticks', 1, 18)">+</button>
+                        </div>
+                    </div>
+
+                    <div class="upsell-item" id="ai-lollipop">
+                        <div class="upsell-info">
+                            <img id="aimg-lollipop" src="https://cdn.shopify.com/s/files/1/0559/8498/0141/files/d17cab12e1c95f68909feaf29b12f1b4.jpg?v=1787063637" alt="Chocolate Apple Lollipop" style="width:100px;height:100px;object-fit:cover;border-radius:8px;">
+                            <div class="upsell-details">
+                                <h4 id="atit-lollipop">Chocolate Apple Lollipop</h4>
+                                <p id="asub-lollipop">Molded chocolate apple on a stick, wrapped with ribbon</p>
+                            </div>
+                        </div>
+                        <div class="upsell-price">$5</div>
+                        <div class="quantity-controls">
+                            <button class="qty-btn" onclick="adjustQty('lollipop', -1, 5)">&minus;</button>
+                            <div class="qty-display" id="qty-lollipop">0</div>
+                            <button class="qty-btn" onclick="adjustQty('lollipop', 1, 5)">+</button>
+                        </div>
+                    </div>
+
+                    <div class="upsell-item" id="ai-mini-shofars">
+                        <div class="upsell-info">
+                            <img id="aimg-mini-shofars" src="https://cdn.shopify.com/s/files/1/0559/8498/0141/files/milk_chocolate_mini_shofars.png?v=1787175985" alt="Mini Chocolate Shofars (12-pack)" style="width:100px;height:100px;object-fit:cover;border-radius:8px;">
+                            <div class="upsell-details">
+                                <h4 id="atit-mini-shofars">Mini Chocolate Shofars (12-pack)</h4>
+                                <p id="asub-mini-shofars">Individually molded 2&quot; mini shofars embossed with &ldquo;Shanah Tova&rdquo; in Hebrew</p>
+                            </div>
+                        </div>
+                        <div class="upsell-price">$18</div>
+                        <div class="quantity-controls">
+                            <button class="qty-btn" onclick="adjustQty('mini-shofars', -1, 18)">&minus;</button>
+                            <div class="qty-display" id="qty-mini-shofars">0</div>
+                            <button class="qty-btn" onclick="adjustQty('mini-shofars', 1, 18)">+</button>
+                        </div>
+                    </div>
+
+                    <div class="upsell-item" id="ai-large-shofar">
+                        <div class="upsell-info">
+                            <img id="aimg-large-shofar" src="https://cdn.shopify.com/s/files/1/0559/8498/0141/files/29f1691f1e3f5bb4b0a49ba5a14b0caf.jpg" alt="Large Chocolate Shofar" style="width:100px;height:100px;object-fit:cover;border-radius:8px;">
+                            <div class="upsell-details">
+                                <h4 id="atit-large-shofar">Large Chocolate Shofar</h4>
+                                <p id="asub-large-shofar">Molded chocolate shofar embossed &ldquo;Happy New Year&rdquo;</p>
+                            </div>
+                        </div>
+                        <div class="upsell-price">$12</div>
+                        <div class="quantity-controls">
+                            <button class="qty-btn" onclick="adjustQty('large-shofar', -1, 12)">&minus;</button>
+                            <div class="qty-display" id="qty-large-shofar">0</div>
+                            <button class="qty-btn" onclick="adjustQty('large-shofar', 1, 12)">+</button>
+                        </div>
+                    </div>
+
+                    <div class="upsell-item" id="ai-kiddush">
+                        <div class="upsell-info">
+                            <img id="aimg-kiddush" src="https://cdn.shopify.com/s/files/1/0559/8498/0141/files/chocolateKiddushCup.png" alt="Chocolate Kiddush Cup" style="width:100px;height:100px;object-fit:cover;border-radius:8px;">
+                            <div class="upsell-details">
+                                <h4 id="atit-kiddush">Chocolate Kiddush Cup</h4>
+                                <p id="asub-kiddush">Chocolate cup and plate with a molded chocolate apple, a mini jar of honey, foiled Rosh Hashanah chocolates and mini chocolate shofars</p>
+                            </div>
+                        </div>
+                        <div class="upsell-price">$36</div>
+                        <div class="quantity-controls">
+                            <button class="qty-btn" onclick="adjustQty('kiddush', -1, 36)">&minus;</button>
+                            <div class="qty-display" id="qty-kiddush">0</div>
+                            <button class="qty-btn" onclick="adjustQty('kiddush', 1, 36)">+</button>
+                        </div>
+                    </div>
+
+                    <style>
+                      .rh-reveal{width:100%;background:#fff;border:1px solid #e8e8e8;border-left:3px solid #D4AF37;border-radius:8px;padding:16px 18px;margin:8px 0 0;display:flex;gap:14px;align-items:center;cursor:pointer;font-family:inherit;text-align:left;color:#1D1D1F;}
+                      .rh-thumbs{display:flex;flex-shrink:0}
+                      .rh-thumbs img{width:44px;height:44px;object-fit:cover;border-radius:6px;border:2px solid #fff;margin-left:-12px;background:#f2f2f2}
+                      .rh-thumbs img:first-child{margin-left:0}
+                      .rh-rvtext{flex:1;min-width:0}
+                      .rh-rvtext strong{display:block;font-size:.97rem;font-weight:600}
+                      .rh-rvtext em{font-style:normal;color:#888;font-size:.79rem;display:block;margin-top:2px}
+                      .rh-rvcta{flex-shrink:0;font-size:.82rem;font-weight:600;color:#1D1D1F;border:1px solid #1D1D1F;border-radius:6px;padding:8px 14px;white-space:nowrap}
+                      .rh-strip-wrap{display:none;margin-top:12px}
+                      .rh-strip-wrap.open{display:block}
+                      .rh-strip{display:flex;gap:12px;overflow-x:auto;padding:4px 2px 10px;-webkit-overflow-scrolling:touch}
+                      .rh-tile{flex:0 0 150px;background:#fff;border:1px solid #e8e8e8;border-radius:8px;padding:12px;text-align:center}
+                      .rh-tile img{width:100%;height:112px;object-fit:cover;border-radius:6px;background:#f2f2f2}
+                      .rh-tile-t{font-size:.8rem;font-weight:600;color:#1D1D1F;margin-top:8px;line-height:1.3;min-height:31px}
+                      .rh-tile-p{font-size:.95rem;font-weight:700;color:#1D1D1F;margin:6px 0 8px}
+                      .rh-hidden{display:none !important}
+                    </style>
+
+                                        <button type="button" class="rh-reveal" id="rhRevealBtn" onclick="rhToggleTreats()" aria-expanded="false">
+                      <span class="rh-thumbs">
+                        <img src="https://cdn.shopify.com/s/files/1/0559/8498/0141/files/Handcrafted_Truffles_from_The_Sweet_Tooth_c.jpg" alt="">
+                        <img src="https://cdn.shopify.com/s/files/1/0559/8498/0141/files/sweet_tooth_chocolate-chip-cookies_c.jpg" alt="">
+                        <img src="https://cdn.shopify.com/s/files/1/0559/8498/0141/files/One_dozen_brownies_c.jpg" alt="">
+                        <img src="https://cdn.shopify.com/s/files/1/0559/8498/0141/files/chocolate-dipped-pretzels-assorted-sprinkle-and_toppings-tray.jpg" alt="">
+                      </span>
+                      <span class="rh-rvtext">
+                        <strong>Add more treats</strong>
+                        <em id="rhRvSub">Truffles, cookies, brownies, chocolate-dipped pretzels and Oreos</em>
+                      </span>
+                      <span class="rh-rvcta" id="rhRvCta">Show &#9662;</span>
+                    </button>
+                    <div class="rh-strip-wrap" id="rhMoreWrap">
+                    <div class="upsell-item" id="ai-pretzels6">
+                        <div class="upsell-info">
+                            <img id="aimg-pretzels6" src="https://cdn.shopify.com/s/files/1/0559/8498/0141/files/chocolate-dipped-pretzels-assorted-sprinkle-and_toppings-tray.jpg" alt="Chocolate-Dipped Pretzels (6-pack)" style="width:100px;height:100px;object-fit:cover;border-radius:8px;">
+                            <div class="upsell-details">
+                                <h4 id="atit-pretzels6">Chocolate-Dipped Pretzels (6-pack)</h4>
+                            </div>
+                        </div>
+                        <div class="upsell-price">$18</div>
+                        <div class="quantity-controls">
+                            <button class="qty-btn" onclick="adjustQty('pretzels6', -1, 18)">&minus;</button>
+                            <div class="qty-display" id="qty-pretzels6">0</div>
+                            <button class="qty-btn" onclick="adjustQty('pretzels6', 1, 18)">+</button>
+                        </div>
+                    </div>
+
+                    <div class="upsell-item" id="ai-oreos6">
+                        <div class="upsell-info">
+                            <img id="aimg-oreos6" src="https://cdn.shopify.com/s/files/1/0559/8498/0141/files/The_Sweet_Tooth_Famous_Chocolate_Dipped_Oreos.jpg" alt="Chocolate-Dipped Oreos (6-pack)" style="width:100px;height:100px;object-fit:cover;border-radius:8px;">
+                            <div class="upsell-details">
+                                <h4 id="atit-oreos6">Chocolate-Dipped Oreos (6-pack)</h4>
+                            </div>
+                        </div>
+                        <div class="upsell-price">$18</div>
+                        <div class="quantity-controls">
+                            <button class="qty-btn" onclick="adjustQty('oreos6', -1, 18)">&minus;</button>
+                            <div class="qty-display" id="qty-oreos6">0</div>
+                            <button class="qty-btn" onclick="adjustQty('oreos6', 1, 18)">+</button>
+                        </div>
+                    </div>
+
+                    <div class="upsell-item" id="ai-truffles">
+                        <div class="upsell-info">
+                            <img id="aimg-truffles" src="https://cdn.shopify.com/s/files/1/0559/8498/0141/files/Handcrafted_Truffles_from_The_Sweet_Tooth_c.jpg" alt="Assorted Truffles (9-pack)" style="width:100px;height:100px;object-fit:cover;border-radius:8px;">
+                            <div class="upsell-details">
+                                <h4 id="atit-truffles">Assorted Truffles (9-pack)</h4>
+                            </div>
+                        </div>
+                        <div class="upsell-price">$18</div>
+                        <div class="quantity-controls">
+                            <button class="qty-btn" onclick="adjustQty('truffles', -1, 18)">&minus;</button>
+                            <div class="qty-display" id="qty-truffles">0</div>
+                            <button class="qty-btn" onclick="adjustQty('truffles', 1, 18)">+</button>
+                        </div>
+                    </div>
+
+                    <div class="upsell-item" id="ai-cookies">
+                        <div class="upsell-info">
+                            <img id="aimg-cookies" src="https://cdn.shopify.com/s/files/1/0559/8498/0141/files/sweet_tooth_chocolate-chip-cookies_c.jpg" alt="Gourmet Cookies (6-pack)" style="width:100px;height:100px;object-fit:cover;border-radius:8px;">
+                            <div class="upsell-details">
+                                <h4 id="atit-cookies">Gourmet Cookies (6-pack)</h4>
+                            </div>
+                        </div>
+                        <div class="upsell-price">$15</div>
+                        <div class="quantity-controls">
+                            <button class="qty-btn" onclick="adjustQty('cookies', -1, 15)">&minus;</button>
+                            <div class="qty-display" id="qty-cookies">0</div>
+                            <button class="qty-btn" onclick="adjustQty('cookies', 1, 15)">+</button>
+                        </div>
+                    </div>
+
+                    <div class="upsell-item" id="ai-brownies">
+                        <div class="upsell-info">
+                            <img id="aimg-brownies" src="https://cdn.shopify.com/s/files/1/0559/8498/0141/files/One_dozen_brownies_c.jpg" alt="Chocolate Chip Brownies (6-pack)" style="width:100px;height:100px;object-fit:cover;border-radius:8px;">
+                            <div class="upsell-details">
+                                <h4 id="atit-brownies">Chocolate Chip Brownies (6-pack)</h4>
+                            </div>
+                        </div>
+                        <div class="upsell-price">$15</div>
+                        <div class="quantity-controls">
+                            <button class="qty-btn" onclick="adjustQty('brownies', -1, 15)">&minus;</button>
+                            <div class="qty-display" id="qty-brownies">0</div>
+                            <button class="qty-btn" onclick="adjustQty('brownies', 1, 15)">+</button>
+                        </div>
+                    </div>
+
+
+                    </div>
+
+                    <!-- Gluten-Free Basket Upgrade (entire basket swap, not a quantity add-on) -->
+                    <div class="upsell-item" id="gf-row" style="display: none;">
+                        <div class="upsell-info">
+                            <div class="upsell-details">
+                                <h4>Make the entire basket gluten-free</h4>
+                                <p>All items swapped for gluten-free versions *</p>
+                            </div>
+                        </div>
+                        <div class="upsell-price">$20</div>
+                        <div class="quantity-controls">
+                            <button class="qty-btn" onclick="setGlutenFree(false)">&minus;</button>
+                            <div class="qty-display" id="qty-gf-upgrade">0</div>
+                            <button class="qty-btn" onclick="setGlutenFree(true)">+</button>
+                        </div>
+                    </div>
+
+                </div>
+                
+                <div class="total-box os-card">
+                    <h3 class="os-heading">Your Order Summary</h3>
+                    <div class="os-lines" id="orderSummary">
+                        <div class="os-line" id="summaryBasket">No basket selected</div>
+                        <div id="summaryAddons"></div>
+                    </div>
+                    <div class="os-total">
+                        <span class="os-total-label">Total</span>
+                        <span class="os-total-price" id="totalPrice">$0</span>
+                    </div>
+                    <div class="os-si" id="si-wrap">
+                        <button type="button" id="si-toggle" class="os-si-toggle" aria-expanded="false" aria-controls="special-instructions" onclick="toggleSpecialInstructions(this)">
+                            <span class="os-si-left"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex:0 0 auto;color:#6b7280;"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg> Special Instructions</span>
+                            <svg class="os-si-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+                        </button>
+                        <textarea id="special-instructions" placeholder="Tell our kitchen about any allergies, dietary needs, or special requests"></textarea>
+                    </div>
+                    <button type="button" class="os-cta" onclick="goToCheckout()">Continue to Checkout</button>
+                    <p class="os-reassure"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex:0 0 auto;color:#6b7280;"><rect x="3" y="8" width="18" height="13" rx="2"/><path d="M12 8v13"/><path d="M3 12h18"/><path d="M12 8c-1.5-3.5-6-3.5-6-1s4 2.5 6 1c2 1.5 6 1.5 6-1s-4.5-2.5-6 1Z"/></svg> Gift note included &mdash; write your message at checkout</p>
+                </div>
+                
+                
+            </div>
+        </div>
+
+    </div>
+</div>
+<script>
+        // State
+        let selectedOccasion = 'Rosh Hashanah';  // this page is Rosh Hashanah only — occasion step skipped
+        let schoolName = '';
+        let basketData = { name: '', capacity: 0, price: 0 };
+        let upsellQuantities = {};
+        let selectedCookieFlavor = null;
+        // Free chocolate plaque by occasion — top-level so both the line item
+        // properties and the order-level cart attributes can read it.
+        // Add new occasions here as plaque designs become available.
+        const freePlaqueByOccasion = {
+            'Birthday': 'Happy Birthday',
+            'Anniversary': 'Happy Anniversary',
+            'Thank You': 'Thank You',
+            'Get Well': 'Get Well Soon',
+            'Congratulations': 'Congratulations',
+            'Housewarming': 'New Home'
+        };
+
+        let selectedPlaqueOccasion = null;
+        const plaqueOccasions = {
+            'happy-birthday':    { name: 'Happy Birthday',       dairy: 48554746544383, vegan: 48554746708223 , img: 'https://cdn.shopify.com/s/files/1/0559/8498/0141/files/milk-happy-birthday-plaque.jpg?v=1784287112' },
+            'happy-anniversary': { name: 'Happy Anniversary',    dairy: 48554746577151, vegan: 48554746740991 , img: 'https://cdn.shopify.com/s/files/1/0559/8498/0141/files/milk-happy-anniversary-plaque.jpg?v=1784287687' },
+            'i-love-you':        { name: 'I Love You',           dairy: 48843042521343, vegan: 48843043143935 , img: 'https://cdn.shopify.com/s/files/1/0559/8498/0141/files/I_Love_You_Large_Chocolate_Plaque_481edb95-4de5-4dc7-8d2c-7db6d79a7f5f.png?v=1784215894' },
+            'thank-you':         { name: 'Thank You',            dairy: 48554746609919, vegan: 48554746773759 , img: 'https://cdn.shopify.com/s/files/1/0559/8498/0141/files/thank-you-chocolate-plaque-milk.jpg?v=1784301457' },
+            'get-well':          { name: 'Get Well Soon',        dairy: 48554746642687, vegan: 48554746806527 , img: 'https://cdn.shopify.com/s/files/1/0559/8498/0141/files/milk-get-well-soon-plaque.jpg?v=1784288370' },
+            'congratulations':   { name: 'Congratulations',      dairy: 48554746675455, vegan: 48554746839295 , img: 'https://cdn.shopify.com/s/files/1/0559/8498/0141/files/milk-congratulations-plaque.jpg?v=1784287115' },
+            'new-home':          { name: 'New Home - Large Key', dairy: 48844027920639, vegan: 48844101189887 , img: 'https://cdn.shopify.com/s/files/1/0559/8498/0141/files/Chocolate_Large_housekey_d59d2d19-6bc2-467b-aaf8-e547f1b22926.png?v=1784227616' }
+        };
+        let selectedPlaque = false;
+        let glutenFreeUpgrade = false;
+        
+
+        // Container type and gender
+        let containerType = 'basket';
+        let babyGender = null;
+        
+        // Diet selection (Dairy/Vegan)
+        let selectedDiet = 'dairy';
+        
+        function selectDiet(diet) {
+            selectedDiet = diet;
+            
+            // Update pill styles
+            document.getElementById('diet-dairy').classList.toggle('selected', diet === 'dairy');
+            document.getElementById('diet-vegan').classList.toggle('selected', diet === 'vegan');
+            
+            // Store selection for checkout
+            window.selectedDiet = diet;
+            console.log('Diet selected:', diet);
+            if (typeof rhRefreshAddons === 'function') rhRefreshAddons();
+        }
+        
+        // Toggle between basket and bassinet
+        function toggleContainer(type) {
+            containerType = type;
+            
+            // Update toggle buttons
+            document.getElementById('toggle-basket').classList.toggle('active', type === 'basket');
+            document.getElementById('toggle-bassinet').classList.toggle('active', type === 'bassinet');
+            
+            // Show/hide grids
+            document.querySelector('.basket-grid').style.display = type === 'basket' ? 'grid' : 'none';
+            document.getElementById('bassinet-grid').classList.toggle('visible', type === 'bassinet');
+            
+            // Show/hide gender selection for BASSINET
+            document.getElementById('gender-selection').classList.toggle('visible', type === 'bassinet');
+            
+            // Show/hide gender selection for TRADITIONAL BASKET (only when Baby occasion)
+            const traditionalGenderSection = document.getElementById('baby-gender-traditional');
+            if (traditionalGenderSection) {
+                traditionalGenderSection.classList.toggle('visible', type === 'basket' && selectedOccasion === 'Baby');
+            }
+            
+            // Reset selection
+            document.querySelectorAll('.basket-card').forEach(card => card.classList.remove('selected'));
+            
+            // For bassinet: Auto-select Medium size so Continue button appears
+            if (type === 'bassinet') {
+                // Set the default Medium bassinet selection
+                document.getElementById('bassinet-serving').textContent = 'Serves 12-18 people';
+                basketData = {
+                    name: 'Medium Bassinet',
+                    capacity: 55,
+                    price: 149
+                };
+                // Show the continue button and update display
+                document.getElementById('selected-basket-display').textContent = 'Medium Bassinet - $149';
+                trackerLockSync();
+                document.getElementById('basket-continue').style.display = 'block';
+                var bh = document.getElementById('basket-hint'); if (bh) bh.style.display = 'none';
+                // Update total price display
+                updateTotalPrice();
+            } else {
+                document.getElementById('basket-continue').style.display = 'none';
+                var bh2 = document.getElementById('basket-hint'); if (bh2) bh2.style.display = 'block';
+            }
+            
+            // Reset gender selection when switching container types
+            babyGender = null;
+            document.querySelectorAll('.gender-btn').forEach(btn => btn.classList.remove('selected', 'selected-girl', 'selected-boy'));
+            // Reset gender confirmations and container colors
+            document.querySelectorAll('.gender-confirmation').forEach(el => { el.className = 'gender-confirmation'; el.innerHTML = ''; });
+            const tradContainer = document.getElementById('baby-gender-traditional');
+            if (tradContainer) tradContainer.classList.remove('gender-girl', 'gender-boy');
+        }
+        
+        // Select baby gender (for bassinet)
+        function selectGender(gender) {
+            babyGender = gender;
+            var ge = document.getElementById('baby-gender-error'); if (ge) ge.style.display = 'none';
+
+            // Update button states
+            document.querySelectorAll('#gender-selection .gender-btn').forEach(btn => {
+                btn.classList.remove('selected', 'selected-girl', 'selected-boy');
+            });
+            const clickedBtn = event.target.closest('.gender-btn');
+            clickedBtn.classList.add('selected');
+            clickedBtn.classList.add(gender === 'girl' ? 'selected-girl' : 'selected-boy');
+            
+            // Show confirmation message
+            const confirm = document.getElementById('bassinet-gender-confirm');
+            confirm.className = 'gender-confirmation visible ' + (gender === 'girl' ? 'girl' : 'boy');
+            confirm.innerHTML = gender === 'girl' 
+                ? '🎀 Baby Girl bassinet selected — pink ribbons & girl-themed chocolates!'
+                : '💙 Baby Boy bassinet selected — blue ribbons & boy-themed chocolates!';
+            
+            // Update bassinet images
+            const girlImg = '{{ "bb-baby-girl-bassinet.jpg" | asset_url }}';
+            const boyImg = '{{ "bb-baby-boy-bassinet.jpg" | asset_url }}';
+            
+            const imgSrc = gender === 'girl' ? girlImg : boyImg;
+            document.getElementById('bassinet-small-img').src = imgSrc;
+            document.getElementById('bassinet-medium-img').src = imgSrc;
+            document.getElementById('bassinet-large-img').src = imgSrc;
+        }
+        
+        // Select baby gender for TRADITIONAL baskets (not bassinets)
+        function selectTraditionalBabyGender(gender) {
+            babyGender = gender;
+            var ge = document.getElementById('baby-gender-error'); if (ge) ge.style.display = 'none';
+
+            // Update button states in the traditional gender section
+            const container = document.getElementById('baby-gender-traditional');
+            container.querySelectorAll('.gender-btn').forEach(btn => {
+                btn.classList.remove('selected', 'selected-girl', 'selected-boy');
+            });
+            const clickedBtn = event.target.closest('.gender-btn');
+            clickedBtn.classList.add('selected');
+            clickedBtn.classList.add(gender === 'Girl' ? 'selected-girl' : 'selected-boy');
+            
+            // Change container background color
+            container.classList.remove('gender-girl', 'gender-boy');
+            container.classList.add(gender === 'Girl' ? 'gender-girl' : 'gender-boy');
+            
+            // Show confirmation message
+            const confirm = document.getElementById('traditional-gender-confirm');
+            confirm.className = 'gender-confirmation visible ' + (gender === 'Girl' ? 'girl' : 'boy');
+            confirm.innerHTML = gender === 'Girl' 
+                ? '🎀 Baby Girl basket selected — we\'ll add pink ribbons & girl-themed chocolates!'
+                : '💙 Baby Boy basket selected — we\'ll add blue ribbons & boy-themed chocolates!';
+            
+            console.log('Baby gender selected for traditional basket:', gender);
+        }
+        
+        // Show/hide sections
+        function validateAndContinue() {
+            // If College Acceptance, require school name
+            if (selectedOccasion === 'College Acceptance') {
+                const schoolInput = document.getElementById('school-name-input');
+                const schoolError = document.getElementById('school-name-error');
+                const val = schoolInput?.value?.trim() || '';
+                if (!val) {
+                    schoolError.style.display = 'block';
+                    schoolInput.style.border = '2px solid #dc2626';
+                    schoolInput.focus();
+                    schoolInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    return;
+                } else {
+                    schoolError.style.display = 'none';
+                    schoolInput.style.border = '';
+                }
+            }
+            goToStep('step-size');
+        }
+        
+        function trackerMark(step) {
+            document.querySelectorAll('.bb-tstep').forEach(function(b){ b.classList.toggle('active', b.getAttribute('data-step') === step); });
+            trackerLockSync();
+        }
+
+        // Step 2 stays locked until a basket size is chosen.
+        function bbStepUnlocked(step) {
+            if (step === 'step-size') return true;
+            return !!(basketData && basketData.name);
+        }
+
+        function trackerLockSync() {
+            document.querySelectorAll('.bb-tstep').forEach(function(b){
+                var locked = !bbStepUnlocked(b.getAttribute('data-step'));
+                b.classList.toggle('locked', locked);
+                b.setAttribute('aria-disabled', locked ? 'true' : 'false');
+            });
+        }
+
+        function trackerGo(step) {
+            if (!bbStepUnlocked(step)) {
+                var nudge = document.getElementById('bb-step-nudge');
+                if (nudge) {
+                    nudge.style.display = 'block';
+                    clearTimeout(window.__bbNudgeTimer);
+                    window.__bbNudgeTimer = setTimeout(function(){ nudge.style.display = 'none'; }, 4000);
+                }
+                var grid = document.querySelector('#step-size .basket-grid');
+                if (grid) grid.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                return;
+            }
+            goToStep(step);
+        }
+
+        function goToStep(stepId) {
+            if (stepId === 'step-upsells' && typeof rhRefreshAddons === 'function') setTimeout(rhRefreshAddons, 0);
+            // Require Baby Boy / Baby Girl choice before leaving the size step.
+            // Show an inline nudge (not a pop-up) and guide them to the choice.
+            if (stepId === 'step-upsells' && selectedOccasion === 'Baby' && !babyGender) {
+                var bassSel = document.getElementById('gender-selection');
+                var target = (bassSel && bassSel.classList.contains('visible'))
+                    ? bassSel
+                    : document.getElementById('baby-gender-traditional');
+                var err = document.getElementById('baby-gender-error');
+                if (err) err.style.display = 'block';
+                if (target) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                return;
+            }
+            document.querySelectorAll('.section').forEach(section => {
+                section.classList.remove('active');
+            });
+            document.getElementById(stepId).classList.add('active');
+            trackerMark(stepId);
+            window.scrollTo(0, 0);
+            
+            // Show container toggle if Baby occasion and going to size step
+            if (stepId === 'step-size' && selectedOccasion === 'Baby') {
+                document.getElementById('container-toggle').classList.add('visible');
+                // Also show traditional baby gender selection by default (basket is default)
+                document.getElementById('baby-gender-traditional').classList.add('visible');
+            } else {
+                document.getElementById('container-toggle').classList.remove('visible');
+                document.getElementById('gender-selection').classList.remove('visible');
+                document.getElementById('baby-gender-traditional').classList.remove('visible');
+                document.getElementById('bassinet-grid').classList.remove('visible');
+                document.querySelector('.basket-grid').style.display = 'grid';
+            }
+        }
+        
+        // Step 1: Select Occasion
+        function selectOccasion(element, occasion) {
+            // Remove previous selection
+            document.querySelectorAll('.occasion-card').forEach(card => {
+                card.classList.remove('selected');
+            });
+            
+            // Highlight selected
+            element.classList.add('selected');
+            selectedOccasion = occasion;
+            
+            // Hide all info banners first
+            document.querySelectorAll('.occasion-info-banner').forEach(banner => {
+                banner.classList.remove('visible');
+            });
+            
+            // Show relevant info banner (College Acceptance, Rosh Hashanah)
+            if (occasion === 'College Acceptance') {
+                document.getElementById('college-info').classList.add('visible');
+            }
+            if (occasion === 'Rosh Hashanah') {
+                document.getElementById('rosh-info').classList.add('visible');
+            }
+            
+            // Show continue button
+            document.getElementById('occasion-continue').style.display = 'block';
+            var oh = document.getElementById('occasion-hint'); if (oh) oh.style.display = 'none';
+            document.getElementById('selected-occasion-display').textContent = occasion;
+            
+            // Scroll to continue button (or info banner if visible)
+            const visibleBanner = document.querySelector('.occasion-info-banner.visible');
+            if (visibleBanner) {
+                visibleBanner.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            } else {
+                document.getElementById('occasion-continue').scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }
+        
+        // Step 2: Select Basket
+        function selectBasket(element, name, capacity, price) {
+            // Remove previous selection
+            document.querySelectorAll('.basket-card').forEach(card => {
+                card.classList.remove('selected');
+            });
+            
+            // Highlight selected
+            element.classList.add('selected');
+            basketData = { name, capacity, price };
+            trackerLockSync();
+
+            // Show continue button
+            document.getElementById('basket-continue').style.display = 'block';
+            var bh = document.getElementById('basket-hint'); if (bh) bh.style.display = 'none';
+            document.getElementById('selected-basket-display').textContent = name + ' - $' + price;
+            
+            // Update total
+            updateTotalPrice();
+            
+            // Scroll to continue button
+            document.getElementById('basket-continue').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        
+        // Cookie flavor selection
+        function selectCookieFlavor(flavor) {
+            // Remove previous selection
+            document.querySelectorAll('.flavor-pill').forEach(btn => {
+                btn.style.background = 'white';
+                btn.style.borderColor = '#e5e7eb';
+                btn.style.color = '#111111';
+                btn.style.fontWeight = 'normal';
+            });
+            
+            // Highlight selected
+            event.target.style.background = '#111111';
+            event.target.style.borderColor = '#111111';
+            event.target.style.color = 'white';
+            event.target.style.fontWeight = '600';
+            
+            // Show selection message
+            const flavorNames = {
+                'choc-chip': 'Chocolate Chip',
+                'white-choc': 'White Chocolate Macadamia',
+                'oatmeal': 'Oatmeal Raisin',
+                'mixed': 'Mixed'
+            };
+            const msgEl = document.getElementById('cookie-selection-msg');
+            if (msgEl) {
+                msgEl.textContent = '✓ ' + flavorNames[flavor] + ' selected';
+            }
+            
+            selectedCookieFlavor = flavor;
+        }
+
+        function selectPlaqueOccasion(occ, btnEl) {
+            document.querySelectorAll('.plaque-pill').forEach(btn => {
+                btn.style.background = 'white';
+                btn.style.borderColor = '#e5e7eb';
+                btn.style.color = '#111111';
+                btn.style.fontWeight = 'normal';
+            });
+            const target = btnEl || (window.event && window.event.target);
+            if (target) {
+                target.style.background = '#111111';
+                target.style.borderColor = '#111111';
+                target.style.color = 'white';
+                target.style.fontWeight = '600';
+            }
+
+            const data = plaqueOccasions[occ];
+            const imgEl = document.getElementById('plaque-addon-img');
+            if (imgEl && data.img) {
+                imgEl.src = data.img;
+                imgEl.alt = data.name + ' large chocolate plaque';
+            }
+            const msgEl = document.getElementById('plaque-selection-msg');
+            if (msgEl) {
+                msgEl.textContent = '✓ ' + data.name + ' selected';
+            }
+
+            selectedPlaqueOccasion = occ;
+        }
+
+        // Pre-select the Congratulations pill (matches the default hero image) so the
+        // + button works immediately. Nothing is added to the cart until + is tapped.
+        document.addEventListener('DOMContentLoaded', function() {
+            var defaultPill = document.querySelector('.plaque-pill[onclick*="congratulations"]');
+            if (defaultPill) selectPlaqueOccasion('congratulations', defaultPill);
+            trackerLockSync();
+        });
+
+        function toggleSpecialInstructions(btn) {
+            var wrap = document.getElementById('si-wrap');
+            var open = wrap.classList.toggle('is-open');
+            btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+            if (open) { document.getElementById('special-instructions').focus(); }
+        }
+
+        function adjustPlaqueQty(change) {
+            if (!selectedPlaqueOccasion) {
+                const msgEl = document.getElementById('plaque-selection-msg');
+                if (msgEl) {
+                    msgEl.textContent = 'Please choose an occasion first';
+                }
+                return;
+            }
+            // each occasion is its own line item, so you can add e.g. a Birthday AND a Congratulations plaque
+            adjustQty('plaque-' + selectedPlaqueOccasion, change, 20);
+            let total = 0;
+            for (const [id, data] of Object.entries(upsellQuantities)) {
+                if (id.startsWith('plaque-')) total += (data.qty || 0);
+            }
+            const disp = document.getElementById('qty-plaque');
+            if (disp) disp.textContent = total;
+            const msgEl = document.getElementById('plaque-selection-msg');
+            if (msgEl) {
+                const parts = [];
+                for (const [id, data] of Object.entries(upsellQuantities)) {
+                    if (id.startsWith('plaque-') && data.qty > 0) {
+                        parts.push(plaqueOccasions[id.slice(7)].name + ' x' + data.qty);
+                    }
+                }
+                msgEl.textContent = parts.length ? '✓ ' + parts.join(' · ') : '✓ ' + plaqueOccasions[selectedPlaqueOccasion].name + ' selected';
+            }
+        }
+
+        // Plaque selection
+        // Gluten-Free Upgrade — set explicit state (used by +/− buttons in add-ons list, ?gf=1 URL param, and "Remove" link in banner)
+        function setGlutenFree(state) {
+            if (glutenFreeUpgrade === state) return;
+            glutenFreeUpgrade = state;
+
+            // Update qty display on the GF row itself
+            const qtyDisplay = document.getElementById('qty-gf-upgrade');
+            if (qtyDisplay) qtyDisplay.textContent = state ? '1' : '0';
+
+            // Show/hide the sticky banner
+            const banner = document.getElementById('gf-mode-banner');
+            if (banner) banner.style.display = state ? 'block' : 'none';
+
+            // Hide the GF row at the bottom of the add-ons when banner is on (avoid redundant "selected" UI)
+            const gfRow = document.getElementById('gf-row');
+            if (gfRow) gfRow.style.display = state ? 'none' : '';
+
+            // Hide non-GF add-on rows when GF is on; reset their quantities to 0
+            document.querySelectorAll('[data-non-gf="true"]').forEach(function(row) {
+                row.style.display = state ? 'none' : '';
+            });
+            if (state) {
+                // Reset hidden items to 0 in case the user had already added them
+                ['cookies', 'brownies', 'mucho-gusto', 'vegan-oreos'].forEach(function(id) {
+                    if (upsellQuantities[id]) {
+                        delete upsellQuantities[id];
+                        const d = document.getElementById('qty-' + id);
+                        if (d) d.textContent = '0';
+                    }
+                });
+            }
+
+            // Append "(GF)" to truffles label when GF mode is on
+            const trufflesTitle = document.getElementById('truffles-title');
+            if (trufflesTitle) {
+                trufflesTitle.textContent = state ? 'Assorted Truffles (GF) (9-pack)' : 'Assorted Truffles (9-pack)';
+            }
+
+            // Keep legacy button in sync if it still exists somewhere
+            const btn = document.getElementById('gf-upgrade-btn');
+            if (btn) {
+                if (state) {
+                    btn.textContent = '✓ Added';
+                    btn.style.background = '#15803d';
+                    btn.style.color = 'white';
+                    btn.style.borderColor = '#15803d';
+                } else {
+                    btn.textContent = 'Add';
+                    btn.style.background = 'white';
+                    btn.style.color = '#15803d';
+                    btn.style.borderColor = '#22c55e';
+                }
+            }
+            updateTotalPrice();
+        }
+
+        // Legacy toggle — kept for backwards compatibility
+        function toggleGlutenFree() {
+            setGlutenFree(!glutenFreeUpgrade);
+        }
+        
+        function selectPlaqueMessage(message) {
+            // Remove previous selection
+            document.querySelectorAll('.plaque-option').forEach(btn => {
+                btn.style.borderColor = '#e5e7eb';
+                btn.style.background = 'white';
+            });
+            
+            // Highlight selected
+            event.target.style.borderColor = '#f59e0b';
+            event.target.style.background = '#fef3c7';
+            
+            selectedPlaque = true;
+            updateTotalPrice();
+        }
+        
+        // Quantity controls
+        function adjustQty(itemId, change, price) {
+            if (!upsellQuantities[itemId]) {
+                upsellQuantities[itemId] = { qty: 0, price: price };
+            }
+            
+            upsellQuantities[itemId].qty = Math.max(0, upsellQuantities[itemId].qty + change);
+            
+            const displayEl = document.getElementById('qty-' + itemId);
+            if (displayEl) {
+                displayEl.textContent = upsellQuantities[itemId].qty;
+            }
+            
+            updateTotalPrice();
+        }
+        
+        // Update total price
+        function updateSummary() {
+            // Update basket info
+            const summaryBasket = document.getElementById('summaryBasket');
+            const summaryAddons = document.getElementById('summaryAddons');
+            
+            if (summaryBasket) {
+                if (basketData.name) {
+                    summaryBasket.innerHTML = '<span class="os-line-name">' + basketData.name + ' Basket</span><span class="os-line-price">$' + basketData.price + '</span>';
+                } else {
+                    summaryBasket.textContent = 'No basket selected';
+                }
+            }
+            
+            if (summaryAddons) {
+                const addonNames = {
+                    'rh-plaque': 'Large "Happy New Year" Chocolate Plaque',
+                    'rh-apple': 'Chocolate & Caramel Apple',
+                    'red-apple': 'Classic Red Candy Apple',
+                    'apple-sticks': 'Chocolate-Dipped Apple Sticks (6-pack)',
+                    'lollipop': 'Chocolate Apple Lollipop',
+                    'mini-shofars': 'Mini Chocolate Shofars (12-pack)',
+                    'large-shofar': 'Large Chocolate Shofar',
+                    'kiddush': 'Chocolate Kiddush Cup',
+                    'pretzels6': 'Chocolate-Dipped Pretzels (6-pack)',
+                    'oreos6': 'Chocolate-Dipped Oreos (6-pack)',
+                    'truffles': 'Assorted Truffles (9-pack)',
+                    'cookies': 'Gourmet Cookies (6-pack)',
+                    'brownies': 'Chocolate Chip Brownies (6-pack)'
+                };
+                
+                let addonList = [];
+                for (const [id, data] of Object.entries(upsellQuantities)) {
+                    if (data.qty > 0) {
+                        const name = addonNames[id] || id;
+                        addonList.push('<div class="os-line os-line--addon"><span class="os-line-name">' + name + ' <span class="os-qty">\u00d7 ' + data.qty + '</span></span><span class="os-line-price">$' + (data.price * data.qty) + '</span></div>');
+                    }
+                }
+                
+                if (glutenFreeUpgrade) {
+                    addonList.push('<div class="os-line os-line--addon"><span class="os-line-name">Make Basket Gluten-Free</span><span class="os-line-price">$20</span></div>');
+                }
+                
+                if (addonList.length > 0) {
+                    summaryAddons.innerHTML = addonList.join('');
+                } else {
+                    summaryAddons.innerHTML = '';
+                }
+            }
+        }
+        
+        function updateTotalPrice() {
+            let total = basketData.price;
+            
+            // Add all upsells
+            for (let itemId in upsellQuantities) {
+                total += upsellQuantities[itemId].qty * upsellQuantities[itemId].price;
+            }
+            
+            // Add plaque if selected
+            if (selectedPlaque) {
+                total += 8;
+            }
+            
+            // Add gluten-free upgrade if selected
+            if (glutenFreeUpgrade) {
+                total += 20;
+            }
+            
+            const totalEl = document.getElementById('totalPrice');
+            if (totalEl) {
+                totalEl.textContent = '$' + total;
+            }
+            updateSummary();
+        }
+        
+        // Mobile accordion toggle
+        function toggleAccordion(btn) {
+            btn.classList.toggle('open');
+            const content = btn.nextElementSibling;
+            content.classList.toggle('open');
+        }
+        
+        // Bassinet size selection (single card with pills)
+        function selectBassinetSize(size, pieces, price, serves) {
+            // Update serving info
+            document.getElementById('bassinet-serving').textContent = pieces + ' treats · reusable keepsake bassinet';
+            
+            // Update pill active states
+            document.querySelectorAll('.bassinet-size-pill').forEach(pill => {
+                pill.classList.remove('active');
+            });
+            event.currentTarget.classList.add('active');
+            
+            // Store selection
+            const bassinetName = size + ' Bassinet';
+            basketData = {
+                name: bassinetName,
+                capacity: pieces,
+                price: price
+            };
+            
+            // Show continue button and update display
+            document.getElementById('selected-basket-display').textContent = bassinetName + ' - $' + price;
+            trackerLockSync();
+            document.getElementById('basket-continue').style.display = 'block';
+            var bh = document.getElementById('basket-hint'); if (bh) bh.style.display = 'none';
+            document.getElementById('basket-continue').scrollIntoView({ behavior: 'smooth', block: 'center' });
+            
+            // Update the total price display
+            updateTotalPrice();
+        }
+
+        // Navigation
+        
+        function scrollToAddons() {
+            // Scroll to the top of the upsells section
+            const upsellsSection = document.querySelector('.upsells-section');
+            if (upsellsSection) {
+                upsellsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        }
+        
+        function goBack() {
+            const currentStep = document.querySelector('.section.active').id;
+            if (currentStep === 'step-size') {
+                window.location.href = '/pages/build-a-basket';
+                return;
+            } else if (currentStep === 'step-upsells') {
+                goToStep('step-size');
+            } else if (currentStep === 'step-occasions') {
+                // On first step, go back to previous page but warn first
+                if (confirm('Leave the basket builder? Your selections will be lost.')) {
+                    window.history.back();
+                }
+            }
+        }
+        
+
+        // ===== Rosh Hashanah add-ons: follow the basket's Dairy / Parve choice =====
+        // Hidden in parve: dairy items, plus anything whose photo still shows white or milk chocolate.
+        const RH_PARVE_HIDE = ['cookies','brownies','pretzels6','oreos6','truffles'];
+        const RH_PARVE = {
+            "rh-plaque": {
+                        "t": "Large &ldquo;Happy New Year&rdquo; Dark Chocolate Plaque",
+                        "s": null,
+                        "img": "https://cdn.shopify.com/s/files/1/0559/8498/0141/t/83/assets/bbr-parve-plaque.jpg"
+            },
+            "rh-apple": {
+                        "t": "Dark Chocolate Apple",
+                        "s": "Granny Smith apple in dark chocolate",
+                        "img": "https://cdn.shopify.com/s/files/1/0559/8498/0141/files/DARK_CHOCOLATE_APPLE.png?v=1787178699"
+            },
+            "mini-shofars": {
+                        "t": "Mini Dark Chocolate Shofars (12-pack)",
+                        "s": "Individually molded 2&quot; mini shofars in dark chocolate, embossed with &ldquo;Shanah Tova&rdquo; in Hebrew",
+                        "img": "https://cdn.shopify.com/s/files/1/0559/8498/0141/t/83/assets/bbr-minishofars.jpg"
+            },
+            "large-shofar": {
+                        "t": "Large Dark Chocolate Shofar",
+                        "s": "Molded dark chocolate shofar embossed &ldquo;Happy New Year&rdquo;",
+                        "img": "https://cdn.shopify.com/s/files/1/0559/8498/0141/t/83/assets/bbr-parve-shofar.jpg"
+            },
+            "kiddush": {
+                        "t": "Dark Chocolate Kiddush Cup",
+                        "s": "Dark chocolate cup and plate with a molded chocolate apple, a mini jar of honey, foiled Rosh Hashanah chocolates and mini chocolate shofars",
+                        "img": "https://cdn.shopify.com/s/files/1/0559/8498/0141/files/dark_chocolate_kiddush_cup.png?v=1787180976"
+            }
+};
+        let RH_DAIRY = null;
+
+        function rhToggleTreats() {
+            const w = document.getElementById('rhMoreWrap'), c = document.getElementById('rhRvCta'), b = document.getElementById('rhRevealBtn');
+            if (!w) return;
+            const open = w.classList.toggle('open');
+            b.setAttribute('aria-expanded', open);
+            c.innerHTML = (open ? 'Hide' : 'Show') + ' \u25BE';
+        }
+
+        function rhRefreshAddons() {
+            if (!document.getElementById('ai-rh-plaque')) return;
+            var _lb = document.getElementById('rh-lede-basket'), _ld = document.getElementById('rh-lede-diet');
+            if (_lb && typeof basketData !== 'undefined' && basketData && basketData.name) _lb.innerHTML = basketData.name + ' Basket';
+            if (_ld) _ld.innerHTML = (selectedDiet === 'vegan') ? 'Parve/Vegan' : 'Dairy';
+            if (RH_DAIRY === null) {
+                RH_DAIRY = {};
+                document.querySelectorAll('[id^="atit-"]').forEach(function (el) {
+                    const k = el.id.slice(5);
+                    const s = document.getElementById('asub-' + k), im = document.getElementById('aimg-' + k);
+                    RH_DAIRY[k] = { t: el.innerHTML, s: s ? s.innerHTML : null, img: im ? im.src : null };
+                });
+            }
+            const parve = selectedDiet === 'vegan';
+
+            Object.keys(RH_DAIRY).forEach(function (k) {
+                const tEl = document.getElementById('atit-' + k),
+                      sEl = document.getElementById('asub-' + k),
+                      iEl = document.getElementById('aimg-' + k);
+                const p = RH_PARVE[k];
+                if (parve && p) {
+                    tEl.innerHTML = p.t;
+                    if (sEl && p.s) sEl.innerHTML = p.s;
+                    if (iEl && p.img) iEl.src = p.img;
+                } else {
+                    tEl.innerHTML = RH_DAIRY[k].t;
+                    if (sEl && RH_DAIRY[k].s !== null) sEl.innerHTML = RH_DAIRY[k].s;
+                    if (iEl && RH_DAIRY[k].img) iEl.src = RH_DAIRY[k].img;
+                }
+            });
+
+            RH_PARVE_HIDE.forEach(function (k) {
+                const row = document.getElementById('ai-' + k);
+                if (row) row.classList.toggle('rh-hidden', parve);
+                if (parve && upsellQuantities[k] && upsellQuantities[k].qty > 0) {
+                    upsellQuantities[k].qty = 0;
+                    const d = document.getElementById('qty-' + k);
+                    if (d) d.textContent = '0';
+                }
+            });
+
+            const anyTreat = ['truffles','cookies','brownies','pretzels6','oreos6'].some(function (k) {
+                const t = document.getElementById('ai-' + k);
+                return t && !t.classList.contains('rh-hidden');
+            });
+            const btn = document.getElementById('rhRevealBtn'), wrap = document.getElementById('rhMoreWrap');
+            if (btn) btn.classList.toggle('rh-hidden', !anyTreat);
+            if (wrap) { wrap.classList.toggle('rh-hidden', !anyTreat); if (!anyTreat) wrap.classList.remove('open'); }
+
+            if (typeof updateTotalPrice === 'function') updateTotalPrice();
+        }
+
+        function goToCheckout() {
+            // Capture school name if college acceptance
+            if (selectedOccasion === 'College Acceptance') {
+                schoolName = document.getElementById('school-name-input')?.value || '';
+            }
+
+            // Map basket sizes to Shopify variant IDs
+            // Using generic basket products mapped by price
+            const basketVariants = {
+                'Small Round': { dairy: 48012856131839, vegan: 48012856164607, price: 69 },
+                'Medium Round': { dairy: 48012857114879, vegan: 48012857147647, price: 89 },
+                'Large Oval': { dairy: 48012857606399, vegan: 48012857639167, price: 129 },
+                'Extra Large': { dairy: 48012857803007, vegan: 48012857835775, price: 179 },
+                'Grand Oval': { dairy: 48012858163455, vegan: 48012858196223, price: 229 },
+                'Jumbo': { dairy: 48012858327295, vegan: 48012858360063, price: 279 },
+                'Penultimate': { dairy: 48012858589439, vegan: 48012858622207, price: 399 },
+                'Supreme': { dairy: 48012859048191, vegan: 48012859080959, price: 629 },
+                // Bassinets - Baby Boy Bassinet product variant IDs
+                'Small Bassinet Boy': { dairy: 39729244602541, vegan: 47551460966655, price: 109 },
+                'Medium Bassinet Boy': { dairy: 47551488884991, vegan: 47551488950527, price: 149 },
+                'Large Bassinet Boy': { dairy: 47551488917759, vegan: 47551488983295, price: 199 },
+                // Bassinets - Baby Girl Bassinet product variant IDs
+                'Small Bassinet Girl': { dairy: 39728357146797, vegan: 39728357179565, price: 109 },
+                'Medium Bassinet Girl': { dairy: 46479145861375, vegan: 46479145926911, price: 149 },
+                'Large Bassinet Girl': { dairy: 46479145894143, vegan: 46479145959679, price: 199 }
+            };
+            
+            // Build cart items array
+            let cartItems = [];
+            
+            // Get basket variant based on diet selection
+            const dietKey = selectedDiet === 'vegan' ? 'vegan' : 'dairy';
+            
+            // For bassinets, append gender to the variant lookup key
+            let variantLookupName = basketData.name;
+            if (containerType === 'bassinet' && babyGender) {
+                // Convert "Small Bassinet" to "Small Bassinet Boy" or "Small Bassinet Girl"
+                const genderSuffix = babyGender.charAt(0).toUpperCase() + babyGender.slice(1).toLowerCase();
+                variantLookupName = basketData.name + ' ' + genderSuffix;
+            }
+            const basketVariant = basketVariants[variantLookupName];
+            
+            if (basketVariant) {
+                // Build comprehensive line item properties
+                let properties = {
+                    'Occasion': selectedOccasion,
+                    'Diet': selectedDiet === 'vegan' ? 'Vegan/Parve' : 'Dairy'
+                };
+
+                if (freePlaqueByOccasion[selectedOccasion]) {
+                    properties['Chocolate Plaque'] = freePlaqueByOccasion[selectedOccasion] + ' \u2014 included free';
+                }
+
+                if (selectedOccasion === 'Rosh Hashanah') {
+                    properties['Holiday Additions'] = 'Rosh Hashanah chocolates included \u2014 mini honey jar, "Happy New Year" plaque, chocolate shofar, chocolate apple & more';
+                }
+
+                properties['Basket Size'] = basketData.name;
+                properties['Pieces'] = basketData.capacity + ' pieces';
+                
+                // Add school name if college acceptance
+                if (schoolName) {
+                    properties['School'] = schoolName;
+                }
+                
+                // Add baby gender if applicable
+                if (babyGender) {
+                    properties['Baby Gender'] = babyGender;
+                }
+                
+                // Add container type if bassinet
+                if (containerType === 'bassinet') {
+                    properties['Container'] = 'Bassinet';
+                }
+                
+                // Upsell variant IDs - mapped to actual Shopify products
+                const upsellVariants = {
+                    'rh-plaque':    { dairy: 47185493229823, vegan: 47185493262591 },
+                    'rh-apple':     { dairy: 47234680488191, vegan: 48932045259007 },
+                    'red-apple':    46195034685695,
+                    'apple-sticks': { dairy: 47174754631935, vegan: 47174754664703 },
+                    'lollipop':     { dairy: 49042667667711, vegan: 49042667700479 },
+                    'mini-shofars': { dairy: 49042667766015, vegan: 49042667798783 },
+                    'large-shofar': { dairy: 49042668060927, vegan: 49042668093695 },
+                    'kiddush':      { dairy: 49032214151423, vegan: 49032214184191 },
+                    'pretzels6':    { dairy: 49042668159231, vegan: 49042668191999 },
+                    'oreos6':       { dairy: 49042668323071, vegan: 49042668355839 },
+                    'truffles':     { dairy: 48000994541823, vegan: 48740479926527 },
+                    'cookies': {
+                        'choc-chip': 48000994377983,
+                        'white-choc': 48000994410751,
+                        'oatmeal': 48000994443519,
+                        'mixed': 48236883837183
+                    },
+                    'brownies': 48000994312447
+                };
+                
+                const upsellNames = {
+                    'rh-plaque': 'Large "Happy New Year" Chocolate Plaque',
+                    'rh-apple': 'Chocolate & Caramel Apple',
+                    'red-apple': 'Classic Red Candy Apple',
+                    'apple-sticks': 'Chocolate-Dipped Apple Sticks (6-pack)',
+                    'lollipop': 'Chocolate Apple Lollipop',
+                    'mini-shofars': 'Mini Chocolate Shofars (12-pack)',
+                    'large-shofar': 'Large Chocolate Shofar',
+                    'kiddush': 'Chocolate Kiddush Cup',
+                    'pretzels6': 'Chocolate-Dipped Pretzels (6-pack)',
+                    'oreos6': 'Chocolate-Dipped Oreos (6-pack)',
+                    'truffles': 'Assorted Truffles (9-pack)',
+                    'cookies': 'Gourmet Cookies (6-pack)',
+                    'brownies': 'Chocolate Chip Brownies (6-pack)'
+                };
+                
+                // Add upsells as separate line items
+                for (const [upsellId, upsellData] of Object.entries(upsellQuantities)) {
+                    const qty = upsellData.qty || 0;
+                    if (qty > 0) {
+                        let variantId = upsellVariants[upsellId];
+                        let upsellProps = { 'Add-on for': basketData.name + ' basket' };
+                        
+                        // Handle cookies with flavor selection
+                        if (upsellId === 'cookies') {
+                            const flavor = selectedCookieFlavor || 'mixed';
+                            variantId = upsellVariants['cookies'][flavor];
+                            upsellProps['Flavor'] = flavor;
+                        }
+
+                        // Any add-on with dairy/vegan variants follows the basket's Dairy/Parve selection
+                        if (variantId && typeof variantId === 'object' && variantId.dairy) {
+                            const dk = selectedDiet === 'vegan' ? 'vegan' : 'dairy';
+                            variantId = variantId[dk];
+                            upsellProps['Assortment'] = selectedDiet === 'vegan' ? 'Vegan/Parve' : 'Dairy';
+                        }
+
+                        // Large plaque upgrade: one line item per occasion + basket's Dairy/Parve selection
+                        // (occasion + assortment already show via the variant title — no duplicate properties)
+                        if (upsellId.startsWith('plaque-')) {
+                            const occ = plaqueOccasions[upsellId.slice(7)];
+                            if (occ) {
+                                const dietKey = selectedDiet === 'vegan' ? 'vegan' : 'dairy';
+                                variantId = occ[dietKey];
+                                upsellProps['Upgrade'] = 'Replaces the free basket plaque';
+                            }
+                        }
+
+                        if (variantId) {
+                            cartItems.push({
+                                id: variantId,
+                                quantity: qty,
+                                properties: upsellProps
+                            });
+                        }
+                    }
+                }
+                
+                // Add special instructions
+                const specialInstructions = document.getElementById('special-instructions')?.value?.trim();
+                if (specialInstructions) {
+                    properties['Special Instructions'] = specialInstructions;
+                }
+                
+                // Add gluten-free upgrade flag
+                if (glutenFreeUpgrade) {
+                    properties['Gluten-Free Upgrade'] = 'Yes (+$20)';
+                }
+                
+                cartItems.push({
+                    id: basketVariant[dietKey],
+                    quantity: 1,
+                    properties: properties
+                });
+                
+                // Add gluten-free upgrade as separate line item
+                if (glutenFreeUpgrade) {
+                    cartItems.push({
+                        id: 48212759380223,
+                        quantity: 1,
+                        properties: { 'Upgrade for': basketData.name + ' basket' }
+                    });
+                }
+            }
+            
+            // If no basket selected, show error
+            if (cartItems.length === 0) {
+                alert('Please select a basket size first.');
+                return;
+            }
+            
+            // Log what we're sending
+            console.log('=== BASKET BUILDER CHECKOUT ===');
+            console.log('Occasion:', selectedOccasion);
+            console.log('Diet:', selectedDiet);
+            console.log('Basket:', basketData);
+            console.log('Container:', containerType);
+            console.log('Upsells:', upsellQuantities);
+            console.log('Cart Items:', cartItems);
+            
+            // Build the cart note + attributes once, so both the normal path and the
+            // fallback path below can use them.
+            let cartNote = 'Basket Builder — ' + selectedOccasion;
+            let cartAttributes = { 'Basket Builder': 'Yes', 'Occasion': selectedOccasion };
+            if (selectedOccasion === 'College Acceptance' && schoolName) {
+                cartNote += ' — School: ' + schoolName;
+                cartAttributes['School'] = schoolName;
+            }
+            // Surface the free plaque at order level so it appears in the customer's
+            // order confirmation email under "Additional details".
+            if (freePlaqueByOccasion[selectedOccasion]) {
+                cartAttributes['Chocolate Plaque'] = freePlaqueByOccasion[selectedOccasion] + ' — included free';
+            }
+            if (selectedOccasion === 'Rosh Hashanah') {
+                cartAttributes['Holiday Additions'] = 'Rosh Hashanah chocolates included — mini honey jar, "Happy New Year" plaque, chocolate shofar, chocolate apple & more';
+            }
+
+            // FALLBACK (added 2026-08-07). Shopify sometimes answers /cart/*.js with an HTML
+            // "Verifying your connection..." bot-check or a 429 instead of JSON. A fetch() can
+            // never clear that challenge, so the customer gets stuck forever. A real form POST
+            // is a top-level navigation, which does clear it — and still adds the basket.
+            function submitCartViaForm() {
+                var f = document.createElement('form');
+                f.method = 'post';
+                f.action = '/cart/add';
+                f.acceptCharset = 'UTF-8';
+                f.style.display = 'none';
+                function put(name, value) {
+                    var i = document.createElement('input');
+                    i.type = 'hidden';
+                    i.name = name;
+                    i.value = String(value);
+                    f.appendChild(i);
+                }
+                cartItems.forEach(function (it, ix) {
+                    put('items[' + ix + '][id]', it.id);
+                    put('items[' + ix + '][quantity]', it.quantity);
+                    var props = it.properties || {};
+                    Object.keys(props).forEach(function (k) {
+                        put('items[' + ix + '][properties][' + k + ']', props[k]);
+                    });
+                });
+                put('note', cartNote);
+                Object.keys(cartAttributes).forEach(function (k) {
+                    put('attributes[' + k + ']', cartAttributes[k]);
+                });
+                put('return_to', '/cart');
+                document.body.appendChild(f);
+                f.submit();
+            }
+
+            // Replace the cart, safely (reworked 2026-08-07).
+            // This used to call /cart/clear.js FIRST, so if the add then failed the customer
+            // was left with an empty cart and no basket. Now we note what is already in the
+            // cart, add the new basket, and only remove the old lines once the add succeeded.
+            var stOldKeys = [];
+            fetch('/cart.js', { headers: { 'Accept': 'application/json' } })
+                .then(function (r) {
+                    var ct = r.headers.get('content-type') || '';
+                    return (r.ok && ct.indexOf('json') !== -1) ? r.json() : null;
+                })
+                .catch(function () { return null; })
+                .then(function (existing) {
+                    if (existing && existing.items) {
+                        stOldKeys = existing.items.map(function (i) { return i.key; });
+                    }
+                    return fetch('/cart/add.js', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                        body: JSON.stringify({ items: cartItems })
+                    });
+                })
+                .then(function (response) {
+                    // If Shopify handed back HTML (bot check) or throttled us, bail to the form.
+                    var ct = response.headers.get('content-type') || '';
+                    if (ct.indexOf('json') === -1 || response.status === 429 || response.status === 430) {
+                        var err = new Error('non-json cart response: ' + response.status);
+                        err.useFormFallback = true;
+                        throw err;
+                    }
+                    return response.json();
+                })
+                .then(function (data) {
+                    console.log('Cart response:', data);
+
+                    if (data && data.items && data.items.length > 0) {
+                        // Success. Set the note, then go — but never let the note call
+                        // block the customer from reaching their cart.
+                        // Add succeeded. Now drop whatever was in the cart beforehand,
+                        // and set the note — one request, and only on the happy path.
+                        var stUpdates = {};
+                        stOldKeys.forEach(function (k) { stUpdates[k] = 0; });
+                        return fetch('/cart/update.js', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                            body: JSON.stringify({ updates: stUpdates, note: cartNote, attributes: cartAttributes })
+                        })
+                            .catch(function () { /* cosmetic only — never block the customer */ })
+                            .then(function () { window.location.href = '/cart'; });
+                    }
+
+                    if (data && data.description) {
+                        // A genuine Shopify rejection (sold out, bad variant). Say so plainly.
+                        console.error('Shopify error:', data, cartItems);
+                        alert('Sorry — we could not add that to your cart: ' + data.description + '\n\nPlease pick a different option, or call us and we will build it for you.');
+                        return;
+                    }
+
+                    window.location.href = '/cart';
+                })
+                .catch(function (error) {
+                    console.error('Checkout error, using form fallback:', error);
+                    submitCartViaForm();
+                });
+        }
+        
+        // URL Parameter Handling - allows direct links like ?product=bassinet&occasion=baby
+        document.addEventListener('DOMContentLoaded', function() {
+            // Clear school name error on typing
+            const schoolInput = document.getElementById('school-name-input');
+            if (schoolInput) {
+                schoolInput.addEventListener('input', function() {
+                    if (this.value.trim()) {
+                        document.getElementById('school-name-error').style.display = 'none';
+                        this.style.border = '';
+                    }
+                });
+            }
+            
+            const urlParams = new URLSearchParams(window.location.search);
+            const product = urlParams.get('product');
+            const occasion = urlParams.get('occasion');
+            const gfParam = urlParams.get('gf');
+
+            // Disabled 2026-08-07: gluten-free upgrade product is unpublished, so enabling it
+            // blocked add-to-cart. Re-enable only when the product is live on the Online Store.
+            void gfParam;
+            
+            // If occasion is specified, auto-select it
+            if (occasion) {
+                const occasionMap = {
+                    // Core occasions (must match h3 text exactly)
+                    'baby': 'Baby',
+                    'new-baby': 'Baby',
+                    'birthday': 'Birthday',
+                    'thank-you': 'Thank You',
+                    'thankyou': 'Thank You',
+                    'sympathy': 'Sympathy/Shiva',
+                    'shiva': 'Sympathy/Shiva',
+                    'congratulations': 'Congratulations',
+                    'congrats': 'Congratulations',
+                    'corporate': 'Corporate',
+                    'teacher': 'Teacher Appreciation',
+                    'teacher-appreciation': 'Teacher Appreciation',
+                    'just-because': 'Just Because',
+                    'justbecause': 'Just Because',
+                    'get-well': 'Get Well',
+                    'getwell': 'Get Well',
+                    'anniversary': 'Anniversary',
+                    'housewarming': 'Housewarming',
+                    'graduation': 'Graduation',
+                    'college': 'College Acceptance',
+                    'college-acceptance': 'College Acceptance',
+                    'bed-party': 'College Acceptance',
+                    'college-bed-party': 'College Acceptance',
+                    // Holidays (seasonal - active 3-4 weeks before)
+                    'valentines': "Valentine's Day",
+                    'valentines-day': "Valentine's Day",
+                    'thanksgiving': 'Thanksgiving',
+                    'rosh-hashanah': 'Rosh Hashanah',
+                    'roshhashanah': 'Rosh Hashanah',
+                    'sukkot': 'Sukkot',
+                                        'passover': 'Passover',
+                    'pesach': 'Passover',
+                    'christmas': 'Christmas',
+                    'hanukkah': 'Hanukkah',
+                    'chanukah': 'Hanukkah',
+                    'fathers-day': "Father's Day",
+                    'fathersday': "Father's Day"
+                };
+                const occasionName = occasionMap[occasion.toLowerCase()] || occasion;
+                
+                // Find and click the matching occasion card
+                document.querySelectorAll('.occasion-card').forEach(card => {
+                    if (card.querySelector('h3') && card.querySelector('h3').textContent.trim() === occasionName) {
+                        card.click();
+                        // Auto-advance to Step 2 (size selection) after a brief delay
+                        setTimeout(function() {
+                            goToStep('step-size');
+                        }, 150);
+                    }
+                });
+            }
+            
+            // If product=bassinet, switch to bassinet view (after occasion is set)
+            if (product && product.toLowerCase() === 'bassinet') {
+                setTimeout(function() {
+                    // Make sure we're on the size step and toggle is visible
+                    if (document.getElementById('container-toggle').classList.contains('visible')) {
+                        toggleContainer('bassinet');
+                    }
+                }, 100);
+            }
+        });
+    
+    </script>
+
+<style>
+/* === Basket Builder cleanup — May 2026 === */
+/* 1. Hide page heading on every step */
+.basket-builder h1 { display: none !important; }
+/* 2. Hide cookie flavor pills + selection message (cart auto-defaults to Mixed via existing JS) */
+.upsell-details > div { display: none !important; }
+/* 3. (mobile) Add-on subtitles shown small under the name */
+/* 4. MOBILE: add-on card = photo + name on top, price + qty controls below */
+@media (max-width: 768px) {
+  .upsell-details p { display: block !important; font-size: 0.85rem !important; color: #6b7280 !important; margin: 3px 0 0 !important; line-height: 1.3 !important; }
+  .upsell-item { display: flex !important; flex-direction: row !important; flex-wrap: wrap !important; align-items: center !important; gap: 12px !important; row-gap: 12px !important; padding: 12px !important; text-align: left !important; border-radius: 14px !important; margin-bottom: 12px !important; }
+  .upsell-info { flex: 1 1 100% !important; display: flex !important; flex-direction: row !important; align-items: center !important; gap: 12px !important; min-width: 0 !important; }
+  .upsell-info img { width: 96px !important; height: 96px !important; flex: 0 0 96px !important; margin: 0 !important; border-radius: 10px !important; }
+  .upsell-details { flex: 1 1 auto !important; min-width: 0 !important; text-align: left !important; }
+  .upsell-details h4 { font-size: 1.12rem !important; font-weight: 700 !important; margin: 0 !important; line-height: 1.25 !important; text-align: left !important; }
+  .upsell-price { font-size: 1.25rem !important; font-weight: 700 !important; flex: 0 0 auto !important; margin: 0 auto 0 4px !important; white-space: nowrap !important; }
+  .quantity-controls { flex: 0 0 auto !important; gap: 10px !important; margin: 0 4px 0 auto !important; }
+  .qty-btn { width: 40px !important; height: 40px !important; font-size: 1.15rem !important; }
+  .qty-display { min-width: 26px !important; font-size: 1.15rem !important; font-weight: 700 !important; }
+}
+</style>
+
+<style>
+/* Plaque upgrade: occasion pills must stay visible (exception to the cookie-pill hiding rule above) */
+.upsell-details > .plaque-pills { display: flex !important; }
+.upsell-details > #plaque-selection-msg { display: block !important; }
+@media (max-width: 768px) {
+  .plaque-upsell { flex-wrap: wrap !important; }
+  .plaque-pills { gap: 7px !important; margin-top: 10px !important; }
+  .plaque-pills .plaque-pill { padding: 8px 13px !important; font-size: 0.82rem !important; }
+}
+</style>
+
+
+<style>
+/* === Basket Builder Mobile Redesign v2 — 2026-05-09 === */
+/* All rules scoped to mobile only. Brand black: #111111, gold: #D4AF37 */
+
+/* Hide mobile-only elements on desktop */
+.bb-mobile-pillbar,
+.bb-mobile-strip {
+  display: none;
+}
+
+/* Hide the eye icon on desktop (accordion is mobile-only anyway) */
+.bb-eye-icon { display: none; }
+.bb-flavor-guide-link { display: none; }
+
+@media (max-width: 749px) {
+
+  /* ============================================ */
+  /* STEP 1 — OCCASION GRID (3-col compact)       */
+  /* ============================================ */
+  #step-occasions > h2 {
+    font-size: 1.6rem !important;
+    margin-bottom: 14px !important;
+  }
+  .occasion-grid {
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 8px !important;
+    max-width: none !important;
+    padding: 0 4px;
+  }
+  .occasion-card {
+    padding: 14px 6px !important;
+    border-radius: 12px !important;
+    border-width: 2px !important;
+    min-height: 96px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+  .occasion-card:hover {
+    transform: none !important;
+  }
+  .occasion-card .icon {
+    font-size: 1.9rem !important;
+    margin-bottom: 6px !important;
+    line-height: 1 !important;
+  }
+  .occasion-card h3 {
+    font-size: 0.78rem !important;
+    line-height: 1.18 !important;
+    font-weight: 600 !important;
+    text-align: center;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    word-break: keep-all;
+  }
+  /* College Acceptance has a <br> in the title — strip it on mobile */
+  .occasion-card h3 br { display: none; }
+
+  /* ============================================ */
+  /* STEP 2 — SIZE STEP                            */
+  /* ============================================ */
+  #step-size > h2 {
+    font-size: 1.6rem !important;
+    margin-bottom: 12px !important;
+  }
+
+  /* STEP 3 — ADD-ONS heading matches the other steps */
+  #step-upsells > h2 {
+    font-size: 1.6rem !important;
+    margin-bottom: 14px !important;
+  }
+
+  /* A) Sticky pill bar — 2 rows of 4 (no scroll) */
+  .bb-mobile-pillbar {
+    display: grid !important;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: #ffffff;
+    padding: 10px 12px;
+    margin: 0 -12px 10px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  }
+  .bb-mobile-pillbar a {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 4px;
+    border-radius: 999px;
+    background: #f3f4f6;
+    color: #111111;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.86rem;
+    font-weight: 700;
+    text-decoration: none;
+    border: 1.5px solid transparent;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+    white-space: nowrap;
+    line-height: 1;
+    min-height: 40px;
+  }
+  .bb-mobile-pillbar a.is-active {
+    background: #111111;
+    color: #ffffff;
+    border-color: #D4AF37;
+  }
+
+  /* C) Size comparison ladder — proportional SVG icons, all 8 visible */
+  .bb-mobile-strip {
+    display: flex !important;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 2px;
+    padding: 10px 6px 14px;
+    margin: 0 -6px 16px;
+    overflow: visible;
+  }
+  .bb-mobile-strip a {
+    flex: 1 1 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    text-decoration: none;
+    color: #111111;
+    padding: 2px 0;
+    border-radius: 6px;
+    transition: background 0.15s;
+    min-width: 0;
+  }
+  .bb-mobile-strip a:active { background: #faf6ec; }
+  .bb-mobile-strip svg {
+    display: block;
+    margin-bottom: 4px;
+    transition: transform 0.15s;
+  }
+  .bb-mobile-strip a.is-active svg {
+    transform: translateY(-2px);
+  }
+  .bb-mobile-strip .bb-strip-price {
+    font-size: 0.76rem;
+    font-weight: 600;
+    color: #6b7280;
+    line-height: 1;
+    white-space: nowrap;
+  }
+  .bb-mobile-strip a.is-active .bb-strip-price {
+    color: #111111;
+  }
+
+  /* E) "What's Inside" accordion — prominent card with gold accent */
+  .bb-mobile-accordion-card {
+    margin: 0 0 18px !important;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    border-left: 4px solid #D4AF37;
+  }
+  .bb-mobile-accordion-card .accordion-toggle {
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-left: none;
+    border-radius: 0 12px 0 0;
+    padding: 14px 16px;
+    font-size: 0.95rem;
+  }
+  .bb-mobile-accordion-card .accordion-toggle .arrow {
+    color: #D4AF37;
+    font-size: 0.85rem;
+  }
+  .bb-mobile-accordion-card .accordion-content {
+    border-left: none;
+    border-radius: 0 0 12px 0;
+  }
+  .bb-mobile-accordion-card .bb-accordion-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .bb-mobile-accordion-card .bb-eye-icon {
+    display: inline-block;
+    color: #D4AF37;
+    flex: 0 0 20px;
+  }
+  .bb-mobile-accordion-card .bb-flavor-guide-link {
+    display: inline-block;
+    margin-top: 14px;
+    padding: 10px 14px;
+    background: #faf6ec;
+    border: 1.5px solid #D4AF37;
+    border-radius: 8px;
+    color: #111111;
+    font-size: 0.88rem;
+    font-weight: 600;
+    text-decoration: none;
+  }
+
+  /* B) Shrink basket cards: image left 40%, text right 60% */
+  .basket-grid {
+    gap: 10px !important;
+    margin-bottom: 24px !important;
+  }
+  .basket-card {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: stretch !important;
+    padding: 10px !important;
+    gap: 10px !important;
+    border-radius: 14px !important;
+    border-width: 2px !important;
+  }
+  .basket-card.selected { border-width: 3px !important; }
+  .basket-card .basket-image {
+    flex: 0 0 47% !important;
+    width: 47% !important;
+    max-width: 47% !important;
+    max-height: 210px !important;
+    height: auto !important;
+    object-fit: contain !important;
+    align-self: center !important;
+    padding: 0 !important;
+    background: transparent !important;
+  }
+  .basket-card .basket-content {
+    flex: 1 1 53% !important;
+    width: 53% !important;
+    padding: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    gap: 8px !important;
+  }
+  .basket-card .basket-header {
+    flex-direction: row !important;
+    justify-content: space-between !important;
+    align-items: baseline !important;
+    gap: 8px !important;
+  }
+  .basket-card .basket-name {
+    font-size: 1.35rem !important;
+    font-weight: 700 !important;
+    line-height: 1.15 !important;
+  }
+  .basket-card .basket-price {
+    font-size: 1.35rem !important;
+    font-weight: 700 !important;
+    margin-left: 0 !important;
+    white-space: nowrap !important;
+  }
+  .basket-card .serving-pill {
+    font-size: 0.88rem !important;
+    padding: 6px 13px !important;
+    margin-bottom: 0 !important;
+    align-self: flex-start !important;
+    letter-spacing: 0.01em;
+  }
+  .basket-card .basket-details {
+    font-size: 1rem !important;
+    line-height: 1.35 !important;
+    color: #4b5563;
+  }
+  .basket-card .popular-badge-overlay {
+    top: 6px !important;
+    left: 6px !important;
+    padding: 3px 8px !important;
+    font-size: 0.65rem !important;
+    border-radius: 999px;
+  }
+  .basket-card.selected::after {
+    width: 22px !important;
+    height: 22px !important;
+    font-size: 13px !important;
+    top: 8px !important;
+    right: 8px !important;
+  }
+
+  /* Anchor scroll offset so sticky pill bar doesn't cover the card */
+  .basket-card[id^="size-"] {
+    scroll-margin-top: 96px;
+  }
+}
+</style>
+
+<script>
+/* === Basket Builder Mobile Pillbar + Proportional Ladder — 2026-05-09 === */
+(function () {
+  // Basket diameter in inches — drives proportional icon size in the ladder
+  var BASKET_DIAMETER = {
+    'size-small': 10,
+    'size-medium': 12,
+    'size-large': 16,
+    'size-xl': 18,
+    'size-grand': 20,
+    'size-jumbo': 24.5,
+    'size-penultimate': 24,
+    'size-supreme': 30
+  };
+
+  var PILL_LABEL = {
+    'size-small': 'Small',
+    'size-medium': 'Medium',
+    'size-large': 'Large',
+    'size-xl': 'XL',
+    'size-grand': 'Grand',
+    'size-jumbo': 'Jumbo',
+    'size-penultimate': 'Penult.',
+    'size-supreme': 'Supreme'
+  };
+
+  // Inline SVG basket silhouette — cream-gold fill, gold rim/handle
+  // Returns SVG string sized to the requested width (height auto-scales).
+  function basketSvg(widthPx) {
+    var w = Math.round(widthPx);
+    var h = Math.round(widthPx * 0.75);
+    return '<svg width="' + w + '" height="' + h + '" viewBox="0 0 40 30" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+      '<path d="M11 11 Q 11 4, 20 4 Q 29 4, 29 11" fill="none" stroke="#D4AF37" stroke-width="1.6" stroke-linecap="round"/>' +
+      '<path d="M4.5 11.5 L35.5 11.5 L32 26 Q 20 28.5, 8 26 Z" fill="#F1E3BF" stroke="#D4AF37" stroke-width="1.2" stroke-linejoin="round"/>' +
+      '<path d="M14 13 V 26" stroke="#D4AF37" stroke-width="0.5" opacity="0.5"/>' +
+      '<path d="M20 13 V 27" stroke="#D4AF37" stroke-width="0.5" opacity="0.5"/>' +
+      '<path d="M26 13 V 26" stroke="#D4AF37" stroke-width="0.5" opacity="0.5"/>' +
+      '</svg>';
+  }
+
+  function init() {
+    var pillbar = document.querySelector('.bb-mobile-pillbar');
+    var strip = document.querySelector('.bb-mobile-strip');
+    if (!pillbar || !strip) return;
+    if (pillbar.dataset.bbBuilt === '1') return;
+
+    var cards = document.querySelectorAll('.basket-grid .basket-card[id^="size-"]');
+    if (!cards.length) return;
+
+    // Compute icon size range. Smallest basket = 22px wide, largest = 56px.
+    var diameters = Array.prototype.map.call(cards, function (c) {
+      return BASKET_DIAMETER[c.id] || 10;
+    });
+    var minD = Math.min.apply(null, diameters);
+    var maxD = Math.max.apply(null, diameters);
+    var minPx = 28, maxPx = 66;
+    function scale(d) {
+      if (maxD === minD) return (minPx + maxPx) / 2;
+      return minPx + ((d - minD) / (maxD - minD)) * (maxPx - minPx);
+    }
+
+    var pillFrag = document.createDocumentFragment();
+    var stripFrag = document.createDocumentFragment();
+
+    cards.forEach(function (card) {
+      var id = card.id;
+      var label = PILL_LABEL[id] || (card.querySelector('.basket-name') || {}).textContent || id;
+      var priceEl = card.querySelector('.basket-price');
+      var diameter = BASKET_DIAMETER[id] || 10;
+
+      // Pill (2x4 grid item)
+      var pill = document.createElement('a');
+      pill.href = '#' + id;
+      pill.dataset.target = id;
+      pill.textContent = label;
+      pillFrag.appendChild(pill);
+
+      // Strip ladder item — proportional SVG basket
+      var thumb = document.createElement('a');
+      thumb.href = '#' + id;
+      thumb.dataset.target = id;
+      thumb.setAttribute('aria-label', label);
+      thumb.innerHTML = basketSvg(scale(diameter));
+      var price = document.createElement('span');
+      price.className = 'bb-strip-price';
+      price.textContent = priceEl ? priceEl.textContent.trim() : '';
+      thumb.appendChild(price);
+      stripFrag.appendChild(thumb);
+    });
+
+    pillbar.appendChild(pillFrag);
+    strip.appendChild(stripFrag);
+    pillbar.dataset.bbBuilt = '1';
+
+    function onAnchorClick(e) {
+      var a = e.target.closest('a[data-target]');
+      if (!a) return;
+      var target = document.getElementById(a.dataset.target);
+      if (!target) return;
+      e.preventDefault();
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      setActive(a.dataset.target);
+    }
+    pillbar.addEventListener('click', onAnchorClick);
+    strip.addEventListener('click', onAnchorClick);
+
+    function setActive(id) {
+      pillbar.querySelectorAll('a').forEach(function (a) {
+        a.classList.toggle('is-active', a.dataset.target === id);
+      });
+      strip.querySelectorAll('a').forEach(function (a) {
+        a.classList.toggle('is-active', a.dataset.target === id);
+      });
+    }
+
+    if ('IntersectionObserver' in window) {
+      var io = new IntersectionObserver(function (entries) {
+        var best = null;
+        entries.forEach(function (en) {
+          if (!en.isIntersecting) return;
+          if (!best || en.intersectionRatio > best.intersectionRatio) best = en;
+        });
+        if (best && best.target.id) setActive(best.target.id);
+      }, { rootMargin: '-30% 0px -50% 0px', threshold: [0, 0.25, 0.5, 0.75, 1] });
+      cards.forEach(function (c) { io.observe(c); });
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
+</script>
+
+
+
+
+
+<style>
+/* Order summary redesign (approved 2026-07-18) */
+.total-box.os-card { background: #ffffff !important; border: 1px solid #e5e7eb !important; border-radius: 14px !important; padding: 24px !important; box-shadow: 0 1px 2px rgba(16,24,40,.04) !important; }
+.total-box.os-card .os-heading { margin: 0 0 16px; font-size: 13px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: #111; text-align: left; }
+.os-lines { margin: 0 0 4px; text-align: left; }
+.os-line { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; padding: 7px 0; font-size: 15px; font-weight: 600; color: #111; }
+.os-line-name { font-size: 15px; font-weight: 600; color: #111; line-height: 1.4; }
+.os-line-price { font-size: 15px; font-weight: 600; color: #111; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.os-line--addon .os-line-name, .os-line--addon .os-line-price { font-size: 14px; font-weight: 400; color: #4b5563; }
+.os-qty { color: #6b7280; font-size: 13px; }
+.os-total { display: flex; justify-content: space-between; align-items: baseline; border-top: 1px solid #e5e7eb; margin-top: 10px; padding-top: 14px; }
+.os-total-label { font-size: 15px; font-weight: 600; color: #111; }
+.os-total-price { font-size: 24px; font-weight: 700; color: #111; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+.os-si { margin-top: 16px; }
+.os-si-toggle { display: flex; width: 100%; justify-content: space-between; align-items: center; background: #fff; border: 1px solid #d1d5db; border-radius: 10px; padding: 13px 14px; cursor: pointer; font-family: inherit; font-size: 14px; font-weight: 600; color: #111; transition: border-color .15s ease, background-color .15s ease; }
+.os-si-toggle:hover { border-color: #D4AF37; background: #fffdf7; }
+.os-si-toggle[aria-expanded="true"] { border-color: #D4AF37; }
+.os-si-toggle[aria-expanded="true"] .os-si-chevron { transform: rotate(180deg); }
+.os-si-left { display: flex; align-items: center; gap: 9px; }
+.os-si-chevron { flex: 0 0 auto; color: #6b7280; transition: transform .18s ease; }
+.os-si textarea { display: none; width: 100%; box-sizing: border-box; min-height: 72px; margin-top: 8px; padding: 12px; border: 1px solid #d1d5db; border-radius: 10px; font-family: inherit; font-size: 14px; line-height: 1.5; color: #111; resize: vertical; }
+.os-si textarea:focus { outline: none; border-color: #D4AF37; box-shadow: 0 0 0 3px rgba(212,175,55,.28); }
+.os-si.is-open textarea { display: block; }
+.os-cta { display: block; width: 100%; margin-top: 16px; background: #111 !important; color: #fff; border: none; border-radius: 12px; padding: 16px 24px; font-family: inherit; font-size: 16px; font-weight: 600; cursor: pointer; transition: background-color .15s ease; }
+.os-cta:hover { background: #2a2a2a !important; }
+.os-reassure { display: flex; justify-content: center; align-items: center; gap: 6px; margin: 12px 0 0; font-size: 13px; color: #4b5563; text-align: center; }
+@media (prefers-reduced-motion: reduce) { .os-si-chevron, .os-si-toggle, .os-cta, .occasion-card { transition: none; } }
+</style>
+
+
