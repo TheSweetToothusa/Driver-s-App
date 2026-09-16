@@ -299,6 +299,7 @@ async function readPodDataLight(): Promise<Record<string, any>> {
           value::jsonb->>'photoR2Key' as photo_r2_key,
           value::jsonb->>'signatureR2Key' as signature_r2_key,
           value::jsonb->>'adminNotes' as admin_notes,
+          value::jsonb->>'officeInstructions' as office_instructions,
           value::jsonb->>'deliveryFee' as delivery_fee,
           value::jsonb->'attempts' as attempts
         FROM kv_store 
@@ -323,6 +324,7 @@ async function readPodDataLight(): Promise<Record<string, any>> {
           hasPhoto: row.has_photo,
           hasSignature: row.has_signature,
           adminNotes: row.admin_notes || undefined,
+          officeInstructions: row.office_instructions || undefined,
           deliveryFee: row.delivery_fee != null ? parseFloat(row.delivery_fee) : undefined,
         };
         if (row.photo_r2_key) entry.confirmationPhoto = `/api/pod/${row.order_id}/photo`;
