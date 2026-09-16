@@ -86,6 +86,10 @@ export interface Delivery {
   };
   items: DeliveryItem[];
   deliveryInstructions: string;
+  // Special instructions the office adds in the app after the order is placed.
+  // Kept apart from deliveryInstructions so the customer's own checkout text is
+  // never overwritten.
+  officeInstructions?: string;
   status: DeliveryStatus;
   deliveryDate: string;
   deliveryWindow?: string;

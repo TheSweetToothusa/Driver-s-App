@@ -2529,6 +2529,16 @@ async function startServer() {
     res.json({ success: true });
   });
 
+  // Special instructions added by the office. Its own field: the customer's
+  // checkout instructions come from Shopify and must never be written over.
+  app.post("/api/orders/:id/instructions", async (req, res) => {
+    const existing = await readPodOrderForUpdate(req.params.id);
+    if (!existing) return res.status(503).json({ error: 'Database unavailable — please retry' });
+    existing.officeInstructions = String(req.body?.instructions || '').trim();
+    await writePodOrder(req.params.id, existing);
+    res.json({ success: true });
+  });
+
   // Edit contact/address info (admin: all except rate; super_admin: everything)
   app.patch("/api/orders/:id/edit", async (req, res) => {
     const { customer, address, giftReceiverName, giftSenderName, giftSenderPhone, deliveryFee, deliveryDate } = req.body;

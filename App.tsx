@@ -235,6 +235,7 @@ function orderInstructionLines(order: Delivery): string[] {
     if (t && t !== 'null' && !out.some(x => x.toLowerCase() === t.toLowerCase())) out.push(t);
   };
   add(order.deliveryInstructions);
+  add(order.officeInstructions);
   for (const item of (order.items || []) as any[]) {
     for (const prop of (item.properties || []) as any[]) {
       const n = String(prop?.name || '').toLowerCase();
@@ -242,6 +243,11 @@ function orderInstructionLines(order: Delivery): string[] {
     }
   }
   return out;
+}
+
+// The same lines squashed to one string, for cards and printed sheets.
+function instructionText(order: Delivery): string {
+  return orderInstructionLines(order).join(' \u00b7 ');
 }
 
 // Katie's number, same as the server's KATIE_PHONE. Used in the driver's
@@ -798,10 +804,10 @@ const OrderCard: React.FC<{ order: Delivery; role: AppRole; onTap: () => void; i
             <p className="text-base font-black text-black mt-0.5 leading-tight">{order.address?.city} {order.address?.zip}</p>
             <p className="text-[10px] text-stone-400 leading-tight truncate">{order.address?.street}</p>
             {product && <p className="text-[10px] text-stone-500 truncate mt-0.5">{product.name}{product.quantity > 1 ? ` ×${product.quantity}` : ''}</p>}
-            {order.deliveryInstructions && (
+            {instructionText(order) && (
               <div className="flex items-center gap-1 mt-1 bg-red-50 border border-red-200 rounded px-2 py-1">
                 <AlertTriangle size={10} className="text-red-600 shrink-0" />
-                <p className="text-[10px] font-black text-red-700 leading-tight truncate">{order.deliveryInstructions}</p>
+                <p className="text-[10px] font-black text-red-700 leading-tight truncate">{instructionText(order)}</p>
               </div>
             )}
           </div>
@@ -1178,6 +1184,9 @@ const OrderDetail: React.FC<{
   const [pendingFailure, setPendingFailure] = useState<{ reason: FailureReason; notes: string; photo: string | null } | null>(null);
   const [showReschedule, setShowReschedule] = useState(false);
   const [adminNote, setAdminNote] = useState('');
+  // Special instructions the office adds after the order is placed
+  const [officeInstr, setOfficeInstr] = useState(order.officeInstructions || '');
+  const [instrSaving, setInstrSaving] = useState(false);
   const [reassignTo, setReassignTo] = useState('');
   const [showNotifyPreview, setShowNotifyPreview] = useState<null | 'SUCCESS' | 'FAILURE'>(null);
   const [notifyPreviewText, setNotifyPreviewText] = useState('');
@@ -1622,6 +1631,28 @@ const OrderDetail: React.FC<{
       setIsSending(false);
       setNotifyError('Network error — please try again.');
     }
+  };
+
+  // Keep the box in step with whichever order is open
+  useEffect(() => { setOfficeInstr(order.officeInstructions || ''); }, [order.id, order.officeInstructions]);
+
+  const handleSaveInstructions = async () => {
+    const text = officeInstr.trim();
+    setInstrSaving(true);
+    try {
+      const isManualOrder = (order as any).isManual;
+      const r = await fetch(isManualOrder ? `/api/manual-orders/${order.id}` : `/api/orders/${order.id}/instructions`, {
+        method: isManualOrder ? 'PATCH' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(isManualOrder ? { officeInstructions: text } : { instructions: text }),
+      });
+      if (r.ok) {
+        onUpdate(order.id, { officeInstructions: text });
+        logAudit('INSTRUCTIONS_SAVED', 'officeInstructions', order.officeInstructions || '', text);
+        setStatusSaveToast('saved'); setTimeout(() => setStatusSaveToast(null), 2500);
+      } else { setStatusSaveToast('error'); setTimeout(() => setStatusSaveToast(null), 3500); }
+    } catch { setStatusSaveToast('error'); setTimeout(() => setStatusSaveToast(null), 3500); }
+    setInstrSaving(false);
   };
 
   const handleAddNote = async () => {
@@ -2108,10 +2139,16 @@ const OrderDetail: React.FC<{
       <div className="flex-1 overflow-y-auto pb-6" style={{ background: '#FFFFFF' }}>
 
         {/* ── DELIVERY INSTRUCTIONS — Subtle but visible ── */}
-        {order.deliveryInstructions && (
+        {(order.deliveryInstructions || order.officeInstructions) && (
           <div style={{ background: '#FEF3C7', padding: '12px 16px', borderLeft: '3px solid #F59E0B' }}>
             <p style={{ fontSize: 10, fontWeight: 700, color: '#92400E', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>⚠ Special Instructions</p>
-            <p style={{ fontSize: 14, fontWeight: 600, color: '#78350F' }}>{order.deliveryInstructions}</p>
+            {order.deliveryInstructions && <p style={{ fontSize: 14, fontWeight: 600, color: '#78350F' }}>{order.deliveryInstructions}</p>}
+            {order.officeInstructions && (
+              <div style={{ marginTop: order.deliveryInstructions ? 8 : 0, paddingTop: order.deliveryInstructions ? 8 : 0, borderTop: order.deliveryInstructions ? '1px solid #FCD34D' : 'none' }}>
+                <p style={{ fontSize: 9, fontWeight: 700, color: '#92400E', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 2 }}>Added by office</p>
+                <p style={{ fontSize: 14, fontWeight: 600, color: '#78350F' }}>{order.officeInstructions}</p>
+              </div>
+            )}
             {order.customer?.phone && (
               <a href={`tel:${order.customer.phone}`} style={{ display: 'inline-block', marginTop: 6, fontSize: 13, fontWeight: 700, color: '#92400E', textDecoration: 'underline' }}>
                 📞 {order.customer.phone}
@@ -2806,6 +2843,22 @@ const OrderDetail: React.FC<{
                   </button>
                 </div>
               )}
+            </div>
+
+            {/* Special instructions the office adds — every driver sees these */}
+            <div className="px-4 py-3 border-t border-stone-100">
+              <p className="text-[10px] font-black uppercase text-stone-400 mb-1">Special Instructions (drivers see this)</p>
+              <textarea
+                value={officeInstr}
+                onChange={e => setOfficeInstr(e.target.value)}
+                rows={2}
+                placeholder="e.g. Deliver before 10:45 AM"
+                className="w-full bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-sm outline-none"
+              />
+              <button onClick={handleSaveInstructions} disabled={instrSaving}
+                className="mt-2 w-full py-2.5 bg-amber-500 text-white rounded-lg font-black text-xs uppercase disabled:opacity-50">
+                {instrSaving ? 'Saving…' : 'Save Special Instructions'}
+              </button>
             </div>
 
             {/* Admin Notes */}
@@ -3533,10 +3586,10 @@ const OrdersView: React.FC<OrdersViewProps> = ({
                   {order.items?.[0] && (
                     <p className="text-xs text-stone-400 truncate">{order.items[0].name} — ${(order.items[0].price * order.items[0].quantity).toFixed(2)}</p>
                   )}
-                  {order.deliveryInstructions && (
+                  {instructionText(order) && (
                     <div className="flex items-center gap-1.5 bg-amber-400 rounded-lg px-2.5 py-1.5 mt-1">
                       <AlertTriangle size={12} className="text-amber-900 shrink-0" />
-                      <p className="text-xs font-black text-amber-950 leading-snug">{order.deliveryInstructions}</p>
+                      <p className="text-xs font-black text-amber-950 leading-snug">{instructionText(order)}</p>
                     </div>
                   )}
                 </div>
@@ -4251,7 +4304,7 @@ const ScheduleView: React.FC<{
       const orderNum = (order.orderNumber || order.id).replace(/^#+/, '');
       const senderName = order.giftSenderName || '';
       const senderPhone = order.giftSenderPhone || '';
-      const instructions = order.deliveryInstructions || '';
+      const instructions = instructionText(order);
       const items = (order.items || []).map((it: any) => it.name || '').filter(Boolean).join(', ');
       const driver = order.driverName || driverLabel;
       const delivDate = order.deliveryDate
@@ -4562,7 +4615,7 @@ const ScheduleView: React.FC<{
       const rows = list.map((o, i) => {
         const line2 = [o.address?.unit, o.address?.company].filter(Boolean).join(' · ');
         const items = (o.items || []).filter(it => !(it.name || '').toLowerCase().includes('tip')).map(it => `${it.quantity}x ${it.name}`).join('; ');
-        const note = (o.deliveryInstructions || '').replace(/\s+/g, ' ').trim();
+        const note = instructionText(o).replace(/\s+/g, ' ').trim();
         return `<tr><td><span class="box"></span></td><td>${i + 1}</td><td class="num">#${esc((o.orderNumber || o.id).replace(/^#+/, ''))}</td>
           <td><div class="who">${esc(o.giftReceiverName || o.customer?.name)}</div><div>${esc(o.address?.street)}${line2 ? ' — ' + esc(line2) : ''}</div>
           <div class="city">${esc(o.address?.city)} ${esc(zipOf(o))}${o.giftSenderName ? ' · from ' + esc(o.giftSenderName) : ''}</div>
@@ -4810,7 +4863,7 @@ const ScheduleView: React.FC<{
                       <div className="flex-1 min-w-0 cursor-pointer" onClick={() => onSelectOrder(order)}>
                         <div className="flex items-center gap-2">
                           <span className="font-black text-base text-stone-900">#{cleanNum}</span>
-                          {order.deliveryInstructions && <AlertTriangle size={14} className="text-red-500 shrink-0" />}
+                          {instructionText(order) && <AlertTriangle size={14} className="text-red-500 shrink-0" />}
                         </div>
                         <p className="text-sm font-bold text-stone-700 truncate">{name}</p>
                         <p className="text-xs text-stone-500 truncate">{order.address?.city} {order.address?.zip}</p>
@@ -6639,7 +6692,7 @@ const DriverHomeView: React.FC<DriverHomeProps> = ({ currentUser, deliveries, on
             {dateDeliveries.map(d => {
               const isDone = d.status === DeliveryStatus.DELIVERED;
               const cleanNum = d.orderNumber?.replace(/^#+/, '') || d.id;
-              const hasAlert = !!(d.deliveryInstructions || d.adminNotes);
+              const hasAlert = !!(d.deliveryInstructions || d.officeInstructions || d.adminNotes);
               return (
                 <button key={d.id} onClick={() => onSelectOrder(d)}
                   className={`w-full rounded-2xl px-4 py-3 active:scale-[0.98] transition-all text-left border ${isDone ? 'bg-green-50 border-green-100' : 'bg-white border-stone-100 shadow-sm'}`}>
@@ -6665,7 +6718,7 @@ const DriverHomeView: React.FC<DriverHomeProps> = ({ currentUser, deliveries, on
                     <div className="mt-2 flex items-start gap-1.5 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
                       <AlertTriangle size={11} className="text-amber-600 shrink-0 mt-0.5" />
                       <p className="text-[10px] font-black text-amber-800 leading-snug">
-                        {[d.deliveryInstructions, d.adminNotes].filter(Boolean).join(' · ')}
+                        {[d.deliveryInstructions, d.officeInstructions, d.adminNotes].filter(Boolean).join(' · ')}
                       </p>
                     </div>
                   )}
