@@ -2631,6 +2631,10 @@ const OrderDetail: React.FC<{
                         } else {
                           allSuccess = false;
                         }
+                      } else {
+                        // Nothing was sent (blank pick, or driver list not loaded).
+                        // A skipped save must never light up "saved".
+                        allSuccess = false;
                       }
                     }
                     
@@ -7684,12 +7688,9 @@ export default function App() {
         }));
       } catch { /* localStorage full or disabled - no problem */ }
     } catch (err) {
-      console.error('fetchOrders failed:', err);
-      const { getDeliveries: gd } = await import('./services/shopifyService');
-      try {
-        const fallback = await gd();
-        setDeliveries(fallback);
-      } catch {}
+      // Keep whatever is already on screen (last good list or the cache).
+      // Never replace real orders with anything else. The red banner says so.
+      console.error('fetchOrders failed — keeping last good list:', err);
       setDataSource('ERROR');
     }
     finally { 
@@ -7789,6 +7790,11 @@ export default function App() {
           </button>
         </div>
       </div>
+      {dataSource === 'ERROR' && !isLoading && !isSyncing && (
+        <div className="bg-red-600 text-white text-xs font-bold px-4 py-2 text-center">
+          Couldn't refresh{lastSync ? ` — showing orders from ${lastSync}` : ''}. Tap the refresh arrow to retry.
+        </div>
+      )}
 
       {/* Rate by ZIP dropdown bar */}
       {isAdmin && showZipBar && (

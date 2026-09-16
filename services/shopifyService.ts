@@ -52,11 +52,14 @@ export const getDeliveries = async (): Promise<Delivery[]> => {
       return [...mapped, ...manualOrders];
     }
 
-    // Otherwise fall back to samples (for testing) + manual orders
-    return [...getSamples(), ...manualOrders];
+    // Shopify returned no orders in the window. The honest answer is "just the
+    // manual orders". Never substitute sample data — it put fake orders in
+    // front of drivers whenever Shopify hiccupped (Sep 11 / Sep 16, 2026).
+    return [...manualOrders];
   } catch (error) {
-    console.warn("Shopify unavailable, using samples", error);
-    return getSamples();
+    // Let the caller keep whatever is already on screen and show a banner.
+    console.error("Shopify unavailable — keeping last good list", error);
+    throw error;
   }
 };
 
