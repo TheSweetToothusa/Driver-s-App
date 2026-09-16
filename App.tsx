@@ -3871,11 +3871,9 @@ const ScheduleView: React.FC<{
   const [statusFilter, setStatusFilter] = useState<'OPEN'|'DONE'|'ALL'>('OPEN');
   const [sortBy, setSortBy] = useState<'date'|'city'|'zip'|'name'|'driver'>('date');
   const [customOrder, setCustomOrder] = useState<string[]>([]); // manual sort by order ID
-  const [showDateFilter, setShowDateFilter] = useState(false);
-  // Deliveries opens on today only (Mike, Sep 11 2026). The Dates button still
-  // reaches other days; Clear shows every day.
-  const [dateFrom, setDateFrom] = useState(todayStr);
-  const [dateTo, setDateTo] = useState(todayStr);
+  // Deliveries opens on today and everything forward (Mike, Sep 16 2026).
+  // Older dates are hidden behind the Past Orders button at the top.
+  const [showPast, setShowPast] = useState(false);
 
   // Route optimization state
   const [routeLoading, setRouteLoading] = useState(false);
@@ -3920,13 +3918,10 @@ const ScheduleView: React.FC<{
       }
       // Date and status filters are skipped entirely when a search is active
       if (!isSearching) {
-        // Date range filter
-        if (dateFrom || dateTo) {
+        // Today forward only, unless Past Orders is turned on
+        if (!showPast) {
           const orderDate = (d.deliveryDate || d.completedAt || '').split('T')[0];
-          if (orderDate) {
-            if (dateFrom && orderDate < dateFrom) return false;
-            if (dateTo && orderDate > dateTo) return false;
-          }
+          if (orderDate && orderDate < todayStr) return false;
         }
         // Status filter — always applies when not searching. Before, a date filter
         // turned it off, so Delivered orders came back into the to-deliver list.
@@ -3950,16 +3945,12 @@ const ScheduleView: React.FC<{
         (d.status || '').toLowerCase().includes(q)
       );
     });
-  }, [deliveries, driverFilter, statusFilter, search, isAdmin, currentUserId, dateFrom, dateTo]);
+  }, [deliveries, driverFilter, statusFilter, search, isAdmin, currentUserId, showPast, todayStr]);
 
   // Group by date, sorted ascending
   const grouped = useMemo(() => {
     const map: Record<string, Delivery[]> = {};
-    // Only include today as first group when NOT filtering by date range
-    const isDateFiltered = dateFrom || dateTo;
-    if (!isDateFiltered) {
-      map[todayStr] = [];
-    }
+    map[todayStr] = [];
     filtered.forEach(d => {
       const key = (d.deliveryDate || 'unscheduled').split('T')[0];
       if (!map[key]) map[key] = [];
@@ -3985,16 +3976,17 @@ const ScheduleView: React.FC<{
         return (a.orderNumber || '').localeCompare(b.orderNumber || '');
       });
     });
-    // Sort dates: today first (if not filtering), then chronological, unscheduled last
+    // Today first, then the days coming up. Past days (only there when Past
+    // Orders is on) drop to the bottom, newest first. Unscheduled last.
     // Filter out empty date groups (e.g., TODAY with no orders)
     return Object.entries(map).filter(([, orders]) => orders.length > 0).sort(([a], [b]) => {
       if (a === 'unscheduled') return 1;
       if (b === 'unscheduled') return -1;
-      if (!isDateFiltered && a === todayStr) return -1;
-      if (!isDateFiltered && b === todayStr) return 1;
-      return a.localeCompare(b);
+      const aPast = a < todayStr, bPast = b < todayStr;
+      if (aPast !== bPast) return aPast ? 1 : -1;
+      return aPast ? b.localeCompare(a) : a.localeCompare(b);
     });
-  }, [filtered, sortBy, customOrder, todayStr, dateFrom, dateTo]);
+  }, [filtered, sortBy, customOrder, todayStr]);
   
   // Move order up/down in the list
   const moveOrder = (orderId: string, direction: 'up' | 'down', dateOrders: Delivery[]) => {
@@ -4022,10 +4014,9 @@ const ScheduleView: React.FC<{
   // Get the first date group for route planning (drivers route one day at a time)
   // This lets them prep tomorrow's route today when today has no deliveries
   const routingDate = useMemo(() => {
-    if (grouped.length === 0) return null;
-    const firstDateKey = grouped[0][0];
-    return firstDateKey === 'unscheduled' ? null : firstDateKey;
-  }, [grouped]);
+    const next = grouped.find(([key]) => key !== 'unscheduled' && key >= todayStr);
+    return next ? next[0] : null;
+  }, [grouped, todayStr]);
 
   const optimizableStops = useMemo(() => {
     if (!routingDate) return [];
@@ -4715,51 +4706,14 @@ const ScheduleView: React.FC<{
               ))}
             </select>
           )}
-          {/* Date Range Filter Toggle */}
-          <button 
-            onClick={() => setShowDateFilter(!showDateFilter)}
-            className={`px-3 py-2 rounded-xl text-xs font-black uppercase flex items-center gap-1 ${dateFrom || dateTo ? 'bg-black text-white' : 'bg-stone-100 text-stone-600'}`}>
+          {/* Past Orders toggle — the list is today forward until this is on */}
+          <button
+            onClick={() => { setShowPast(!showPast); showFilterToast(showPast ? 'Today Forward' : 'Past Orders Showing'); }}
+            className={`px-3 py-2 rounded-xl text-xs font-black uppercase flex items-center gap-1 ${showPast ? 'bg-black text-white' : 'bg-stone-100 text-stone-600'}`}>
             <Calendar size={14} />
-            {dateFrom || dateTo ? 'Dates ✓' : 'Dates'}
+            {showPast ? 'Past Orders ✓' : 'Past Orders'}
           </button>
         </div>
-
-        {/* Date Range Picker */}
-        {showDateFilter && (
-          <div className="mt-3 p-3 bg-stone-50 rounded-xl border border-stone-200">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-[10px] font-black uppercase text-stone-500">Filter by Date Range</p>
-              {(dateFrom || dateTo) && (
-                <button onClick={() => { setDateFrom(''); setDateTo(''); showFilterToast('Showing All Dates'); }} className="text-[10px] font-black text-red-500 uppercase">Clear</button>
-              )}
-            </div>
-            <div className="flex gap-2">
-              <div className="flex-1">
-                <p className="text-[9px] font-bold text-stone-400 mb-1">From</p>
-                <input 
-                  type="date" 
-                  value={dateFrom}
-                  onChange={e => setDateFrom(e.target.value)}
-                  className="w-full bg-white border border-stone-200 rounded-lg px-2 py-2 text-sm font-bold"
-                />
-              </div>
-              <div className="flex-1">
-                <p className="text-[9px] font-bold text-stone-400 mb-1">To</p>
-                <input 
-                  type="date" 
-                  value={dateTo}
-                  onChange={e => setDateTo(e.target.value)}
-                  className="w-full bg-white border border-stone-200 rounded-lg px-2 py-2 text-sm font-bold"
-                />
-              </div>
-            </div>
-            {/* Quick presets */}
-            <div className="flex gap-2 mt-2 flex-wrap">
-              <button onClick={() => { setDateFrom(''); setDateTo(''); showFilterToast('Showing All'); }} className="px-3 py-1.5 bg-white border border-stone-200 rounded-lg text-[11px] font-bold active:scale-95 transition-transform">All</button>
-              <button onClick={() => { setDateFrom(todayStr); setDateTo(todayStr); showFilterToast('Showing Today'); }} className="px-3 py-1.5 bg-white border border-stone-200 rounded-lg text-[11px] font-bold active:scale-95 transition-transform">Today</button>
-            </div>
-          </div>
-        )}
 
         {/* Filter feedback toast */}
         {filterToast && (
@@ -4771,21 +4725,21 @@ const ScheduleView: React.FC<{
 
       {/* ── PLAN ROUTE BUTTON ── */}
       {optimizableStops.length > 0 && routingDate && (
-        <div className="px-4 py-3 bg-stone-50 border-b border-stone-200">
+        <div className="px-4 py-2 bg-stone-50 border-b border-stone-200 flex gap-2">
           <button
             onClick={() => setShowPlanRoute(true)}
-            className="w-full py-4 rounded-2xl font-black text-sm flex items-center justify-center gap-2 active:scale-95 transition-all"
+            className="flex-1 py-2.5 rounded-xl font-black text-xs flex items-center justify-center gap-1.5 active:scale-95 transition-all"
             style={{ background: '#374151', color: '#fff' }}
           >
-            <MapIcon size={16} /> Plan Today's Route
+            <MapIcon size={14} /> Plan Route
           </button>
           {isAdmin && (
             <button
               onClick={printZonePages}
-              className="w-full mt-2 py-4 rounded-2xl font-black text-sm flex items-center justify-center gap-2 active:scale-95 transition-all border-2 border-stone-300"
+              className="flex-1 py-2.5 rounded-xl font-black text-xs flex items-center justify-center gap-1.5 active:scale-95 transition-all border-2 border-stone-300"
               style={{ background: '#fff', color: '#374151' }}
             >
-              🖨️ Print Zone Pages
+              🖨️ Print Zones
             </button>
           )}
         </div>
