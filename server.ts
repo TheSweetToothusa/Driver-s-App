@@ -2225,8 +2225,29 @@ async function startServer() {
         console.error('Advance-order fetch failed (non-fatal):', err);
       }
 
+      // Advance orders the app just finished (Delivered, etc.) are no longer
+      // open, so the query above drops them and they vanish from the app the
+      // moment the driver taps Delivered. Keep older orders this app marked
+      // done in the last 7 days (updated_at moves when the st_status tag is set).
+      let recentlyDoneAdvance: any[] = [];
+      try {
+        const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
+        const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+        const older = await fetchAllShopifyOrders(
+          `https://${SHOPIFY_STORE_URL}/admin/api/2025-01/orders.json?status=any&limit=250&created_at_min=${ninetyDaysAgo}&created_at_max=${twoWeeksAgo}&updated_at_min=${sevenDaysAgo}`
+        );
+        recentlyDoneAdvance = older.filter((o: any) => (o.tags || '').split(',').some((t: string) => t.trim().startsWith('st_status:')));
+      } catch (err) {
+        console.error('Recently-done advance-order fetch failed (non-fatal):', err);
+      }
+
       const seenIds = new Set(recentOrders.map((o: any) => o.id));
-      const data = { orders: [...recentOrders, ...advanceOrders.filter((o: any) => !seenIds.has(o.id))] };
+      const extra = [...advanceOrders, ...recentlyDoneAdvance].filter((o: any) => {
+        if (seenIds.has(o.id)) return false;
+        seenIds.add(o.id);
+        return true;
+      });
+      const data = { orders: [...recentOrders, ...extra] };
       // A completed draft order (source_name "shopify_draft_order") is the
       // PARENT/payment order — e.g. a corporate master order whose real
       // deliveries are scheduled as separate sub-orders, or a paid pickup.
