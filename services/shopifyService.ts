@@ -133,7 +133,9 @@ function parseNoteInstructions(note: string): string {
 // POD block the driver app appends on delivery. Only the customer's own text may
 // stand in for a missing gift message.
 function noteAsGiftMessage(note: string): string {
-  const customerPart = (note || '').split('📦')[0].trim();
+  // Lines the office dashboard writes itself (refund / order-changed records) are history, not a message.
+  const customerPart = (note || '').split('📦')[0]
+    .split('\n').filter(l => !/^\s*(REFUNDED|ORDER CHANGED)\b/i.test(l)).join('\n').trim();
   if (!customerPart) return '';
   // The basket builder page stamped its own label here; that is not a gift message.
   if (/^basket builder/i.test(customerPart)) return '';
@@ -168,17 +170,32 @@ const mapShopifyOrder = (order: any): Delivery => {
     attributes[attr.name.toLowerCase().trim()] = attr.value;
   });
 
+  // Orders Shopify will not edit (paid with its own Local Delivery) carry their item
+  // changes in the "Invoice Items Override" attribute, written by the printer dashboard.
+  const itemOverrides: Record<string, any> = {};
+  try {
+    JSON.parse(attributes['invoice items override'] || '[]').forEach((o: any) => { itemOverrides[String(o.lineId)] = o; });
+  } catch { /* unreadable override: show Shopify's own items */ }
+
   const filteredItems = (order.line_items || [])
     .filter((item: any) => !item.name.toLowerCase().includes('tip'))
-    .map((item: any) => ({
-      id: item.id.toString(),
-      name: item.name,
-      quantity: item.quantity,
-      sku: item.sku || '',
-      price: parseFloat(item.price || '0'),
-      variantTitle: item.variant_title || '',
-      properties: (item.properties || []).filter((p: any) => p.value && p.value !== 'null' && !p.name.startsWith('_') && !p.name.toLowerCase().includes('delivery fee')),
-    }));
+    .map((item: any) => {
+      const ov = itemOverrides[String(item.id)];
+      const oldVariant = item.variant_title || '';
+      const name = ov && oldVariant && item.name.endsWith(oldVariant)
+        ? item.name.slice(0, -oldVariant.length) + ov.variantTitle
+        : item.name;
+      return {
+        id: item.id.toString(),
+        name,
+        quantity: ov ? ov.quantity : item.quantity,
+        sku: item.sku || '',
+        price: parseFloat((ov ? ov.price : item.price) || '0'),
+        variantTitle: ov ? ov.variantTitle : oldVariant,
+        properties: (item.properties || []).filter((p: any) => p.value && p.value !== 'null' && !p.name.startsWith('_') && !p.name.toLowerCase().includes('delivery fee')),
+      };
+    })
+    .filter((item: any) => item.quantity > 0);
 
   // Trust Shopify's actual shipping line (reflects manual price adjustments).
   // Fall back to ZIP-based rate table only when the order has no shipping line.
