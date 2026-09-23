@@ -9,7 +9,7 @@ import {
   MessageCircle, MessageSquare, ChevronLeft, Edit3,
   Bell, Clock, XCircle, Gift, User,
   AlertTriangle, RotateCcw, Inbox, Home, DollarSign, Store, Truck, Map as MapIcon, Route, Trash2, Plus,
-  ChevronUp, ChevronDown, MoreVertical, Printer, Mail
+  ChevronUp, ChevronDown, MoreVertical, Printer, Mail, EyeOff
 } from 'lucide-react';
 import { Delivery, DeliveryStatus, AppRole, FailureReason, FAILURE_REASON_LABELS, ViewMode, UserAccount, MessageTemplate } from './types';
 import { getDeliveries } from './services/shopifyService';
@@ -1187,6 +1187,7 @@ const OrderDetail: React.FC<{
   // Special instructions the office adds after the order is placed
   const [officeInstr, setOfficeInstr] = useState(order.officeInstructions || '');
   const [instrSaving, setInstrSaving] = useState(false);
+  const [hideSaving, setHideSaving] = useState(false);
   const [reassignTo, setReassignTo] = useState('');
   const [showNotifyPreview, setShowNotifyPreview] = useState<null | 'SUCCESS' | 'FAILURE'>(null);
   const [notifyPreviewText, setNotifyPreviewText] = useState('');
@@ -2572,6 +2573,31 @@ const OrderDetail: React.FC<{
           <div className="mx-3 mt-3 bg-white rounded-xl border border-stone-200 overflow-hidden">
             <div className="px-4 py-2 bg-stone-50 border-b border-stone-100 flex items-center justify-between">
               <p className="text-[10px] font-black uppercase text-stone-500 tracking-widest">Admin Controls</p>
+              {role === 'SUPER_ADMIN' && (
+                <button
+                  disabled={hideSaving}
+                  onClick={async () => {
+                    const hidden = !order.hidden;
+                    setHideSaving(true);
+                    try {
+                      const r = await fetch(`/api/orders/${order.id}/hide`, {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ hidden })
+                      });
+                      if (!r.ok) throw new Error(String(r.status));
+                      onUpdate(order.id, { hidden });
+                      logAudit(hidden ? 'ORDER_HIDDEN' : 'ORDER_UNHIDDEN', 'hidden', String(!hidden), String(hidden));
+                    } catch {
+                      alert(`Could not ${hidden ? 'hide' : 'unhide'} this order. Please try again.`);
+                    } finally {
+                      setHideSaving(false);
+                    }
+                  }}
+                  className="flex items-center gap-1 px-2 py-1 rounded-lg border border-stone-300 bg-white text-[10px] font-black uppercase text-stone-600 disabled:opacity-50"
+                >
+                  {order.hidden ? <><Eye size={11} /> Unhide</> : <><EyeOff size={11} /> Hide</>}
+                </button>
+              )}
             </div>
 
             {/* Quick Controls Row: Status + Driver + Date */}
@@ -7719,12 +7745,19 @@ export default function App() {
   }, []);
 
   // ── DRIVER ISOLATION: drivers only see orders assigned to them ──
+  // Hidden orders (st_hidden tag) are off every screen. Only Mike can see
+  // them, and only while the Hidden button in the top bar is on.
+  const [showHidden, setShowHidden] = useState(false);
+  const canSeeHidden = currentUser?.role === 'SUPER_ADMIN';
+  const unhiddenDeliveries = useMemo(() => deliveries.filter(d => !d.hidden), [deliveries]);
+  const hiddenCount = deliveries.length - unhiddenDeliveries.length;
   const visibleDeliveries = useMemo(() => {
-    if (!currentUser) return deliveries;
+    if (canSeeHidden && showHidden) return deliveries.filter(d => d.hidden);
+    if (!currentUser) return unhiddenDeliveries;
     const admin = currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'MANAGER';
-    if (admin) return deliveries;
-    return deliveries.filter(d => d.driverId === currentUser.id);
-  }, [deliveries, currentUser]);
+    if (admin) return unhiddenDeliveries;
+    return unhiddenDeliveries.filter(d => d.driverId === currentUser.id);
+  }, [deliveries, unhiddenDeliveries, currentUser, canSeeHidden, showHidden]);
 
   // Opening an order used to replace the whole tab layout, which threw away the
   // History/Deliveries driver + date filters and the list position every time
@@ -7790,6 +7823,12 @@ export default function App() {
               <DollarSign size={11} /> ZIP Fee
             </button>
           )}
+          {canSeeHidden && (hiddenCount > 0 || showHidden) && (
+            <button onClick={() => setShowHidden(s => !s)}
+              className={`flex items-center gap-1 px-2 py-1.5 rounded-lg font-bold text-[10px] uppercase transition-all border whitespace-nowrap ${showHidden ? 'bg-black text-white border-black' : 'bg-stone-100 text-stone-600 border-stone-200'}`}>
+              <EyeOff size={11} /> Hidden ({hiddenCount})
+            </button>
+          )}
           <span className={`w-2 h-2 rounded-full ${isLoading ? 'bg-amber-400 animate-pulse' : isSyncing ? 'bg-blue-400 animate-pulse' : dataSource === 'LIVE' ? 'bg-green-500' : 'bg-red-400'}`} />
           <button onClick={() => { localStorage.removeItem('ordersCache'); fetchOrders(false); }} className={`p-1.5 text-[#5F6368] ${isLoading || isSyncing ? 'animate-spin' : ''}`}><RefreshCw size={15} /></button>
           <button onClick={logout} className="flex items-center gap-1 px-3 py-2 bg-red-50 text-red-500 rounded-xl font-bold uppercase text-[10px] active:scale-95 border border-red-100">
@@ -7797,6 +7836,11 @@ export default function App() {
           </button>
         </div>
       </div>
+      {canSeeHidden && showHidden && (
+        <div className="bg-black text-white text-xs font-bold px-4 py-2 text-center">
+          Showing hidden orders only. No one else can see these.
+        </div>
+      )}
       {dataSource === 'ERROR' && !isLoading && !isSyncing && (
         <div className="bg-red-600 text-white text-xs font-bold px-4 py-2 text-center">
           Couldn't refresh{lastSync ? ` — showing orders from ${lastSync}` : ''}. Tap the refresh arrow to retry.
@@ -8066,7 +8110,7 @@ export default function App() {
               </button>
             </div>
             {/* AdminPanel handles ALL admin features */}
-            <AdminPanel role={currentUser.role} deliveries={deliveries} allUsers={allUsers} setAllUsers={setAllUsers} currentUser={currentUser} />
+            <AdminPanel role={currentUser.role} deliveries={unhiddenDeliveries} allUsers={allUsers} setAllUsers={setAllUsers} currentUser={currentUser} />
           </div>
         )}
 

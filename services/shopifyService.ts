@@ -256,6 +256,7 @@ const mapShopifyOrder = (order: any): Delivery => {
     deliveryDate: order._st_deliveryDate || parseDeliveryDate(rawDate),
     priority: order.tags?.toLowerCase().includes('urgent') ? 'Urgent' :
               order.tags?.toLowerCase().includes('sympathy') ? 'Sympathy' : 'Standard',
+    hidden: (order.tags || '').split(',').some((t: string) => t.trim() === 'st_hidden'),
     driverId: order._st_driverId || '',
     driverName: order._st_driverName || '',
     internalNotes: [],

@@ -2676,6 +2676,33 @@ async function startServer() {
   });
 
 
+  // Hide / unhide an order (Mike only in the app). Adds or removes the
+  // st_hidden Shopify tag; the order stays in Shopify and comes back on unhide.
+  app.post("/api/orders/:id/hide", async (req, res) => {
+    const id = req.params.id;
+    const hidden = !!req.body?.hidden;
+    try {
+      const tagResp = await fetch(`https://${SHOPIFY_STORE_URL}/admin/api/2025-01/orders/${id}.json?fields=tags`, {
+        headers: { 'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN }
+      });
+      if (!tagResp.ok) return res.status(502).json({ error: `Shopify ${tagResp.status}` });
+      const tagData = await tagResp.json();
+      const tagsList = (tagData.order?.tags || '').split(',').map((t: string) => t.trim())
+        .filter((t: string) => t && t !== 'st_hidden');
+      if (hidden) tagsList.push('st_hidden');
+      const putResp = await fetch(`https://${SHOPIFY_STORE_URL}/admin/api/2025-01/orders/${id}.json`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN },
+        body: JSON.stringify({ order: { id, tags: tagsList.join(', ') } })
+      });
+      if (!putResp.ok) return res.status(502).json({ error: `Shopify ${putResp.status}` });
+      console.log(`Order ${id} ${hidden ? 'hidden' : 'unhidden'}`);
+      res.json({ success: true, hidden });
+    } catch (e) {
+      res.status(500).json({ error: String(e) });
+    }
+  });
+
   // ── DEBUG: see raw order statuses ──────────────────────────────────────────
   app.get('/api/debug/orders', async (req, res) => {
     try {

@@ -90,6 +90,7 @@ export interface Delivery {
   // Kept apart from deliveryInstructions so the customer's own checkout text is
   // never overwritten.
   officeInstructions?: string;
+  hidden?: boolean; // st_hidden tag — only Mike sees it, under Hidden
   status: DeliveryStatus;
   deliveryDate: string;
   deliveryWindow?: string;
