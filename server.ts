@@ -3775,6 +3775,10 @@ async function startServer() {
     const orderLine = displayOrderNumber
       ? `<div style="font-size:13px;color:#999;margin-top:24px;">Order #${escapeHtmlForEmail(displayOrderNumber)}</div>`
       : '';
+    // The star row in the email is 5 separate static links, not a single
+    // adjustable control — a mis-tap here has no other way back to 5★.
+    const fiveStarQS = displayOrderNumber ? `?n=${encodeURIComponent(displayOrderNumber)}` : '';
+    const wrongStarLink = `/review/${encodeURIComponent(orderId)}/5${fiveStarQS}`;
 
     res.status(200).type('html').send(`<!DOCTYPE html>
 <html><head>
@@ -3788,7 +3792,8 @@ async function startServer() {
     <table role="presentation" width="540" cellpadding="0" cellspacing="0" border="0" style="max-width:540px;width:100%;background:#fff;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,0.06);overflow:hidden;">
       <tr><td align="center" style="background:#2a2a2a;padding:28px 24px;"><img src="/brand/logo.png" alt="The Sweet Tooth" width="220" style="display:block;width:220px;max-width:80%;height:auto;margin:0 auto;border:0;"></td></tr>
       <tr><td align="center" style="padding:36px 32px 8px 32px;font-size:22px;font-weight:600;">Thanks for the ${ratingLabel} rating.</td></tr>
-      <tr><td align="center" style="padding:0 32px 24px 32px;font-size:16px;color:#666;line-height:1.6;">Tell us what we could have done better.</td></tr>
+      <tr><td align="center" style="padding:0 32px 8px 32px;font-size:13px;color:#999;line-height:1.5;">Tapped the wrong star? <a href="${wrongStarLink}" style="color:#2a2a2a;font-weight:600;text-decoration:underline;">Tap here to give us 5 stars instead.</a></td></tr>
+      <tr><td align="center" style="padding:0 32px 24px 32px;font-size:16px;color:#666;line-height:1.6;">Or tell us what we could have done better.</td></tr>
       <tr><td style="padding:0 32px 32px 32px;">
         <form method="POST" action="/review/${encodeURIComponent(orderId)}/${stars}" style="margin:0;">
           ${displayOrderNumber ? `<input type="hidden" name="n" value="${escapeHtmlForEmail(displayOrderNumber)}">` : ''}
